@@ -2,28 +2,20 @@
 {% block title %}{{ report.title }}{% endblock %}
 {% block content %}
 <style>
-  .ra-wrap { background: #fff; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+  .ra-wrap { padding: 1.25rem; }
   .ra-header-center { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-  .ra-phase-title { font-weight: 700; text-decoration: underline; text-transform: uppercase; margin: 1.25rem 0 .5rem; font-size: .95rem; }
+  .ra-phase-title { font-weight: 700; text-transform: uppercase; margin: 1.25rem 0 .5rem; font-size: .95rem; }
   .ra-table { font-size: .78rem; border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
-  .ra-table th, .ra-table td { border: 1px solid #000; padding: .28rem .35rem; text-align: center; vertical-align: middle; }
+  .ra-table th, .ra-table td { border: 1px solid #dee2e6; padding: .28rem .35rem; text-align: center; vertical-align: middle; }
   .ra-table th.sub-left, .ra-table td.sub-left { text-align: left; font-weight: 600; }
   .ra-table thead tr:first-child th { font-weight: 700; }
   .ra-table tbody tr.summary-row td { font-weight: 600; }
-  .ra-note { font-size: .75rem; color: #444; max-width: 900px; }
-  .ra-table-caption {
-    caption-side: top;
-    text-align: left;
-    font-size: .72rem;
-    font-weight: 600;
-    color: #222;
-    padding: .35rem .25rem .45rem;
-    line-height: 1.35;
-  }
+  .ra-note { font-size: .75rem; max-width: 900px; }
+  .ra-table-caption { caption-side: top; text-align: left; font-size: .72rem; font-weight: 600; padding: .35rem .25rem .45rem; line-height: 1.35; }
   @media print {
     .no-print { display: none !important; }
     body { background: #fff !important; }
-    .ra-wrap { box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+    .ra-wrap { padding: 0 !important; }
     .ra-table { font-size: 9pt; }
   }
 </style>

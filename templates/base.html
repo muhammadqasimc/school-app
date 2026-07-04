@@ -5,111 +5,147 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}School Dashboard{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/kismet-theme.css') }}" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            border: none;
-            margin-bottom: 20px;
-        }
-        .card-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px 15px 0 0 !important;
-            padding: 20px;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-        }
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-        }
-        .navbar {
-            background: rgba(255, 255, 255, 0.95) !important;
-            backdrop-filter: blur(10px);
-        }
-        .table-responsive {
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .chart-container {
-            position: relative;
-            height: 400px;
-            margin: 20px 0;
+        body.kismet-theme .navbar {
+            display: none;
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    {% if current_user.is_authenticated %}
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">
-                <img src="{{ url_for('static', filename='images/school-logo.png') }}" alt="School Logo" style="height: 40px; margin-right: 10px;">
-                School Dashboard
-            </a>
-            <div class="navbar-nav ms-auto">
-                {% if current_user.is_authenticated and not is_admin and not is_teacher %}
-                <a class="nav-link" href="{{ url_for('parent_learner_profile') }}"><i class="fas fa-id-card"></i> Learner Profile</a>
-                {% if endpoint_available('parent_messages_page') %}
-                <a class="nav-link" href="{{ url_for('parent_messages_page') }}"><i class="fas fa-comments"></i> Chat</a>
-                {% endif %}
-                {% endif %}
-                {% if is_teacher %}
-                <a class="nav-link" href="{{ url_for('teacher_dashboard') }}"><i class="fas fa-chalkboard-teacher"></i> Teacher</a>
-                {% if endpoint_available('teacher_chat_page') %}
-                <a class="nav-link" href="{{ url_for('teacher_chat_page') }}"><i class="fas fa-comments"></i> Chat</a>
-                {% endif %}
-                {% endif %}
-                {% if can_access_asset_inventory and endpoint_available('inventory_dashboard') %}
-                <a class="nav-link" href="{{ url_for('inventory_dashboard') }}"><i class="fas fa-boxes-stacked"></i> Asset inventory</a>
-                {% endif %}
-                {% if is_manager %}
-                <a class="nav-link" href="{{ url_for('portal_select') }}"><i class="fas fa-layer-group"></i> Portals</a>
-                <a class="nav-link" href="{{ url_for('management_dashboard') }}"><i class="fas fa-chart-line"></i> Management Reports</a>
-                {% if endpoint_available('management_chat_page') %}
-                <a class="nav-link" href="{{ url_for('management_chat_page') }}"><i class="fas fa-comments"></i> Management Chat</a>
-                {% endif %}
-                {% endif %}
-                {% if is_admin %}
-                {% if endpoint_available('admin_dashboard') %}
-                <a class="nav-link" href="{{ url_for('admin_dashboard') }}"><i class="fas fa-cog"></i> Admin</a>
-                {% endif %}
-                {% if endpoint_available('admin_chat_page') %}
-                <a class="nav-link" href="{{ url_for('admin_chat_page') }}"><i class="fas fa-comments"></i> Admin Chat</a>
-                {% endif %}
-                {% endif %}
-                <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+<body class="kismet-theme">
+{% if current_user.is_authenticated %}
+<!-- Sidebar Overlay (mobile) -->
+<div class="kismet-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- Kismet Sidebar -->
+<div class="kismet-sidebar" id="kismetSidebar">
+    <div class="kismet-sidebar-header">
+        <div class="kismet-sidebar-brand">
+            <div class="kismet-sidebar-icon">
+                <i class="fas fa-school"></i>
+            </div>
+            <div class="kismet-sidebar-brand-text">
+                <h2>SchoolApp</h2>
+                <small>{% if is_admin %}Admin{% elif is_manager %}Manager{% elif is_teacher %}{{ current_user.teacher_role or 'Teacher' }}{% else %}User{% endif %}</small>
             </div>
         </div>
-    </nav>
-    {% endif %}
-
-    <div class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% block content %}{% endblock %}
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block extra_js %}{% endblock %}
+    <nav class="kismet-nav">
+        <!-- Parent links -->
+        {% if current_user.is_authenticated and not is_admin and not is_teacher %}
+        <a class="kismet-nav-item {% if request.endpoint == 'parent_learner_profile' %}active{% endif %}" href="{{ url_for('parent_learner_profile') }}">
+            <i class="fas fa-id-card"></i> Learner Profile
+        </a>
+        {% if endpoint_available('parent_messages_page') %}
+        <a class="kismet-nav-item {% if request.endpoint == 'parent_messages_page' %}active{% endif %}" href="{{ url_for('parent_messages_page') }}">
+            <i class="fas fa-comments"></i> Chat
+        </a>
+        {% endif %}
+        {% endif %}
+
+        <!-- Teacher links -->
+        {% if is_teacher %}
+        <a class="kismet-nav-item {% if request.endpoint == 'teacher_dashboard' %}active{% endif %}" href="{{ url_for('teacher_dashboard') }}">
+            <i class="fas fa-chalkboard-teacher"></i> Teacher
+        </a>
+        {% if endpoint_available('teacher_chat_page') %}
+        <a class="kismet-nav-item {% if request.endpoint == 'teacher_chat_page' %}active{% endif %}" href="{{ url_for('teacher_chat_page') }}">
+            <i class="fas fa-comments"></i> Chat
+        </a>
+        {% endif %}
+        {% endif %}
+
+        <!-- Inventory -->
+        {% if can_access_asset_inventory and endpoint_available('inventory_dashboard') %}
+        <a class="kismet-nav-item {% if request.endpoint and request.endpoint.startswith('inventory_') %}active{% endif %}" href="{{ url_for('inventory_dashboard') }}">
+            <i class="fas fa-boxes-stacked"></i> Asset Inventory
+        </a>
+        {% endif %}
+
+        <!-- Management links -->
+        {% if is_manager %}
+        <a class="kismet-nav-item {% if request.endpoint == 'portal_select' %}active{% endif %}" href="{{ url_for('portal_select') }}">
+            <i class="fas fa-layer-group"></i> Portals
+        </a>
+        <a class="kismet-nav-item {% if request.endpoint == 'management_dashboard' %}active{% endif %}" href="{{ url_for('management_dashboard') }}">
+            <i class="fas fa-chart-line"></i> Management Reports
+        </a>
+        {% if endpoint_available('management_chat_page') %}
+        <a class="kismet-nav-item {% if request.endpoint == 'management_chat_page' %}active{% endif %}" href="{{ url_for('management_chat_page') }}">
+            <i class="fas fa-comments"></i> Mgmt Chat
+        </a>
+        {% endif %}
+        {% endif %}
+
+        <!-- Admin links -->
+        {% if is_admin %}
+        {% if endpoint_available('admin_dashboard') %}
+        <a class="kismet-nav-item {% if request.endpoint and request.endpoint.startswith('admin_') %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">
+            <i class="fas fa-cog"></i> Admin
+        </a>
+        {% endif %}
+        {% if endpoint_available('admin_chat_page') %}
+        <a class="kismet-nav-item {% if request.endpoint == 'admin_chat_page' %}active{% endif %}" href="{{ url_for('admin_chat_page') }}">
+            <i class="fas fa-comments"></i> Admin Chat
+        </a>
+        {% endif %}
+        {% endif %}
+    </nav>
+
+    <div class="kismet-sidebar-footer">
+        <a class="kismet-nav-item" href="{{ url_for('logout') }}">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Main Content -->
+<div class="kismet-main">
+    {% if current_user.is_authenticated %}
+    <!-- Mobile header -->
+    <div class="kismet-mobile-header">
+        <button class="kismet-menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div>
+            <a class="kismet-nav-item d-inline-flex text-decoration-none" href="{{ url_for('logout') }}">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show kismet-flash" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function toggleSidebar() {
+    document.getElementById('kismetSidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+</script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

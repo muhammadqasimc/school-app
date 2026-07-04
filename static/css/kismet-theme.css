@@ -1,0 +1,907 @@
+/* ============================================================
+   Kismet SMS Theme — SchoolApp
+   Adapted from the Kismet SMS application design system
+   ============================================================ */
+
+/* --- Color Palette (Kismet SMS inspired) --- */
+:root {
+  /* Primary brand colors */
+  --kismet-blue: #3b82f6;
+  --kismet-blue-dark: #2563eb;
+  --kismet-indigo: #6366f1;
+  --kismet-purple: #a855f7;
+  --kismet-teal: #14b8a6;
+  --kismet-emerald: #10b981;
+  --kismet-amber: #f59e0b;
+  --kismet-red: #ef4444;
+  --kismet-red-dark: #dc2626;
+
+  /* Sidebar gradient */
+  --sidebar-from: #1e3a5f;
+  --sidebar-via: #312e81;
+  --sidebar-to: #581c87;
+
+  /* Neutrals */
+  --kismet-gray-50: #f9fafb;
+  --kismet-gray-100: #f3f4f6;
+  --kismet-gray-200: #e5e7eb;
+  --kismet-gray-300: #d1d5db;
+  --kismet-gray-400: #9ca3af;
+  --kismet-gray-500: #6b7280;
+  --kismet-gray-600: #4b5563;
+  --kismet-gray-700: #374151;
+  --kismet-gray-800: #1f2937;
+  --kismet-gray-900: #111827;
+
+  /* Layout */
+  --sidebar-width: 256px;
+  --content-padding-x: 1.5rem;
+  --content-padding-y: 1.5rem;
+  --card-radius: 0.75rem;
+}
+
+/* Base body */
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background-color: var(--kismet-gray-50);
+  color: var(--kismet-gray-700);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   KISMET SIDEBAR — fixed left sidebar with gradient
+   ============================================================ */
+.kismet-wrapper {
+  display: flex;
+  min-height: 100vh;
+}
+
+.kismet-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: linear-gradient(180deg, var(--sidebar-from), var(--sidebar-via), var(--sidebar-to));
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease;
+  transform: translateX(-100%);
+}
+
+@media (min-width: 992px) {
+  .kismet-sidebar {
+    transform: translateX(0);
+  }
+}
+
+.kismet-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Sidebar header / brand area */
+.kismet-sidebar-header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.kismet-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.kismet-sidebar-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--kismet-blue), var(--kismet-indigo));
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kismet-sidebar-icon i {
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.kismet-sidebar-brand-text h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.kismet-sidebar-brand-text small {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: capitalize;
+}
+
+/* Sidebar navigation */
+.kismet-nav {
+  padding: 0.75rem 0.75rem;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.kismet-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.kismet-nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  text-decoration: none;
+}
+
+.kismet-nav-item.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-weight: 600;
+}
+
+.kismet-nav-item i {
+  width: 1.25rem;
+  text-align: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Sidebar footer */
+.kismet-sidebar-footer {
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.kismet-sidebar-footer .kismet-nav-item {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ============================================================
+   MAIN CONTENT AREA
+   ============================================================ */
+.kismet-main {
+  flex: 1;
+  margin-left: 0;
+  padding: 1rem;
+  transition: margin-left 0.2s ease;
+  max-width: 100%;
+}
+
+@media (min-width: 992px) {
+  .kismet-main {
+    margin-left: var(--sidebar-width);
+    padding: 1.5rem 2rem;
+  }
+}
+
+/* Mobile header bar */
+.kismet-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 992px) {
+  .kismet-mobile-header {
+    display: none;
+  }
+}
+
+.kismet-mobile-header .kismet-menu-btn {
+  background: none;
+  border: none;
+  color: var(--kismet-gray-600);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+/* Sidebar overlay (mobile) */
+.kismet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+}
+
+.kismet-overlay.show {
+  display: block;
+}
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+.kismet-page-header {
+  margin-bottom: 1.5rem;
+}
+
+.kismet-page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--kismet-gray-800);
+  margin: 0;
+}
+
+.kismet-page-header p {
+  font-size: 0.875rem;
+  color: var(--kismet-gray-400);
+  margin-top: 0.25rem;
+}
+
+/* ============================================================
+   STAT CARDS (Kismet style)
+   ============================================================ */
+.kismet-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kismet-stat-card {
+  background: #fff;
+  border-radius: var(--card-radius);
+  padding: 1.25rem;
+  border: 1px solid var(--kismet-gray-100);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.kismet-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.kismet-stat-label {
+  font-size: 0.875rem;
+  color: var(--kismet-gray-500);
+  margin: 0 0 0.25rem;
+}
+
+.kismet-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--kismet-gray-800);
+  margin: 0;
+}
+
+.kismet-stat-sub {
+  font-size: 0.75rem;
+  color: var(--kismet-gray-400);
+  margin-top: 0.125rem;
+}
+
+.kismet-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kismet-stat-icon i {
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+/* Stat icon colors */
+.stat-icon-blue { background: var(--kismet-blue); }
+.stat-icon-purple { background: var(--kismet-purple); }
+.stat-icon-indigo { background: var(--kismet-indigo); }
+.stat-icon-teal { background: var(--kismet-teal); }
+.stat-icon-emerald { background: var(--kismet-emerald); }
+.stat-icon-amber { background: var(--kismet-amber); }
+.stat-icon-red { background: var(--kismet-red); }
+
+/* ============================================================
+   KISMET CARDS
+   ============================================================ */
+.kismet-card {
+  background: #fff;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--kismet-gray-100);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.kismet-card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--kismet-gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.kismet-card-header h3,
+.kismet-card-header h4,
+.kismet-card-header h5 {
+  margin: 0;
+  font-weight: 700;
+  color: var(--kismet-gray-800);
+  font-size: 1rem;
+}
+
+.kismet-card-body {
+  padding: 1.25rem;
+}
+
+/* Override Bootstrap cards */
+.kismet-theme .card {
+  border: 1px solid var(--kismet-gray-100);
+  border-radius: var(--card-radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.kismet-theme .card-header {
+  background: var(--kismet-gray-50);
+  border-bottom: 1px solid var(--kismet-gray-100);
+  color: var(--kismet-gray-800);
+  font-weight: 700;
+  padding: 1rem 1.25rem;
+  border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
+}
+
+.kismet-theme .card-body {
+  padding: 1.25rem;
+  background: #fff;
+}
+
+/* Override Bootstrap primary button */
+
+/* ============================================================
+   TABS (Kismet style)
+   ============================================================ */
+.kismet-tabs {
+  border-bottom: 1px solid var(--kismet-gray-200);
+  background: var(--kismet-gray-50);
+  padding: 0.5rem;
+  border-radius: 0.75rem 0.75rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.kismet-tab {
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--kismet-gray-500);
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kismet-tab:hover {
+  color: var(--kismet-gray-700);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.kismet-tab.active {
+  color: var(--kismet-gray-800);
+  background: #fff;
+  border-bottom: 3px solid var(--kismet-blue);
+  font-weight: 600;
+}
+
+.kismet-tab i {
+  margin-right: 0.375rem;
+}
+
+/* ============================================================
+   FORMS (Kismet style)
+   ============================================================ */
+.kismet-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--kismet-gray-200);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--kismet-gray-700);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kismet-input:focus {
+  outline: none;
+  border-color: var(--kismet-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.kismet-select {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--kismet-gray-200);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--kismet-gray-700);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+}
+
+.kismet-select:focus {
+  outline: none;
+  border-color: var(--kismet-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* ============================================================
+   BUTTONS (Kismet style)
+   ============================================================ */
+.kismet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.kismet-btn-primary {
+  background: var(--kismet-blue);
+  color: #fff;
+  border-color: var(--kismet-blue);
+}
+
+.kismet-btn-primary:hover {
+  background: var(--kismet-blue-dark);
+  color: #fff;
+}
+
+.kismet-btn-outline {
+  background: transparent;
+  color: var(--kismet-gray-600);
+  border-color: var(--kismet-gray-200);
+}
+
+.kismet-btn-outline:hover {
+  background: var(--kismet-gray-50);
+  border-color: var(--kismet-gray-300);
+}
+
+.kismet-btn-primary i,
+.kismet-btn i {
+  font-size: 0.875rem;
+}
+
+/* ============================================================
+   TABLES (Kismet style)
+   ============================================================ */
+.kismet-table-container {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+}
+
+.kismet-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.kismet-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kismet-gray-500);
+  background: var(--kismet-gray-50);
+  border-bottom: 1px solid var(--kismet-gray-200);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.kismet-table td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--kismet-gray-700);
+  border-bottom: 1px solid var(--kismet-gray-100);
+}
+
+.kismet-table tbody tr:hover {
+  background: var(--kismet-gray-50);
+}
+
+.kismet-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================
+   AUTH PAGES (Login / Register / Forgot Password)
+   ============================================================ */
+.kismet-auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a5f 0%, #312e81 50%, #581c87 100%);
+  padding: 1rem;
+}
+
+.kismet-auth-card {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+
+.kismet-auth-header {
+  background: linear-gradient(135deg, var(--kismet-blue), var(--kismet-indigo));
+  padding: 2rem;
+  text-align: center;
+  color: #fff;
+}
+
+.kismet-auth-header .auth-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.kismet-auth-header .auth-icon i {
+  font-size: 1.75rem;
+  color: #fff;
+}
+
+.kismet-auth-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.kismet-auth-header p {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  margin: 0.5rem 0 0;
+}
+
+.kismet-auth-body {
+  padding: 2rem;
+}
+
+.kismet-auth-body .form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--kismet-gray-700);
+}
+
+.kismet-auth-body .form-control {
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--kismet-gray-200);
+  border-radius: 0.5rem;
+}
+
+.kismet-auth-body .form-control:focus {
+  border-color: var(--kismet-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.kismet-auth-body .btn-primary {
+  background: var(--kismet-blue);
+  border-color: var(--kismet-blue);
+  padding: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+}
+
+.kismet-auth-body .btn-primary:hover {
+  background: var(--kismet-blue-dark);
+  border-color: var(--kismet-blue-dark);
+}
+
+/* ============================================================
+   LEARNER PROFILE CARD (Kismet dashboard style)
+   ============================================================ */
+.kismet-profile-card {
+  background: linear-gradient(135deg, var(--kismet-blue), var(--kismet-indigo));
+  color: #fff;
+  border-radius: var(--card-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+}
+
+.kismet-profile-card .profile-photo {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.kismet-profile-card h4 {
+  font-weight: 600;
+  margin: 0;
+}
+
+.kismet-profile-card p {
+  opacity: 0.85;
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.kismet-profile-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+/* ============================================================
+   PAGE HEADER ACTIONS
+   ============================================================ */
+.kismet-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* ============================================================
+   REPORT SHELL / FRAME (Management Reports)
+   ============================================================ */
+.kismet-report-shell {
+  background: #fff;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--kismet-gray-100);
+  padding: 1.5rem;
+}
+
+.kismet-report-frame {
+  background: #fff;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--kismet-gray-100);
+  padding: 1.25rem;
+}
+
+/* ============================================================
+   TILE GRID (Management Dashboard)
+   ============================================================ */
+.kismet-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+
+.kismet-tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--kismet-gray-100);
+  border-radius: var(--card-radius);
+  padding: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.kismet-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  text-decoration: none;
+}
+
+.kismet-tile i {
+  font-size: 1.75rem;
+  color: var(--kismet-blue);
+  margin-bottom: 0.5rem;
+}
+
+.kismet-tile h6 {
+  font-size: 0.8rem;
+  color: var(--kismet-gray-800);
+  margin: 0;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+/* ============================================================
+   ALERTS & FLASH MESSAGES
+   ============================================================ */
+.kismet-flash .alert {
+  border-radius: 0.5rem;
+  border: none;
+  font-size: 0.875rem;
+}
+
+/* ============================================================
+   MISC UTILITIES
+   ============================================================ */
+.kismet-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--kismet-gray-800);
+  margin-bottom: 1rem;
+}
+
+.kismet-text-muted {
+  color: var(--kismet-gray-400);
+  font-size: 0.875rem;
+}
+
+/* Badge styling */
+.kismet-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 999px;
+}
+
+/* ============================================================
+   RESPONSIVE: Mobile adjustments
+   ============================================================ */
+@media (max-width: 576px) {
+  .kismet-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .kismet-stat-card {
+    padding: 1rem;
+  }
+
+  .kismet-stat-value {
+    font-size: 1.25rem;
+  }
+
+  .kismet-tile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kismet-main {
+    padding: 0.75rem;
+  }
+}
+
+/* ============================================================
+   BOOTSTRAP OVERRIDES (for compatibility)
+   ============================================================ */
+/* Override Bootstrap navbar to be invisible in sidebar mode */
+body.kismet-theme .navbar {
+  display: none;
+}
+
+/* Make Bootstrap cards match kismet style */
+.kismet-card .card-header {
+  background: var(--kismet-gray-50);
+  border-bottom: 1px solid var(--kismet-gray-100);
+  color: var(--kismet-gray-800);
+  font-weight: 700;
+  padding: 1rem 1.25rem;
+}
+
+.kismet-card .card-body {
+  padding: 1.25rem;
+}
+
+/* Override Bootstrap primary button */
+.kismet-theme .btn-primary {
+  background-color: var(--kismet-blue);
+  border-color: var(--kismet-blue);
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+
+.kismet-theme .btn-primary:hover {
+  background-color: var(--kismet-blue-dark);
+  border-color: var(--kismet-blue-dark);
+}
+
+/* Bootstrap table override */
+.kismet-theme .table {
+  color: var(--kismet-gray-700);
+}
+
+.kismet-theme .table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kismet-gray-500);
+  border-bottom: 1px solid var(--kismet-gray-200);
+}
+
+/* Form control override */
+.kismet-theme .form-control,
+.kismet-theme .form-select {
+  border-color: var(--kismet-gray-200);
+  border-radius: 0.5rem;
+}
+
+.kismet-theme .form-control:focus,
+.kismet-theme .form-select:focus {
+  border-color: var(--kismet-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Manage Bootstrap nav tabs */
+.kismet-theme .nav-tabs {
+  border-bottom: 1px solid var(--kismet-gray-200);
+  background: var(--kismet-gray-50);
+  padding: 0.5rem;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.kismet-theme .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  color: var(--kismet-gray-500);
+  font-weight: 500;
+  padding: 0.625rem 1rem;
+}
+
+.kismet-theme .nav-tabs .nav-link:hover {
+  color: var(--kismet-gray-700);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.kismet-theme .nav-tabs .nav-link.active {
+  color: var(--kismet-gray-800);
+  background: #fff;
+  border-bottom: 3px solid var(--kismet-blue);
+  font-weight: 600;
+}
+
+/* Alert styling */
+.kismet-theme .alert {
+  border-radius: 0.5rem;
+  border: none;
+}

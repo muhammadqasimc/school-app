@@ -1,14 +1,5 @@
 {% extends "base.html" %}
 {% block title %}Asset inventory — Overview{% endblock %}
-{% block extra_css %}
-<style>
-  .inventory-hero { border-radius: 15px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: rgba(255,255,255,0.12); color: #fff; }
-  .inventory-metric { background: #fff; border-radius: 12px; padding: 1rem; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-  .inventory-metric strong { font-size: 1.75rem; display: block; color: #764ba2; }
-  .inventory-card { background: #fff; border-radius: 14px; overflow: hidden; }
-  .activity-feed { max-height: 480px; overflow-y: auto; }
-</style>
-{% endblock %}
 {% block content %}
 <div class="inventory-hero">
   {% include "inventory/_nav.html" %}

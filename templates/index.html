@@ -4,235 +4,246 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kismet Secondary School - Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/kismet-theme.css') }}" rel="stylesheet">
     <style>
-        :root {
-            --primary-color: #24bfd1;
-            --secondary-color: #1ea3b3;
-            --accent-color: #8f78de;
-            --panel-bg: #f2f4f6;
-            --teal-soft: #d5eef3;
-            --text-main: #2f3e46;
-            --border-soft: #e7e7e7;
-        }
-        
+        /* Kismet Landing Page Styles */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
             overflow-x: hidden;
+            color: #374151;
         }
-        
-        /* Navigation */
-        .navbar {
+
+        .kismet-landing-nav {
             background: rgba(255, 255, 255, 0.95) !important;
             backdrop-filter: blur(10px);
-            box-shadow: 0 2px 10px rgba(47, 62, 70, 0.08);
-            border-bottom: 1px solid var(--border-soft);
-            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 0;
         }
-        
-        .navbar-brand {
-            font-weight: bold;
-            font-size: 1.5rem;
-            color: var(--primary-color) !important;
+
+        .kismet-landing-nav .navbar-brand {
+            font-weight: 700;
+            font-size: 1.4rem;
+            color: #1e3a5f !important;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        
-        .nav-link {
-            color: #333 !important;
+
+        .kismet-landing-nav .navbar-brand img {
+            height: 45px;
+        }
+
+        .kismet-landing-nav .nav-link {
+            color: #374151 !important;
             font-weight: 500;
             margin: 0 0.5rem;
             transition: color 0.3s;
         }
-        
-        .nav-link:hover {
-            color: var(--primary-color) !important;
+
+        .kismet-landing-nav .nav-link:hover {
+            color: #3b82f6 !important;
         }
 
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
+        .kismet-landing-nav .btn-primary {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            border-radius: 999px;
+            padding: 0.5rem 1.25rem;
+            font-weight: 500;
         }
-        .btn-primary:hover,
-        .btn-primary:focus {
-            background-color: var(--secondary-color);
-            border-color: var(--secondary-color);
+
+        .kismet-landing-nav .btn-primary:hover {
+            background-color: #2563eb;
+            border-color: #2563eb;
         }
-        .btn-outline-primary {
-            color: var(--primary-color);
-            border-color: var(--primary-color);
+
+        .kismet-landing-nav .btn-outline-primary {
+            color: #3b82f6;
+            border-color: #3b82f6;
+            border-radius: 999px;
+            padding: 0.5rem 1.25rem;
+            font-weight: 500;
         }
-        .btn-outline-primary:hover,
-        .btn-outline-primary:focus {
+
+        .kismet-landing-nav .btn-outline-primary:hover {
             color: #fff;
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
+            background-color: #3b82f6;
+            border-color: #3b82f6;
         }
-        
-        /* Hero Section with Slideshow */
-        .hero-section {
+
+        /* Hero */
+        .kismet-hero-section {
             position: relative;
             height: 600px;
             overflow: hidden;
-            margin-top: 76px;
+            margin-top: 73px;
         }
-        
-        .carousel-item {
+
+        #heroCarousel .carousel-item,
+        #heroCarousel .carousel-item img {
             height: 600px;
-        }
-        
-        .carousel-item img {
             object-fit: cover;
-            width: 100%;
-            height: 100%;
         }
-        
-        .carousel-caption {
+
+        #heroCarousel .carousel-caption {
             background: rgba(0, 0, 0, 0.5);
             border-radius: 10px;
             padding: 2rem;
             bottom: 50px;
         }
-        
-        .hero-overlay {
+
+        .kismet-hero-overlay {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(135deg, rgba(36, 191, 209, 0.82) 0%, rgba(30, 163, 179, 0.82) 100%);
+            background: linear-gradient(135deg, rgba(30, 58, 95, 0.85) 0%, rgba(49, 46, 129, 0.85) 50%, rgba(88, 28, 135, 0.85) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1;
         }
-        
-        .hero-content {
+
+        .kismet-hero-content {
             text-align: center;
             color: white;
             z-index: 2;
             position: relative;
         }
-        
-        .hero-content h1 {
+
+        .kismet-hero-content h1 {
             font-size: 3.5rem;
-            font-weight: bold;
+            font-weight: 700;
             margin-bottom: 1rem;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
-        
-        .hero-content p {
+
+        .kismet-hero-content p {
             font-size: 1.3rem;
             margin-bottom: 2rem;
+            opacity: 0.9;
         }
-        
-        .btn-hero {
+
+        .kismet-btn-hero {
             padding: 1rem 3rem;
             font-size: 1.2rem;
             border-radius: 50px;
             background: white;
-            color: var(--text-main);
-            font-weight: bold;
+            color: #1e3a5f;
+            font-weight: 700;
             transition: transform 0.3s, box-shadow 0.3s;
+            text-decoration: none;
+            display: inline-block;
         }
-        
-        .btn-hero:hover {
+
+        .kismet-btn-hero:hover {
             transform: translateY(-3px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            color: var(--text-main);
+            color: #1e3a5f;
         }
-        
-        /* Section Styling */
-        .section {
+
+        /* Sections */
+        .kismet-section {
             padding: 5rem 0;
         }
-        
-        .section-title {
+
+        .kismet-section-title {
             text-align: center;
-            font-size: 2.5rem;
-            font-weight: bold;
+            font-size: 2.25rem;
+            font-weight: 700;
             margin-bottom: 3rem;
-            color: var(--text-main);
+            color: #1e3a5f;
         }
-        
-        .card-feature {
-            border: 1px solid var(--border-soft);
-            border-radius: 12px;
-            box-shadow: none;
+
+        .kismet-feature-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
             transition: transform 0.3s, box-shadow 0.3s;
             height: 100%;
             padding: 2rem;
             background: #fff;
         }
-        
-        .card-feature:hover {
+
+        .kismet-feature-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
-        
-        .card-feature i {
+
+        .kismet-feature-card i {
             font-size: 3rem;
-            color: var(--primary-color);
+            color: #3b82f6;
             margin-bottom: 1rem;
         }
-        
-        /* About Section */
-        .about-section {
-            background: var(--panel-bg);
+
+        .kismet-about-section {
+            background: #f3f4f6;
         }
-        
-        /* Facilities Section */
-        .facility-card {
+
+        .kismet-facility-card {
             text-align: center;
             padding: 2rem;
             background: white;
-            border-radius: 12px;
-            box-shadow: none;
-            border: 1px solid var(--border-soft);
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
             margin-bottom: 2rem;
             transition: transform 0.3s;
         }
-        
-        .facility-card:hover {
+
+        .kismet-facility-card:hover {
             transform: translateY(-5px);
         }
-        
-        .facility-card i {
+
+        .kismet-facility-card i {
             font-size: 3rem;
-            color: var(--secondary-color);
+            color: #6366f1;
             margin-bottom: 1rem;
         }
-        
-        /* Contact Section */
-        .contact-section {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+
+        .kismet-contact-section {
+            background: linear-gradient(135deg, #1e3a5f 0%, #312e81 50%, #581c87 100%);
             color: white;
         }
-        
-        .contact-info {
+
+        .kismet-contact-info {
             text-align: center;
             padding: 2rem;
         }
-        
-        .contact-info i {
+
+        .kismet-contact-info i {
             font-size: 2rem;
             margin-bottom: 1rem;
         }
-        
-        /* Footer */
-        footer {
-            background: var(--text-main);
+
+        .kismet-landing-footer {
+            background: #111827;
             color: white;
             padding: 2rem 0;
             text-align: center;
+        }
+
+        .kismet-landing-footer a {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+        }
+
+        .kismet-landing-footer a:hover {
+            color: #fff;
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top kismet-landing-nav">
         <div class="container">
             <a class="navbar-brand" href="/">
-                <img src="{{ url_for('static', filename='images/school-logo.png') }}" alt="Kismet Secondary School Logo" style="height: 50px; margin-right: 10px;">
+                <img src="{{ url_for('static', filename='images/school-logo.png') }}" alt="Kismet Secondary School Logo">
                 Kismet Secondary School
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -262,13 +273,13 @@
     </nav>
 
     <!-- Hero Section with Slideshow -->
-    <section id="home" class="hero-section">
+    <section id="home" class="kismet-hero-section">
         {% if slideshow_images %}
         <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
             <div class="carousel-inner">
                 {% for image in slideshow_images %}
                 <div class="carousel-item {% if loop.first %}active{% endif %}">
-                    <img src="{{ url_for('static', filename='uploads/slideshow/' + image.filename) }}" 
+                    <img src="{{ url_for('static', filename='uploads/slideshow/' + image.filename) }}"
                          alt="{{ image.caption or 'School Image' }}" class="d-block w-100">
                     {% if image.caption %}
                     <div class="carousel-caption d-none d-md-block">
@@ -291,24 +302,24 @@
         </div>
         {% else %}
         <!-- Default hero if no slideshow images -->
-        <div class="hero-overlay">
-            <div class="hero-content">
+        <div class="kismet-hero-overlay">
+            <div class="kismet-hero-content">
                 <h1>Welcome to Kismet Secondary School</h1>
                 <p>Excellence in Education, Character, and Leadership</p>
-                <a href="{{ url_for('login') }}" class="btn btn-hero">
+                <a href="{{ url_for('login') }}" class="kismet-btn-hero">
                     <i class="fas fa-sign-in-alt"></i> Parent Portal Login
                 </a>
             </div>
         </div>
         {% endif %}
-        
+
         <!-- Hero Content Overlay (if slideshow exists) -->
         {% if slideshow_images %}
-        <div class="hero-overlay">
-            <div class="hero-content">
+        <div class="kismet-hero-overlay">
+            <div class="kismet-hero-content">
                 <h1>Welcome to Kismet Secondary School</h1>
                 <p>Excellence in Education, Character, and Leadership</p>
-                <a href="{{ url_for('login') }}" class="btn btn-hero">
+                <a href="{{ url_for('login') }}" class="kismet-btn-hero">
                     <i class="fas fa-sign-in-alt"></i> Parent Portal Login
                 </a>
             </div>
@@ -317,14 +328,14 @@
     </section>
 
     <!-- About Section -->
-    <section id="about" class="section about-section">
+    <section id="about" class="kismet-section kismet-about-section">
         <div class="container">
-            <h2 class="section-title">About Kismet Combined School</h2>
-            
+            <h2 class="kismet-section-title">About Kismet Combined School</h2>
+
             <!-- Introduction -->
             <div class="row mb-5">
                 <div class="col-lg-10 mx-auto">
-                    <div class="card-feature">
+                    <div class="kismet-feature-card">
                         <i class="fas fa-info-circle"></i>
                         <h4>1.2. INTRODUCTION</h4>
                         <p class="text-start">
@@ -337,7 +348,7 @@
             <div class="row">
                 <!-- Mission -->
                 <div class="col-md-6 mb-4">
-                    <div class="card-feature">
+                    <div class="kismet-feature-card">
                         <i class="fas fa-bullseye"></i>
                         <h4>1.3. MISSION</h4>
                         <p class="text-start">
@@ -345,10 +356,10 @@
                         </p>
                     </div>
                 </div>
-                
+
                 <!-- Vision -->
                 <div class="col-md-6 mb-4">
-                    <div class="card-feature">
+                    <div class="kismet-feature-card">
                         <i class="fas fa-eye"></i>
                         <h4>1.4. VISION</h4>
                         <p class="text-start">
@@ -361,7 +372,7 @@
             <!-- Aim -->
             <div class="row mt-4">
                 <div class="col-lg-10 mx-auto">
-                    <div class="card-feature">
+                    <div class="kismet-feature-card">
                         <i class="fas fa-target"></i>
                         <h4>1.5. AIM</h4>
                         <p class="text-start">
@@ -376,13 +387,12 @@
         </div>
     </section>
 
-
     <!-- Footer -->
-    <footer>
+    <footer class="kismet-landing-footer">
         <div class="container">
             <p>&copy; 2026 Kismet Secondary School. All rights reserved.</p>
             <p>
-                <a href="{{ url_for('login') }}" class="text-white text-decoration-none">
+                <a href="{{ url_for('login') }}">
                     <i class="fas fa-sign-in-alt"></i> Parent Portal
                 </a>
             </p>

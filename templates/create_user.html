@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center mt-4">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h4 class="mb-0"><i class="fas fa-user-plus"></i> Create Parent User</h4>
             </div>
-            <div class="card-body p-4">
+            <div class="card-body">
                 {% if dashboard_url %}
                 <div class="alert alert-success">
                     <h5><i class="fas fa-check-circle"></i> User Created Successfully!</h5>
@@ -21,7 +21,7 @@
                     <p class="text-muted small">Share this URL with the parent. They will need to set a password on first login.</p>
                 </div>
                 {% endif %}
-                
+
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="mb-3">

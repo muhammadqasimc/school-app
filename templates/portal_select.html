@@ -3,66 +3,8 @@
 {% block title %}Portal Selection{% endblock %}
 
 {% block content %}
-<style>
-    :root {
-        --panel-bg: #f2f4f6;
-        --teal: #24bfd1;
-        --teal-soft: #d5eef3;
-        --text-main: #2f3e46;
-        --border-soft: #e7e7e7;
-    }
-
-    .portal-shell {
-        background: var(--panel-bg);
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    .portal-shell .card {
-        border: 1px solid var(--border-soft);
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: none;
-    }
-
-    .portal-shell .card-header {
-        background: var(--teal-soft);
-        color: var(--text-main);
-        border-bottom: 1px solid var(--border-soft);
-        font-weight: 700;
-    }
-
-    .portal-shell .card-body {
-        background: #fff;
-    }
-
-    .btn-portal-parent {
-        background-color: var(--teal);
-        border-color: var(--teal);
-        color: #fff;
-    }
-    .btn-portal-parent:hover,
-    .btn-portal-parent:focus {
-        background-color: #1ea3b3;
-        border-color: #1ea3b3;
-        color: #fff;
-    }
-
-    .btn-portal-management {
-        background-color: #8f78de;
-        border-color: #8f78de;
-        color: #fff;
-    }
-    .btn-portal-management:hover,
-    .btn-portal-management:focus {
-        background-color: #7a64cc;
-        border-color: #7a64cc;
-        color: #fff;
-    }
-</style>
 <div class="row mb-4">
     <div class="col-12">
-        <div class="portal-shell">
         <div class="card">
             <div class="card-header">
                 <h3 class="mb-0"><i class="fas fa-layer-group"></i> Select Portal</h3>
@@ -76,7 +18,7 @@
                     <div class="col-md-6">
                         <form method="POST" action="{{ url_for('choose_parent_portal') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <button type="submit" class="btn btn-portal-parent w-100">
+                            <button type="submit" class="btn btn-primary w-100">
                                 <i class="fas fa-user"></i> Parent Dashboard (restricted)
                             </button>
                         </form>
@@ -84,7 +26,7 @@
                     <div class="col-md-6">
                         <form method="POST" action="{{ url_for('choose_management_portal') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <button type="submit" class="btn btn-portal-management w-100">
+                            <button type="submit" class="btn btn-primary w-100">
                                 <i class="fas fa-chart-line"></i> Management Portal (unrestricted graphs)
                             </button>
                         </form>
@@ -106,7 +48,6 @@
                     Current selection: <strong>{{ session.get("portal_mode", "parent") }}</strong>
                 </div>
             </div>
-        </div>
         </div>
     </div>
 </div>
