@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Management Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+.management-tile {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.management-tile:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.management-tile .tile-icon {
+    font-size: 2rem;
+    color: #667eea;
+    margin-bottom: 0.5rem;
+}
+
+.management-tile h6 {
+    font-size: 0.85rem;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+@media (max-width: 576px) {
+    .management-tile h6 {
+        font-size: 0.75rem;
+    }
+    .management-tile .tile-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.3rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-chart-line"></i> Management Reports</h3>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header">
+    <h5 class="mb-0">Management Reports</h5>
+  </div>
+  <div class="card-body">
+    <div class="row g-2 g-sm-3 row-cols-2 row-cols-sm-3 row-cols-lg-5">
+      {% for report in reports %}
+      <div class="col">
+        <a class="text-decoration-none" href="{{ url_for('management_report', report_key=report.key) }}">
+          <div class="management-tile">
+            <i class="fas fa-chart-line tile-icon"></i>
+            <h6 class="mb-0 text-dark">{{ report.title }}</h6>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

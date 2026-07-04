@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}{{ item.tag }} — Inventory{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <h4 class="mb-0">{{ item.tag }}</h4>
+      <small class="opacity-75">{{ model.name }} · {{ model.item_type }}</small>
+    </div>
+    <div>
+      <span class="badge bg-light text-dark fs-6">{{ status_label.replace('_',' ') }}</span>
+      {% if open_checkout %}
+      <a class="btn btn-sm btn-light ms-2" href="{{ url_for('inventory_report_expected') }}">Due report</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card shadow-sm border-0">
+      <div class="card-header"><strong>Attributes</strong></div>
+      <div class="card-body row g-3">
+        <div class="col-md-6"><small class="text-muted">Serial number</small><div class="fw-semibold">{{ item.serial_number or '—' }}</div></div>
+        <div class="col-md-6"><small class="text-muted">Operational status</small><div>{{ item.ops_status }}</div></div>
+        <div class="col-md-6"><small class="text-muted">Location</small><div>{{ item.physical_location or '—' }}</div></div>
+        <div class="col-md-6"><small class="text-muted">Quantity on hand</small><div>{{ item.quantity_on_hand }}{% if model.item_type == 'consumable' %} <span class="text-muted small">(stock)</span>{% endif %}</div></div>
+        {% if model.low_stock_threshold is not none %}
+        <div class="col-md-6"><small class="text-muted">Low-stock threshold</small><div>{{ model.low_stock_threshold }}</div></div>
+        {% endif %}
+        {% if item.archived_reason %}<div class="col-12"><small class="text-muted">Archive reason</small><div>{{ item.archived_reason }}</div></div>{% endif %}
+        {% if item.notes %}<div class="col-12"><small class="text-muted">Notes</small><div>{{ item.notes }}</div></div>{% endif %}
+      </div>
+      {% if custom_fields %}
+      <ul class="list-group list-group-flush">
+        {% for cf in custom_fields %}
+        <li class="list-group-item d-flex justify-content-between">
+          {{ cf.field_label }}
+          <code>{{ custom_values.get(cf.field_key, '—') }}</code>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div class="card-body border-top bg-light">
+        <div class="row g-2 align-items-center">
+          <div class="col-auto"><img src="{{ url_for('inventory_item_qr_png', item_id=item.id) }}" alt="QR" class="rounded border bg-white"></div>
+          <div class="col">
+            <div class="small text-muted mb-1">Scan link (staff only)</div>
+            <code class="small d-block">{{ ext_scan_url }}</code>
+          </div>
+          <div class="col-auto d-flex flex-column gap-1">
+            <a class="btn btn-sm btn-primary" href="{{ url_for('inventory_item_print_label', item_id=item.id) }}" target="_blank" rel="noopener">Print sticker</a>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('inventory_item_qr_png', item_id=item.id) }}" download="{{ item.tag }}-qr.png">QR PNG</a>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('inventory_item_label_pdf', item_id=item.id) }}">PDF label</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header bg-primary text-white">Checkout</div>
+      <div class="card-body">
+        {% if item.ops_status == 'archived' or item.deleted_at %}
+          <p class="text-muted mb-0">Archived items cannot be checked out.</p>
+        {% elif open_checkout %}
+          <p>Assigned to <strong>{{ assignee.username if assignee }}</strong>.</p>
+          {% if open_checkout.expected_return_at %}<p class="small">Expected back: {{ open_checkout.expected_return_at.strftime('%Y-%m-%d %H:%M') }}</p>{% endif %}
+          <form method="post" action="{{ url_for('inventory_checkin', item_id=item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if model.item_type == 'consumable' %}
+            <p class="small text-muted mb-2">Consumable check-ins return the full issued quantity to stock.</p>
+            <input type="hidden" name="return_quantity" value="{{ open_checkout.quantity }}">
+            {% else %}
+            <label class="form-label">Return quantity</label>
+            <input type="number" name="return_quantity" class="form-control mb-2" value="{{ open_checkout.quantity }}" min="1" max="{{ open_checkout.quantity }}">
+            {% endif %}
+            <button class="btn btn-success w-100" type="submit"><i class="fas fa-sign-in-alt"></i> Check in</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('inventory_checkout', item_id=item.id) }}" id="checkoutForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label">Assign to</label>
+            <select class="form-select mb-2" name="assignee_user_id" required>
+              {% for u in staff_users %}
+              <option value="{{ u.id }}">{{ u.username }}</option>
+              {% endfor %}
+            </select>
+            {% if model.item_type == 'consumable' %}
+            <label class="form-label">Quantity</label>
+            <input type="number" name="quantity" class="form-control mb-2" value="1" min="1" max="{{ item.quantity_on_hand }}">
+            {% endif %}
+            <label class="form-label">Expected return (optional)</label>
+            <input type="datetime-local" name="expected_return_at" class="form-control mb-2">
+            <label class="form-label">Notes</label>
+            <input type="text" name="checkout_notes" class="form-control mb-2" maxlength="500">
+            <label class="form-label">Acceptance signature (optional)</label>
+            <canvas id="sig" width="400" height="160" class="border rounded bg-white w-100"></canvas>
+            <div class="btn-group btn-group-sm my-2">
+              <button type="button" class="btn btn-outline-secondary" id="sigClear">Clear</button>
+            </div>
+            <input type="hidden" name="acceptance_signature" id="sigField">
+            <button class="btn btn-primary w-100" type="submit">Check out</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% if requestable %}
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header">Request</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('inventory_request_item', item_id=item.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="number" name="quantity" class="form-control mb-2" value="1" min="1">
+          <input type="text" name="notes" class="form-control mb-2" placeholder="Reason (optional)">
+          <button class="btn btn-outline-primary w-100" type="submit">Submit request</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    <div class="d-grid gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('inventory_item_edit', item_id=item.id) }}">Edit item</a>
+      <form method="post" action="{{ url_for('inventory_item_soft_delete', item_id=item.id) }}" onsubmit="return confirm('Remove this item from active inventory?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-danger w-100" type="submit">Delete (soft)</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header">History &amp; audit</div>
+      <div class="card-body p-0 table-responsive" style="max-height:320px;overflow:auto;">
+        <table class="table table-sm mb-0">
+          {% for h in history %}
+          <tr>
+            <td class="text-muted small text-nowrap">{{ h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at }}</td>
+            <td>{{ h.action }}</td>
+            <td>{{ h.summary }}</td>
+            <td class="small text-muted">{{ users_map.get(h.actor_user_id).username if users_map.get(h.actor_user_id) else h.actor_user_id }}</td>
+          </tr>
+          {% else %}<tr><td class="text-muted p-3">No events.</td></tr>{% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-header">Checkouts</div>
+      <div class="card-body p-0 table-responsive" style="max-height:320px;overflow:auto;">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Out</th><th>In</th><th>Assignee</th><th>Qty</th></tr></thead>
+          {% for c in checkouts %}
+          <tr>
+            <td class="small">{{ c.checked_out_at.strftime('%Y-%m-%d') if c.checked_out_at }}</td>
+            <td class="small">{{ c.checkin_at.strftime('%Y-%m-%d') if c.checkin_at else '—' }}</td>
+            <td class="small">
+              {{ users_map.get(c.assignee_user_id).username if users_map.get(c.assignee_user_id) else ('#' ~ c.assignee_user_id) }}
+              {% if c.acceptance_signature_png %}<span class="badge bg-info">signed</span>{% endif %}
+            </td>
+            <td>{{ c.quantity }}</td>
+          </tr>
+          {% else %}<tr><td class="text-muted p-3">None yet.</td></tr>{% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-header">Maintenance</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('inventory_maintenance_add', item_id=item.id) }}" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><input class="form-control" name="summary" placeholder="Summary" required></div>
+      <div class="col-md-4"><input class="form-control" name="detail" placeholder="Detail"></div>
+      <div class="col-md-2"><input class="form-control" name="cost_cents" placeholder="Cost (¢)"></div>
+      <div class="col-md-2"><button class="btn btn-secondary w-100" type="submit">Log</button></div>
+    </form>
+    <ul class="list-group mt-3">
+      {% for m in maintenance %}
+      <li class="list-group-item">{{ m.summary }} · {{ m.serviced_at.strftime('%Y-%m-%d') if m.serviced_at }}{% if m.cost_cents %} · {{ m.cost_cents }}¢{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+  const canvas = document.getElementById('sig');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.lineWidth = 2; ctx.strokeStyle = '#222';
+  let draw = false;
+  canvas.onmousedown = e => { draw = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+  canvas.onmousemove = e => { if (!draw) return; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); };
+  canvas.onmouseup = () => draw = false;
+  canvas.onmouseleave = () => draw = false;
+  document.getElementById('sigClear').onclick = () => ctx.clearRect(0,0,canvas.width,canvas.height);
+  document.getElementById('checkoutForm').onsubmit = () => {
+    const blank = canvas.toDataURL() === document.createElement('canvas').toDataURL();
+    document.getElementById('sigField').value = blank ? '' : canvas.toDataURL('image/png');
+  };
+})();
+</script>
+{% endblock %}

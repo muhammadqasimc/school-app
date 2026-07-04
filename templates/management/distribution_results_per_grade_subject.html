@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h3 class="mb-0">{{ report.title }}</h3><a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a></div>
+<div class="card mb-3"><div class="card-body"><div class="row g-2"><div class="col-md-2"><select id="f-year" class="form-select form-select-sm"></select></div><div class="col-md-2"><select id="f-term" class="form-select form-select-sm"></select></div><div class="col-md-6"><select id="f-subject" class="form-select form-select-sm"><option value="">All Subjects</option></select></div><div class="col-md-2"><button id="apply" class="btn btn-primary btn-sm w-100">Apply</button></div></div></div></div>
+<div id="meta" class="small text-muted mb-2"></div><div id="host"></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function qp(){const p=new URLSearchParams();["year","term"].forEach(k=>{const v=(document.getElementById(`f-${k}`)?.value||"").trim();if(v)p.set(k,v)});const s=(document.getElementById("f-subject").value||"").trim();if(s)p.set("subject",s);return p;}
+function row(r){return `<tr><td>${r.gradeLabel||""}</td><td>${Number(r.averagePct||0).toFixed(2)}</td><td>${r.level1||0}</td><td>${r.level2||0}</td><td>${r.level3||0}</td><td>${r.level4||0}</td><td>${r.level5||0}</td><td>${r.level6||0}</td><td>${r.level7||0}</td><td>${r.absent||0}</td><td>${r.total||0}</td></tr>`}
+async function load(){const f=await (await fetch('/api/management-report-filters')).json();const y=document.getElementById("f-year"),t=document.getElementById("f-term"),s=document.getElementById("f-subject");if(!y.options.length){y.innerHTML=(f?.filters?.years||[]).map(v=>`<option value="${v}">${v}</option>`).join("");t.innerHTML=(f?.filters?.terms||[]).map(v=>`<option value="${v}">Term ${v}</option>`).join("");s.innerHTML='<option value="">All Subjects</option>'+(f?.filters?.subjects||[]).map(v=>`<option value="${v}">${v}</option>`).join("");}
+const d=await (await fetch(`/api/management-distribution-results?${qp().toString()}`)).json();document.getElementById("meta").textContent=`Year ${d.meta?.year||"-"} Term ${d.meta?.term||"-"} ${d.meta?.subject?`| ${d.meta.subject}`:""}`;
+document.getElementById("host").innerHTML=(d.groups||[]).map(g=>`<div class="card mb-3"><div class="card-header fw-semibold">${g.title||""}</div><div class="table-responsive"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Grade</th><th>Avg%</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>Absent</th><th>Total</th></tr></thead><tbody>${(g.rows||[]).map(row).join("")}<tr class="fw-semibold"><td>TOTALS</td><td></td><td>${g.totals?.level1||0}</td><td>${g.totals?.level2||0}</td><td>${g.totals?.level3||0}</td><td>${g.totals?.level4||0}</td><td>${g.totals?.level5||0}</td><td>${g.totals?.level6||0}</td><td>${g.totals?.level7||0}</td><td>${g.totals?.absent||0}</td><td>${g.totals?.total||0}</td></tr></tbody></table></div></div>`).join("")||'<div class="text-muted">No data.</div>';}
+document.getElementById("apply").addEventListener("click",load);load();
+</script>
+{% endblock %}

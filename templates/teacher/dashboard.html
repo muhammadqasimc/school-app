@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Teacher Dashboard</h4></div>
+  <div class="card-body">
+    <p class="text-muted mb-3">Teacher portal menu</p>
+    <div class="row g-2 mb-3">
+      <div class="col-md-3">
+        <a class="btn btn-outline-primary w-100" href="{{ url_for('teacher_learner_profiles_page') }}">Learner Profiles</a>
+      </div>
+      <div class="col-md-3">
+        <a class="btn btn-outline-danger w-100" href="{{ url_for('teacher_disciplinary_entry_page') }}">Disciplinary Entry</a>
+      </div>
+    </div>
+    <hr>
+    <div class="row g-3" id="kpi-row"></div>
+    <pre class="small mt-3" id="scope-json">{{ teacher_scope | tojson(indent=2) }}</pre>
+  </div>
+</div>
+<script>
+async function loadTeacherDashboard() {
+  const r = await fetch("{{ url_for('api_teacher_dashboard') }}");
+  if (!r.ok) return;
+  const data = await r.json();
+  const k = data.kpis || {};
+  const cards = [
+    ["Assigned Classes", k.assignedClasses ?? 0],
+    ["Assigned Grades", k.assignedGrades ?? 0],
+    ["Learners In Scope", k.learnerCount ?? 0],
+    ["Pending Attendance", k.pendingAttendance ?? 0],
+    ["Pending Assessments", k.pendingAssessments ?? 0],
+    ["Recent Discipline", k.recentDiscipline ?? 0],
+  ];
+  const row = document.getElementById("kpi-row");
+  row.innerHTML = cards.map(([label, val]) => `<div class="col-md-4"><div class="card border"><div class="card-body"><div class="small text-muted">${label}</div><div class="h4 mb-0">${val}</div></div></div></div>`).join("");
+}
+loadTeacherDashboard();
+</script>
+{% endblock %}

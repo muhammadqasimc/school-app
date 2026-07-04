@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = false %}
+{% include "management/_report_frame.html" %}
+<div class="alert alert-info py-2">Principal highlight: <span id="principal-highlight">Loading...</span></div>
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Records</div><div id="k-records" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Attendance Rate</div><div id="k-attendance" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Pass Rate</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
+</div>
+<div class="row"><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-phase"></canvas></div></div><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-enrol"></canvas></div></div></div>
+<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Avg %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl-principal"></tbody></table></div></div>
+{% endblock %}
+{% block extra_js %}<script>
+const reportKey="principal-overview";let a=null,b=null;const ids=["year","term","phase","grade","subject"];
+const q=()=>{const p=new URLSearchParams();ids.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)p.set(k,v);});return p;};
+const fs=(id,v)=>{const e=document.getElementById(id),k=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;e.appendChild(o);});e.value=k;};
+async function lf(){const r=await fetch(`/api/management-report-filters?${q()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);fs("f-subject",d.filters.subjects);}
+function rc(id,t,l,rows,c){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(x=>x.label),datasets:[{label:l,data:(rows||[]).map(x=>Number(x.value||0)),backgroundColor:c,borderColor:c}]},options:{responsive:true,maintainAspectRatio:false}});}
+async function lr(){const p=q();p.set("report_key",reportKey);const r=await fetch(`/api/management-report?${p}`);const d=await r.json();const k=(d.reportData||{}).kpis||{};document.getElementById("k-learners").textContent=k.learners??"-";document.getElementById("k-records").textContent=k.records??"-";document.getElementById("k-attendance").textContent=k.attendanceRate!=null?`${k.attendanceRate}%`:"-";document.getElementById("k-pass").textContent=k.passRate!=null?`${k.passRate}%`:"-";
+const h=(d.reportData||{}).highlights||{};document.getElementById("principal-highlight").textContent=h.largestGrade?`Largest cohort: Grade ${h.largestGrade} (${h.largestGradeCount})`:"No highlight available.";
+const c=(d.reportData||{}).charts||{};if(a)a.destroy();if(b)b.destroy();a=rc("chart-phase","bar","Phase Performance",c.phasePerformance||[],"rgba(13,110,253,0.75)");b=rc("chart-enrol","line","Enrolment Trend",c.enrolmentTrend||[],"rgba(111,66,193,0.85)");
+const rows=((d.reportData||{}).tables||{}).subjectPassRates||[];document.getElementById("tbl-principal").innerHTML=rows.length?rows.slice(0,12).map(x=>`<tr><td>${x.label||""}</td><td>${x.value??""}</td><td>${x.passRate??""}</td></tr>`).join(""):'<tr><td colspan="3" class="text-muted">No data.</td></tr>';}
+["f-year","f-term","f-phase","f-grade","f-subject"].forEach(i=>document.getElementById(i).addEventListener("change",lf));document.getElementById("apply-filters").addEventListener("click",lr);(async()=>{await lf();await lr();})();
+</script>{% endblock %}

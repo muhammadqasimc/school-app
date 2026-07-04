@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+
+{% block title %}Detention Notices - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-file-pdf"></i> Detention Notices</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <p class="text-muted">Generate detention notifications and attendance registers from MDB records (no file upload required).</p>
+
+                <div class="card border-primary mb-3">
+                    <div class="card-header bg-primary text-white py-2">
+                        <h6 class="mb-0">1. Detention settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="phaseSelect" class="form-label">Phase</label>
+                                <select id="phaseSelect" class="form-select">
+                                    <option value="foundation">Foundation (Grade 3)</option>
+                                    <option value="primary">Primary (Grades 4-7)</option>
+                                    <option value="highschool">High School (Grades 8-12)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="yearInput" class="form-label">Year</label>
+                                <input id="yearInput" type="number" class="form-control" value="{{ current_year }}" min="2020" max="2100">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="dateInput" class="form-label">Detention Date</label>
+                                <input id="dateInput" type="date" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="educatorInput" class="form-label">Educator Name</label>
+                                <input id="educatorInput" type="text" class="form-control" placeholder="Enter educator name">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="startTimeInput" class="form-label">Start Time</label>
+                                <input id="startTimeInput" type="time" class="form-control">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="endTimeInput" class="form-label">End Time</label>
+                                <input id="endTimeInput" type="time" class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label d-block">Grades (phase)</label>
+                                <div id="gradesFilter" class="d-flex flex-wrap gap-2"></div>
+                                <div class="form-text">Leave all checked or none checked to include every grade in the phase.</div>
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex gap-2">
+                            <button type="button" id="btnLoadLearners" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Load Eligible Learners
+                            </button>
+                            <button type="button" id="btnSelectAll" class="btn btn-outline-secondary" disabled>Select all</button>
+                            <button type="button" id="btnDeselectAll" class="btn btn-outline-secondary" disabled>Deselect all</button>
+                            <div class="form-check ms-auto pt-2">
+                                <input class="form-check-input" type="checkbox" id="generateAllToggle" checked>
+                                <label class="form-check-label" for="generateAllToggle">
+                                    Generate for all eligible learners
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-info mb-3">
+                    <div class="card-header bg-info text-white py-2">
+                        <h6 class="mb-0">2. Learners at detention threshold</h6>
+                    </div>
+                    <div class="card-body" style="max-height: 360px; overflow-y: auto;">
+                        <div id="learnersSummary" class="small text-muted">Load learners to start.</div>
+                        <div id="learnersList" class="mt-2"></div>
+                    </div>
+                </div>
+
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white py-2">
+                        <h6 class="mb-0">3. Generate PDFs</h6>
+                    </div>
+                    <div class="card-body">
+                        <button type="button" id="btnGenerate" class="btn btn-success" disabled>
+                            <i class="fas fa-file-export"></i> Generate Notices + Register
+                        </button>
+                        <div id="generateStatus" class="mt-3 small"></div>
+                    </div>
+                </div>
+
+                <div class="card border-secondary mt-3">
+                    <div class="card-header bg-secondary text-white py-2">
+                        <h6 class="mb-0">4. Generation history</h6>
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="historyList" class="small text-muted">Loading history...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sitMeritModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Apply SIT DETENTION Merit (12)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2" id="sitMeritMeta"></p>
+                <div class="mb-2 d-flex gap-2">
+                    <button type="button" id="sitMeritSelectAll" class="btn btn-sm btn-outline-secondary">Select all not-yet-applied</button>
+                    <button type="button" id="sitMeritClearAll" class="btn btn-sm btn-outline-secondary">Clear all</button>
+                </div>
+                <div id="sitMeritLearners" class="border rounded p-2" style="max-height: 360px; overflow-y: auto;">
+                    <span class="text-muted small">Loading learners...</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="sitMeritApplyBtn">Apply Selected Merits</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const learnersList = document.getElementById('learnersList');
+    const learnersSummary = document.getElementById('learnersSummary');
+    const generateStatus = document.getElementById('generateStatus');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const btnSelectAll = document.getElementById('btnSelectAll');
+    const btnDeselectAll = document.getElementById('btnDeselectAll');
+    const generateAllToggle = document.getElementById('generateAllToggle');
+    const historyList = document.getElementById('historyList');
+    const btnLoadLearners = document.getElementById('btnLoadLearners');
+    const sitMeritModalEl = document.getElementById('sitMeritModal');
+    const sitMeritLearnersEl = document.getElementById('sitMeritLearners');
+    const sitMeritMetaEl = document.getElementById('sitMeritMeta');
+    const sitMeritApplyBtn = document.getElementById('sitMeritApplyBtn');
+    const sitMeritSelectAllBtn = document.getElementById('sitMeritSelectAll');
+    const sitMeritClearAllBtn = document.getElementById('sitMeritClearAll');
+    const dateInput = document.getElementById('dateInput');
+    const phaseSelect = document.getElementById('phaseSelect');
+    const startTimeInput = document.getElementById('startTimeInput');
+    const endTimeInput = document.getElementById('endTimeInput');
+    const gradesFilterEl = document.getElementById('gradesFilter');
+    const scheduleDefaults = {{ schedule_defaults | tojson }};
+    const PHASE_GRADES = {
+        foundation: [3],
+        primary: [4, 5, 6, 7],
+        highschool: [8, 9, 10, 11, 12]
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    dateInput.value = today;
+
+    function toTimeInputValue(hhmm) {
+        const s = String(hhmm || '').trim();
+        const m = s.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return '';
+        const h = String(m[1]).padStart(2, '0');
+        return h + ':' + m[2];
+    }
+
+    function applyPhaseDefaults(phase) {
+        const def = scheduleDefaults[phase] || {};
+        startTimeInput.value = toTimeInputValue(def.start);
+        endTimeInput.value = toTimeInputValue(def.end);
+        const grades = PHASE_GRADES[phase] || [];
+        gradesFilterEl.innerHTML = grades.map(function(g) {
+            return '<div class="form-check form-check-inline">' +
+                '<input class="form-check-input grade-cb" type="checkbox" value="' + g + '" id="grade_' + g + '" checked>' +
+                '<label class="form-check-label" for="grade_' + g + '">Grade ' + g + '</label></div>';
+        }).join('');
+    }
+
+    function selectedGradesQuery() {
+        const boxes = Array.from(document.querySelectorAll('.grade-cb'));
+        if (!boxes.length) return '';
+        const checked = boxes.filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.value; });
+        if (!checked.length || checked.length === boxes.length) {
+            return '';
+        }
+        return '&grades=' + encodeURIComponent(checked.join(','));
+    }
+
+    function selectedGradesBody() {
+        const boxes = Array.from(document.querySelectorAll('.grade-cb'));
+        if (!boxes.length) return [];
+        const checked = boxes.filter(function(cb) { return cb.checked; }).map(function(cb) { return parseInt(cb.value, 10); });
+        if (!checked.length || checked.length === boxes.length) {
+            return [];
+        }
+        return checked;
+    }
+
+    phaseSelect.addEventListener('change', function() {
+        applyPhaseDefaults(phaseSelect.value);
+        currentLearners = [];
+        renderLearners();
+        learnersSummary.innerHTML = '<span class="text-muted">Phase changed — load learners again.</span>';
+    });
+    applyPhaseDefaults(phaseSelect.value);
+
+    let currentLearners = [];
+    let learnersLoadController = null;
+    let activeBatchForMerit = '';
+    const sitMeritModal = (window.bootstrap && sitMeritModalEl) ? new bootstrap.Modal(sitMeritModalEl) : null;
+
+    function esc(val) {
+        return String(val || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function fetchJson(url, options) {
+        return fetch(url, Object.assign({ headers: { 'Accept': 'application/json' } }, options || {})).then(r => r.json());
+    }
+
+    function postJson(url, data) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken || ''
+            },
+            body: JSON.stringify(data)
+        }).then(r => r.json());
+    }
+
+    function selectedLearnerIds() {
+        return Array.from(document.querySelectorAll('.learner-cb:checked')).map(cb => cb.value);
+    }
+
+    function refreshSelectionControls() {
+        const lockSelection = generateAllToggle.checked;
+        document.querySelectorAll('.learner-cb').forEach(function(cb) {
+            cb.disabled = lockSelection;
+            if (lockSelection) cb.checked = true;
+        });
+        btnSelectAll.disabled = lockSelection || !currentLearners.length;
+        btnDeselectAll.disabled = lockSelection || !currentLearners.length;
+    }
+
+    function loadHistory() {
+        historyList.innerHTML = '<span class="text-muted">Loading history...</span>';
+        fetchJson('{{ url_for("admin_detention_notice_history") }}')
+            .then(function(data) {
+                const items = data.history || [];
+                if (!items.length) {
+                    historyList.innerHTML = '<span class="text-muted">No generations yet.</span>';
+                    return;
+                }
+                historyList.innerHTML = items.map(function(h) {
+                    const created = h.createdAt ? new Date(h.createdAt).toLocaleString() : '';
+                    const detentionDate = h.detentionDate ? new Date(h.detentionDate).toLocaleString() : '';
+                    const meritStatus = (Number(h.meritAppliedCount || 0)) + '/' + (Number(h.meritTotalCount || 0));
+                    return '<div class="border-bottom py-2">' +
+                        '<div><strong>' + esc(h.phaseName) + '</strong> - Year ' + esc(h.year) + ' - ' + esc(h.learnerCount) + ' learner(s)</div>' +
+                        '<div class="text-muted">Detention: ' + esc(detentionDate) + ' | Educator: ' + esc(h.educatorName) + '</div>' +
+                        '<div class="text-muted">Created by: ' + esc(h.createdBy || 'admin') + ' | ' + esc(created) + ' | SIT DETENTION merits: ' + esc(meritStatus) + '</div>' +
+                        '<div class="mt-1">' +
+                        '<a class="btn btn-sm btn-outline-primary me-2" href="' + esc(h.notificationsUrl) + '">Notifications</a>' +
+                        '<a class="btn btn-sm btn-outline-success" href="' + esc(h.attendanceUrl) + '">Attendance</a>' +
+                        '<button type="button" class="btn btn-sm btn-outline-warning ms-2 apply-sit-merit-btn" data-batch-id="' + esc(h.id) + '">Apply SIT DETENTION Merit (12)</button>' +
+                        '</div></div>';
+                }).join('');
+            })
+            .catch(function() {
+                historyList.innerHTML = '<span class="text-danger">Failed to load history.</span>';
+            });
+    }
+
+    function renderLearners() {
+        if (!currentLearners.length) {
+            learnersSummary.innerHTML = '<span class="text-muted">No learners currently meet threshold.</span>';
+            learnersList.innerHTML = '';
+            btnGenerate.disabled = true;
+            btnSelectAll.disabled = true;
+            btnDeselectAll.disabled = true;
+            return;
+        }
+        learnersSummary.textContent = currentLearners.length + ' learner(s) found.';
+        learnersList.innerHTML = currentLearners.map(function(l) {
+            return '<div class="form-check border-bottom py-1">' +
+                '<input class="form-check-input learner-cb" type="checkbox" checked value="' + esc(l.id) + '" id="learner_' + esc(l.id) + '">' +
+                '<label class="form-check-label" for="learner_' + esc(l.id) + '">' +
+                esc((l.sname || '') + ', ' + (l.fname || '')) +
+                ' - Grade ' + esc(l.grade) +
+                ' - Balance: ' + esc(l.balance) +
+                '</label></div>';
+        }).join('');
+        btnGenerate.disabled = false;
+        btnSelectAll.disabled = false;
+        btnDeselectAll.disabled = false;
+        refreshSelectionControls();
+    }
+
+    btnLoadLearners.addEventListener('click', function() {
+        const phase = phaseSelect.value;
+        const year = document.getElementById('yearInput').value;
+        if (learnersLoadController) {
+            learnersLoadController.abort();
+        }
+        learnersLoadController = new AbortController();
+        btnLoadLearners.disabled = true;
+        learnersSummary.innerHTML = '<span class="text-muted">Loading learners...</span>';
+        learnersList.innerHTML = '';
+        generateStatus.innerHTML = '';
+        fetchJson('{{ url_for("admin_detention_learners") }}?phase=' + encodeURIComponent(phase) + '&year=' + encodeURIComponent(year) + selectedGradesQuery(), { signal: learnersLoadController.signal })
+            .then(function(data) {
+                currentLearners = data.learners || [];
+                renderLearners();
+                if (data.error) {
+                    learnersSummary.innerHTML = '<span class="text-danger">' + esc(data.error) + '</span>';
+                }
+            })
+            .catch(function(err) {
+                if (err && err.name === 'AbortError') {
+                    return;
+                }
+                learnersSummary.innerHTML = '<span class="text-danger">Failed to load learners.</span>';
+            })
+            .finally(function() {
+                if (learnersLoadController && learnersLoadController.signal.aborted) {
+                    return;
+                }
+                learnersLoadController = null;
+                btnLoadLearners.disabled = false;
+            });
+    });
+
+    btnSelectAll.addEventListener('click', function() {
+        document.querySelectorAll('.learner-cb').forEach(function(cb) { cb.checked = true; });
+    });
+    btnDeselectAll.addEventListener('click', function() {
+        document.querySelectorAll('.learner-cb').forEach(function(cb) { cb.checked = false; });
+    });
+    generateAllToggle.addEventListener('change', refreshSelectionControls);
+
+    btnGenerate.addEventListener('click', function() {
+        const phase = phaseSelect.value;
+        const year = document.getElementById('yearInput').value;
+        const detentionDate = dateInput.value;
+        const educatorName = document.getElementById('educatorInput').value.trim();
+        const startTime = startTimeInput.value;
+        const endTime = endTimeInput.value;
+        const learnerIds = selectedLearnerIds();
+        const generateAll = generateAllToggle.checked;
+        if (!detentionDate) {
+            generateStatus.innerHTML = '<span class="text-warning">Select a detention date.</span>';
+            return;
+        }
+        if (!educatorName) {
+            generateStatus.innerHTML = '<span class="text-warning">Enter educator name.</span>';
+            return;
+        }
+        if (!startTime || !endTime) {
+            generateStatus.innerHTML = '<span class="text-warning">Enter start and end times.</span>';
+            return;
+        }
+        if (!generateAll && !learnerIds.length) {
+            generateStatus.innerHTML = '<span class="text-warning">Select at least one learner.</span>';
+            return;
+        }
+        this.disabled = true;
+        generateStatus.innerHTML = '<span class="text-muted">Generating PDFs...</span>';
+        const payload = {
+            phase: phase,
+            year: year,
+            detention_date: detentionDate,
+            educator_name: educatorName,
+            learner_ids: learnerIds,
+            generate_all: generateAll,
+            start_time: startTime,
+            end_time: endTime
+        };
+        const grades = selectedGradesBody();
+        if (grades.length) {
+            payload.grades = grades;
+        }
+        postJson('{{ url_for("admin_detention_generate") }}', payload).then((data) => {
+            this.disabled = false;
+            if (!data.ok) {
+                generateStatus.innerHTML = '<span class="text-danger">' + esc(data.error || 'Generation failed.') + '</span>';
+                return;
+            }
+            generateStatus.innerHTML =
+                '<span class="text-success">Generated for ' + esc(data.selectedCount) + ' learner(s).</span><br>' +
+                '<a class="btn btn-sm btn-outline-primary mt-2 me-2" href="' + esc(data.notificationsUrl) + '"><i class="fas fa-download"></i> Download Notifications</a>' +
+                '<a class="btn btn-sm btn-outline-success mt-2" href="' + esc(data.attendanceUrl) + '"><i class="fas fa-download"></i> Download Attendance Register</a>';
+            loadHistory();
+        }).catch(() => {
+            this.disabled = false;
+            generateStatus.innerHTML = '<span class="text-danger">Request failed.</span>';
+        });
+    });
+
+    historyList.addEventListener('click', function(e) {
+        const btn = e.target.closest('.apply-sit-merit-btn');
+        if (!btn) return;
+        const batchId = btn.getAttribute('data-batch-id');
+        if (!batchId) return;
+        activeBatchForMerit = String(batchId);
+        sitMeritMetaEl.textContent = 'Loading batch learners...';
+        sitMeritLearnersEl.innerHTML = '<span class="text-muted small">Loading learners...</span>';
+        if (sitMeritModal) sitMeritModal.show();
+        fetchJson('/admin/detention-notices/' + encodeURIComponent(batchId) + '/learners')
+            .then(function(data) {
+                if (data.error) {
+                    sitMeritMetaEl.textContent = data.error;
+                    sitMeritLearnersEl.innerHTML = '<span class="text-danger small">Failed to load learners.</span>';
+                    return;
+                }
+                const learners = data.learners || [];
+                const detentionDate = data.detentionDate ? new Date(data.detentionDate).toLocaleString() : '';
+                sitMeritMetaEl.textContent = (data.phaseName || '') + ' | ' + detentionDate + ' | Select only learners who sat detention.';
+                if (!learners.length) {
+                    sitMeritLearnersEl.innerHTML = '<span class="text-muted small">No learners found in batch.</span>';
+                    return;
+                }
+                sitMeritLearnersEl.innerHTML = learners.map(function(l) {
+                    const id = String(l.id || '');
+                    const label = esc((l.surname || '') + ', ' + (l.name || '')) + ' - Grade ' + esc(l.grade || '') + ' - ' + esc(l.learnerId || id);
+                    if (l.applied) {
+                        return '<div class="form-check border-bottom py-1">' +
+                            '<input class="form-check-input sit-merit-cb" type="checkbox" value="' + esc(id) + '" id="sit_merit_' + esc(id) + '" checked disabled>' +
+                            '<label class="form-check-label text-muted" for="sit_merit_' + esc(id) + '">' + label + ' (already applied)</label></div>';
+                    }
+                    return '<div class="form-check border-bottom py-1">' +
+                        '<input class="form-check-input sit-merit-cb" type="checkbox" value="' + esc(id) + '" id="sit_merit_' + esc(id) + '" checked>' +
+                        '<label class="form-check-label" for="sit_merit_' + esc(id) + '">' + label + '</label></div>';
+                }).join('');
+            })
+            .catch(function() {
+                sitMeritMetaEl.textContent = 'Failed to load learners.';
+                sitMeritLearnersEl.innerHTML = '<span class="text-danger small">Request failed.</span>';
+            });
+    });
+
+    sitMeritSelectAllBtn.addEventListener('click', function() {
+        sitMeritLearnersEl.querySelectorAll('.sit-merit-cb').forEach(function(cb) {
+            if (!cb.disabled) cb.checked = true;
+        });
+    });
+    sitMeritClearAllBtn.addEventListener('click', function() {
+        sitMeritLearnersEl.querySelectorAll('.sit-merit-cb').forEach(function(cb) {
+            if (!cb.disabled) cb.checked = false;
+        });
+    });
+    sitMeritApplyBtn.addEventListener('click', function() {
+        const selected = Array.from(sitMeritLearnersEl.querySelectorAll('.sit-merit-cb:checked'))
+            .filter(function(cb) { return !cb.disabled; })
+            .map(function(cb) { return cb.value; });
+        if (!activeBatchForMerit) {
+            generateStatus.innerHTML = '<span class="text-danger">No detention batch selected.</span>';
+            return;
+        }
+        if (!selected.length) {
+            generateStatus.innerHTML = '<span class="text-warning">Select at least one learner who sat detention.</span>';
+            return;
+        }
+        sitMeritApplyBtn.disabled = true;
+        const old = sitMeritApplyBtn.textContent;
+        sitMeritApplyBtn.textContent = 'Applying...';
+        postJson('/admin/detention-notices/' + encodeURIComponent(activeBatchForMerit) + '/apply-sit-detention-merit', { learner_ids: selected })
+            .then(function(data) {
+                sitMeritApplyBtn.disabled = false;
+                sitMeritApplyBtn.textContent = old;
+                if (!data.ok) {
+                    generateStatus.innerHTML = '<span class="text-danger">' + esc(data.error || 'Failed to apply merit.') + '</span>';
+                    return;
+                }
+                if (sitMeritModal) sitMeritModal.hide();
+                generateStatus.innerHTML = '<span class="text-success">' + esc(data.message || 'Merits applied.') + '</span>';
+                loadHistory();
+            })
+            .catch(function() {
+                sitMeritApplyBtn.disabled = false;
+                sitMeritApplyBtn.textContent = old;
+                generateStatus.innerHTML = '<span class="text-danger">Request failed while applying merit.</span>';
+            });
+    });
+    loadHistory();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Teacher Setup{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Teacher Setup - {{ educator_id }}</h4></div>
+  <div class="card-body">
+    {% if otp_sent %}
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="step" value="verify">
+      <label class="form-label">OTP</label>
+      <input class="form-control" name="otp" required maxlength="6">
+      <button class="btn btn-primary mt-2" type="submit">Verify OTP</button>
+    </form>
+    <form method="POST" class="mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="step" value="resend">
+      <button class="btn btn-outline-secondary" type="submit">Resend OTP</button>
+    </form>
+    {% else %}
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="step" value="send">
+      <label class="form-label">Cellphone for OTP</label>
+      <input class="form-control" name="phone" placeholder="+27..." required>
+      <button class="btn btn-primary mt-2" type="submit">Send OTP</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

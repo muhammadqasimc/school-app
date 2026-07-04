@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Learner Profile{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h3 class="mb-0"><i class="fas fa-id-card"></i> Learner Profile</h3>
+        <a class="btn btn-outline-primary" href="{{ url_for('dashboard') }}">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+{% if learner_info %}
+<div class="alert alert-info">
+    Viewing profile for: <strong>{{ learner_info.name }} {{ learner_info.surname }}</strong>
+    {% if learner_info.learner_id %}(Learner ID: {{ learner_info.learner_id }}){% endif %}
+</div>
+{% endif %}
+
+{% if has_pending %}
+<div class="alert alert-warning">
+    There is already a pending request for this learner. You can submit a new request after admin review.
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('parent_submit_learner_profile_change') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user-graduate"></i> Learner Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if learner_fields %}
+                        {% for key, label in learner_fields %}
+                        <div class="mb-3">
+                            <label class="form-label" for="learner__{{ key }}">{{ label }}</label>
+                            <input
+                                id="learner__{{ key }}"
+                                name="learner__{{ key }}"
+                                class="form-control"
+                                value="{{ learner_row.get(key, '') if learner_row else '' }}"
+                            />
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No learner fields available.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user"></i> Parent Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if parent_fields %}
+                        {% for key, label in parent_fields %}
+                        <div class="mb-3">
+                            <label class="form-label" for="parent__{{ key }}">{{ label }}</label>
+                            <input
+                                id="parent__{{ key }}"
+                                name="parent__{{ key }}"
+                                class="form-control"
+                                value="{{ parent_row.get(key, '') if parent_row else '' }}"
+                            />
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No parent fields found for this learner.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-users"></i> Spouse Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if spouse_fields %}
+                        {% for key, label in spouse_fields %}
+                        <div class="mb-3">
+                            <label class="form-label" for="parent__{{ key }}">{{ label }}</label>
+                            <input
+                                id="parent__{{ key }}"
+                                name="parent__{{ key }}"
+                                class="form-control"
+                                value="{{ parent_row.get(key, '') if parent_row else '' }}"
+                            />
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No spouse fields found.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-comment"></i> Request Comment</h5>
+        </div>
+        <div class="card-body">
+            <textarea class="form-control" name="parent_comment" rows="3" maxlength="4000" placeholder="Add any context for admin review (optional)"></textarea>
+            <div class="d-flex justify-content-end mt-3">
+                <button class="btn btn-primary" type="submit" {% if has_pending %}disabled{% endif %}>
+                    <i class="fas fa-paper-plane"></i> Submit for Approval
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-history"></i> Recent Requests</h5>
+    </div>
+    <div class="card-body">
+        {% if requests_rows %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Status</th>
+                        <th>Submitted</th>
+                        <th>Admin Comment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests_rows %}
+                    <tr>
+                        <td>{{ req.id }}</td>
+                        <td>
+                            <span class="badge {% if req.status == 'approved' %}bg-success{% elif req.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                {{ req.status|upper }}
+                            </span>
+                        </td>
+                        <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at else '-' }}</td>
+                        <td>{{ req.admin_comment or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No requests yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1787 @@
+{
+  "generatedAt": "2026-03-24T21:35:12.492700Z",
+  "mdbPath": "C:\\Users\\User\\Documents\\Reporting_app\\KISMET SECONDARY 2026  JAN (1).mdb",
+  "passwordUsed": "set",
+  "tableCount": 399,
+  "nameHits": [
+    {
+      "table": "DebtorsTrans",
+      "keyword": "debtor",
+      "kind": "table_name"
+    },
+    {
+      "table": "FeeExemptions",
+      "keyword": "exempt",
+      "kind": "table_name"
+    },
+    {
+      "table": "FeederSchools",
+      "keyword": "fee",
+      "kind": "table_name"
+    },
+    {
+      "table": "Fees",
+      "keyword": "fee",
+      "kind": "table_name"
+    },
+    {
+      "table": "GLTrans",
+      "keyword": "gltrans",
+      "kind": "table_name"
+    },
+    {
+      "table": "Journals",
+      "keyword": "journal",
+      "kind": "table_name"
+    },
+    {
+      "table": "SNE_Survey2008SchoolFees",
+      "keyword": "fee",
+      "kind": "table_name"
+    },
+    {
+      "table": "SchoolFees",
+      "keyword": "fee",
+      "kind": "table_name"
+    },
+    {
+      "table": "Fees",
+      "column": "Fees",
+      "keyword": "fee",
+      "kind": "column_name"
+    },
+    {
+      "table": "Journals",
+      "column": "JournalNumber",
+      "keyword": "journal",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "NoFeeCandidate",
+      "keyword": "fee",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "SNEAccommodationConcession",
+      "keyword": "concession",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "ImmigrantLanguageConcession",
+      "keyword": "concession",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "Mathematicalconcession",
+      "keyword": "concession",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "Languageconcession",
+      "keyword": "concession",
+      "kind": "column_name"
+    },
+    {
+      "table": "LearnerExamRegistrationV2",
+      "column": "AccommodationConcessionOther",
+      "keyword": "concession",
+      "kind": "column_name"
+    },
+    {
+      "table": "SNE_Survey2008SchoolFees",
+      "column": "Fee",
+      "keyword": "fee",
+      "kind": "column_name"
+    }
+  ],
+  "valueHits": [
+    {
+      "table": "ChartofAccountsEC",
+      "column": "Description",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "PARTIAL EXEMPT",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "SUBSIDY"
+      ],
+      "sampleRows": [
+        {
+          "AccountId": 5,
+          "AccNumber": 2,
+          "SubAccNo": 2,
+          "AccCat": "INC",
+          "Description": "School Fees after Partial Exemptions",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 10,
+          "AccNumber": 10,
+          "SubAccNo": 4,
+          "AccCat": "INC",
+          "Description": "Grade R subsidy",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 3,
+          "AccNumber": 2,
+          "SubAccNo": 1,
+          "AccCat": "INC",
+          "Description": "Full School Fees",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 5,
+          "AccNumber": 2,
+          "SubAccNo": 2,
+          "AccCat": "INC",
+          "Description": "School Fees after Partial Exemptions",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        }
+      ]
+    },
+    {
+      "table": "ChartofAccountsKZN",
+      "column": "Description",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "SPONSOR",
+        "SUBSIDY"
+      ],
+      "sampleRows": [
+        {
+          "AccountId": 189,
+          "AccNumber": 20,
+          "SubAccNo": 7,
+          "AccCat": "INC",
+          "Description": "Exemption Compensation",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 182,
+          "AccNumber": 10,
+          "SubAccNo": 3,
+          "AccCat": "INC",
+          "Description": "Hostel subsidy",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 183,
+          "AccNumber": 20,
+          "SubAccNo": 0,
+          "AccCat": "INC",
+          "Description": "Government Subsidy / Allocation / Grant",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "SP"
+        },
+        {
+          "AccountId": 244,
+          "AccNumber": 220,
+          "SubAccNo": 17,
+          "AccCat": "EXP",
+          "Description": "Awards and sponsorship",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        },
+        {
+          "AccountId": 180,
+          "AccNumber": 10,
+          "SubAccNo": 1,
+          "AccCat": "INC",
+          "Description": "Full school fees",
+          "OpenCredit": "0.0000",
+          "OpenDebit": "0.0000",
+          "BSGroup": 0,
+          "Type": "I"
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuTitle",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "11.5",
+          "MnuTitle": "DEBTORS AND SCHOOL FEES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Maintain School Fees",
+          "MnuOpt2": "Debtor Take On Balances",
+          "MnuOpt3": "Learner Billing",
+          "MnuOpt4": "School Fee Exemptions",
+          "MnuOpt5": "Debtors Age Analysis",
+          "MnuOpt6": "School Fee Collections",
+          "MnuOpt7": "",
+          "MnuOpt8": "Customer Account Export",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "Learners and Account Numbers",
+          "MnuOpt12": "View/Print Learner Statements",
+          "MnuOpt13": "View/Print  Account Payers",
+          "MnuOpt14": "Change Account Payer",
+          "MnuOpt15": "Learners with No Account Payer",
+          "MnuOpt16": "Archived Learners with Balances",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt1",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "WRITE OFF",
+        "WRITEOFF"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "5.7",
+          "MnuTitle": "GOVERNANCE FINANCE INFORMATION MENU",
+          "MnuOpt0": "GOVERNANCE INFORMATION MENU",
+          "MnuOpt1": "Fee Exemption Statistics",
+          "MnuOpt2": "",
+          "MnuOpt3": "",
+          "MnuOpt4": "",
+          "MnuOpt5": "",
+          "MnuOpt6": "",
+          "MnuOpt7": "",
+          "MnuOpt8": "",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11.19",
+          "MnuTitle": "FINANCIAL YEAR END AND ARCHIVES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Write Off Debtor Accounts",
+          "MnuOpt2": "Process Year End Transactions",
+          "MnuOpt3": "New Financial Year",
+          "MnuOpt4": "Delete Archived Data",
+          "MnuOpt5": "",
+          "MnuOpt6": "",
+          "MnuOpt7": "",
+          "MnuOpt8": "",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11.5",
+          "MnuTitle": "DEBTORS AND SCHOOL FEES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Maintain School Fees",
+          "MnuOpt2": "Debtor Take On Balances",
+          "MnuOpt3": "Learner Billing",
+          "MnuOpt4": "School Fee Exemptions",
+          "MnuOpt5": "Debtors Age Analysis",
+          "MnuOpt6": "School Fee Collections",
+          "MnuOpt7": "",
+          "MnuOpt8": "Customer Account Export",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "Learners and Account Numbers",
+          "MnuOpt12": "View/Print Learner Statements",
+          "MnuOpt13": "View/Print  Account Payers",
+          "MnuOpt14": "Change Account Payer",
+          "MnuOpt15": "Learners with No Account Payer",
+          "MnuOpt16": "Archived Learners with Balances",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt4",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "11.5",
+          "MnuTitle": "DEBTORS AND SCHOOL FEES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Maintain School Fees",
+          "MnuOpt2": "Debtor Take On Balances",
+          "MnuOpt3": "Learner Billing",
+          "MnuOpt4": "School Fee Exemptions",
+          "MnuOpt5": "Debtors Age Analysis",
+          "MnuOpt6": "School Fee Collections",
+          "MnuOpt7": "",
+          "MnuOpt8": "Customer Account Export",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "Learners and Account Numbers",
+          "MnuOpt12": "View/Print Learner Statements",
+          "MnuOpt13": "View/Print  Account Payers",
+          "MnuOpt14": "Change Account Payer",
+          "MnuOpt15": "Learners with No Account Payer",
+          "MnuOpt16": "Archived Learners with Balances",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11.5",
+          "MnuTitle": "DEBTORS AND SCHOOL FEES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Maintain School Fees",
+          "MnuOpt2": "Debtor Take On Balances",
+          "MnuOpt3": "Learner Billing",
+          "MnuOpt4": "School Fee Exemptions",
+          "MnuOpt5": "Debtors Age Analysis",
+          "MnuOpt6": "School Fee Collections",
+          "MnuOpt7": "",
+          "MnuOpt8": "Customer Account Export",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "Learners and Account Numbers",
+          "MnuOpt12": "View/Print Learner Statements",
+          "MnuOpt13": "View/Print  Account Payers",
+          "MnuOpt14": "Change Account Payer",
+          "MnuOpt15": "Learners with No Account Payer",
+          "MnuOpt16": "Archived Learners with Balances",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt5",
+      "matchedKeywords": [
+        "GL ",
+        "JOURNAL",
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "11.4",
+          "MnuTitle": "SELECT A TRANSACTION",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Receipt Payment to School",
+          "MnuOpt2": "Deposit Receipts",
+          "MnuOpt3": "Directly into Bank Account",
+          "MnuOpt4": "",
+          "MnuOpt5": "Journal Entry",
+          "MnuOpt6": "Delete Transactions",
+          "MnuOpt7": "Re-Process Deleted Items",
+          "MnuOpt8": "View Audit File",
+          "MnuOpt9": "View Cancelled Cheques",
+          "MnuOpt10": "Manage Requisitions",
+          "MnuOpt11": "Cheque Payments",
+          "MnuOpt12": "Direct Payments from Bank",
+          "MnuOpt13": "Petty Cash Payments",
+          "MnuOpt14": "SGB Salary Payment",
+          "MnuOpt15": "",
+          "MnuOpt16": "Print a Receipt",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11.16",
+          "MnuTitle": "TRANSACTION PRINTOUTS MENU",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "View Receipts",
+          "MnuOpt2": "View Cheque Payments",
+          "MnuOpt3": "View Petty Cash Payments",
+          "MnuOpt4": "View Bank + Petty Cash Deposits",
+          "MnuOpt5": "View GL Transactions",
+          "MnuOpt6": "View Journal Entries",
+          "MnuOpt7": "",
+          "MnuOpt8": "",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11",
+          "MnuTitle": "FINANCIAL ASSISTANT MENU",
+          "MnuOpt0": "MAIN MENU",
+          "MnuOpt1": "System Setup",
+          "MnuOpt2": "Maintain Chart of Accounts",
+          "MnuOpt3": "Budgets",
+          "MnuOpt4": "Select a Transaction",
+          "MnuOpt5": "Debtors and School Fees",
+          "MnuOpt6": "Bank Reconciliation",
+          "MnuOpt7": "Print Outstanding Cheques",
+          "MnuOpt8": "Print Cash on Hand",
+          "MnuOpt9": "Print Statement of Investment",
+          "MnuOpt10": "View Cash Book",
+          "MnuOpt11": "View Financial Statements",
+          "MnuOpt12": "Export Expenditure (xml)",
+          "MnuOpt13": "Export Budget (xml)",
+          "MnuOpt14": "Quick Export Options (Excel)",
+          "MnuOpt15": "",
+          "MnuOpt16": "Transaction Printouts",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": "Year End Functions"
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt6",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "GL ",
+        "JOURNAL",
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "11.16",
+          "MnuTitle": "TRANSACTION PRINTOUTS MENU",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "View Receipts",
+          "MnuOpt2": "View Cheque Payments",
+          "MnuOpt3": "View Petty Cash Payments",
+          "MnuOpt4": "View Bank + Petty Cash Deposits",
+          "MnuOpt5": "View GL Transactions",
+          "MnuOpt6": "View Journal Entries",
+          "MnuOpt7": "",
+          "MnuOpt8": "",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        },
+        {
+          "MnuNo": "11.5",
+          "MnuTitle": "DEBTORS AND SCHOOL FEES",
+          "MnuOpt0": "Financial Assistant Menu",
+          "MnuOpt1": "Maintain School Fees",
+          "MnuOpt2": "Debtor Take On Balances",
+          "MnuOpt3": "Learner Billing",
+          "MnuOpt4": "School Fee Exemptions",
+          "MnuOpt5": "Debtors Age Analysis",
+          "MnuOpt6": "School Fee Collections",
+          "MnuOpt7": "",
+          "MnuOpt8": "Customer Account Export",
+          "MnuOpt9": "",
+          "MnuOpt10": "",
+          "MnuOpt11": "Learners and Account Numbers",
+          "MnuOpt12": "View/Print Learner Statements",
+          "MnuOpt13": "View/Print  Account Payers",
+          "MnuOpt14": "Change Account Payer",
+          "MnuOpt15": "Learners with No Account Payer",
+          "MnuOpt16": "Archived Learners with Balances",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt9",
+      "matchedKeywords": [
+        "WRITE OFF",
+        "WRITEOFF"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "14.3",
+          "MnuTitle": "FIXED ASSETS",
+          "MnuOpt0": "Physical Resources Menu",
+          "MnuOpt1": "Maintain Master List of Assets",
+          "MnuOpt2": "Maintain Venue List",
+          "MnuOpt3": "Issue and Maintain Fixed Assets",
+          "MnuOpt4": "Inventory List",
+          "MnuOpt5": "Total Fixed Assets List",
+          "MnuOpt6": "Detail Fixed Assets",
+          "MnuOpt7": "Summary Fixed Assets with Costs",
+          "MnuOpt8": "Print Fixed Asset Stock Registers",
+          "MnuOpt9": "Print Fixed Asset Stock Write Offs",
+          "MnuOpt10": "Create Fixed Assets Register/Report",
+          "MnuOpt11": "",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt10",
+      "matchedKeywords": [
+        "ADJUSTMENT"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "12.9.15",
+          "MnuTitle": "DEPARTMENT MARK SCHEDULES PER GRADE",
+          "MnuOpt0": "Curriculum Related Schedules and Printouts",
+          "MnuOpt1": "Foundation Phase",
+          "MnuOpt2": "Gr 4 - 9 Schedule",
+          "MnuOpt3": "Gr 4 - 9 Schedule (GDE Layout)",
+          "MnuOpt4": "Gr 4 - 9 Schedule (SBA, PAT, Exam and Final Mark)",
+          "MnuOpt5": "Gr 10 -12 Schedule (SBA, PAT, Exam and Final Mark)",
+          "MnuOpt6": "Mark Schedule (EC Layout)",
+          "MnuOpt7": "Mark Schedule (All Provinces)",
+          "MnuOpt8": "Learner Achievement Year To Date",
+          "MnuOpt9": "Common Tests Schedule",
+          "MnuOpt10": "Mark Schedule with Circular Adjustments",
+          "MnuOpt11": "Subject Results for Grades R to 9 with Circular Adjustment",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "GlobalSecMenus",
+      "column": "MnuOpt11",
+      "matchedKeywords": [
+        "ADJUSTMENT"
+      ],
+      "sampleRows": [
+        {
+          "MnuNo": "12.9.15",
+          "MnuTitle": "DEPARTMENT MARK SCHEDULES PER GRADE",
+          "MnuOpt0": "Curriculum Related Schedules and Printouts",
+          "MnuOpt1": "Foundation Phase",
+          "MnuOpt2": "Gr 4 - 9 Schedule",
+          "MnuOpt3": "Gr 4 - 9 Schedule (GDE Layout)",
+          "MnuOpt4": "Gr 4 - 9 Schedule (SBA, PAT, Exam and Final Mark)",
+          "MnuOpt5": "Gr 10 -12 Schedule (SBA, PAT, Exam and Final Mark)",
+          "MnuOpt6": "Mark Schedule (EC Layout)",
+          "MnuOpt7": "Mark Schedule (All Provinces)",
+          "MnuOpt8": "Learner Achievement Year To Date",
+          "MnuOpt9": "Common Tests Schedule",
+          "MnuOpt10": "Mark Schedule with Circular Adjustments",
+          "MnuOpt11": "Subject Results for Grades R to 9 with Circular Adjustment",
+          "MnuOpt12": "",
+          "MnuOpt13": "",
+          "MnuOpt14": "",
+          "MnuOpt15": "",
+          "MnuOpt16": "",
+          "MnuOpt17": "",
+          "MnuOpt18": "",
+          "MnuOpt19": ""
+        }
+      ]
+    },
+    {
+      "table": "LearnerPromotion",
+      "column": "ReportComment",
+      "matchedKeywords": [
+        "ADJUSTMENT"
+      ],
+      "sampleRows": [
+        {
+          "LearnerId": 775,
+          "ReportId": 310,
+          "PromotionDecision": 6,
+          "DataYear": "2021",
+          "Grade": 8,
+          "LearnerAverage": 52.0,
+          "LearnerScore": 469.0,
+          "TSTransactionCategory": null,
+          "TSStatusFlag": null,
+          "TSReportStatusFlag": null,
+          "TSReasonCode": null,
+          "ReportComment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "Comment": "Learner is promoted to the next grade after adjusting of marks in up to 3 subjects and then Mathematics mark has been condoned  (E2 of 2019)",
+          "FETPassLevel": "",
+          "DistrictRemark": "",
+          "CodeSelected": "P",
+          "CodeAuto": "NP",
+          "CodeAutoDesc": "NP\r\n Immigrant = False\r\n Dyslectic = False\r\n\r\n Does have : \r\n - Minimum of 9 Subjects (9)\r\n Does NOT have : \r\n  - Math Level >= 3 (2)\r\n Does have : \r\n  - 3 Other Subjects Level >=3\r\n Does have : \r\n  - 2 Other Subjects Level >=2\r\n Does have : \r\n  - HL Level >= 4 ( 4)\r\n Does NOT have : \r\n  - Lang2 Level >= 3 ( 2)",
+          "CodeSched": "PG"
+        },
+        {
+          "LearnerId": 1080,
+          "ReportId": 142,
+          "PromotionDecision": 6,
+          "DataYear": "2018",
+          "Grade": 8,
+          "LearnerAverage": 43.0,
+          "LearnerScore": 387.0,
+          "TSTransactionCategory": 12,
+          "TSStatusFlag": 1,
+          "TSReportStatusFlag": 0,
+          "TSReasonCode": 0,
+          "ReportComment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "Comment": "Learner is progressed but need support in order to achieve in the next year.",
+          "FETPassLevel": "",
+          "DistrictRemark": "",
+          "CodeSelected": "P",
+          "CodeAuto": "NP",
+          "CodeAutoDesc": "NP\r\n Immigrant = False\r\n Dyslectic = False\r\n\r\n Does have : \r\n - Minimum of 9 Subjects (9)\r\n Does NOT have : \r\n  - Math Level >= 3 (2)\r\n Does have : \r\n  - 3 Other Subjects Level >=3\r\n Does have : \r\n  - 2 Other Subjects Level >=2\r\n Does NOT have : \r\n  - HL Level >= 4 ( 3)\r\n Does NOT have : \r\n  - Lang2 Level >= 3 ( 2)",
+          "CodeSched": "PG"
+        },
+        {
+          "LearnerId": 1069,
+          "ReportId": 142,
+          "PromotionDecision": 6,
+          "DataYear": "2018",
+          "Grade": 8,
+          "LearnerAverage": 51.0,
+          "LearnerScore": 461.0,
+          "TSTransactionCategory": 12,
+          "TSStatusFlag": 1,
+          "TSReportStatusFlag": 0,
+          "TSReasonCode": 0,
+          "ReportComment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "Comment": "Learner is progressed but need support in order to achieve in the next year.",
+          "FETPassLevel": "",
+          "DistrictRemark": "",
+          "CodeSelected": "P",
+          "CodeAuto": "NP",
+          "CodeAutoDesc": "NP\r\n Immigrant = False\r\n Dyslectic = False\r\n\r\n Does have : \r\n - Minimum of 9 Subjects (9)\r\n Does NOT have : \r\n  - Math Level >= 3 (2)\r\n Does have : \r\n  - 3 Other Subjects Level >=3\r\n Does have : \r\n  - 2 Other Subjects Level >=2\r\n Does have : \r\n  - HL Level >= 4 ( 4)\r\n Does NOT have : \r\n  - Lang2 Level >= 3 ( 2)",
+          "CodeSched": "PG"
+        },
+        {
+          "LearnerId": 1054,
+          "ReportId": 310,
+          "PromotionDecision": 6,
+          "DataYear": "2021",
+          "Grade": 7,
+          "LearnerAverage": 46.0,
+          "LearnerScore": 417.0,
+          "TSTransactionCategory": null,
+          "TSStatusFlag": null,
+          "TSReportStatusFlag": null,
+          "TSReasonCode": null,
+          "ReportComment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "Comment": "Learner is promoted to the next grade after adjusting of marks in up to 3 subjects and then Mathematics mark has been condoned (NA 7 of 2020)",
+          "FETPassLevel": "",
+          "DistrictRemark": "",
+          "CodeSelected": "P",
+          "CodeAuto": "NP",
+          "CodeAutoDesc": "NP\r\n Immigrant = False\r\n Dyslectic = False\r\n\r\n Does have : \r\n - Minimum of 9 Subjects (9)\r\n Does NOT have : \r\n  - Math Level >= 3 (1)\r\n Does have : \r\n  - 3 Other Subjects Level >=3\r\n Does have : \r\n  - 2 Other Subjects Level >=2\r\n Does NOT have : \r\n  - HL Level >= 4 ( 3)\r\n Does have : \r\n  - Lang2 Level >= 3 ( 4)",
+          "CodeSched": "PG"
+        },
+        {
+          "LearnerId": 725,
+          "ReportId": 190,
+          "PromotionDecision": 6,
+          "DataYear": "2020",
+          "Grade": 7,
+          "LearnerAverage": 43.0,
+          "LearnerScore": 389.0,
+          "TSTransactionCategory": null,
+          "TSStatusFlag": null,
+          "TSReportStatusFlag": null,
+          "TSReasonCode": null,
+          "ReportComment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "Comment": "Learner is promoted to the next grade after adjusting of marks in up to 3 subjects and then Mathematics mark has been condoned  (E2 of 2019)",
+          "FETPassLevel": "",
+          "DistrictRemark": "",
+          "CodeSelected": "P",
+          "CodeAuto": "NP",
+          "CodeAutoDesc": "NP\r\n Immigrant = False\r\n Dyslectic = False\r\n\r\n Does have : \r\n - Minimum of 9 Subjects (9)\r\n Does NOT have : \r\n  - Math Level >= 3 (1)\r\n Does have : \r\n  - 3 Other Subjects Level >=3\r\n Does have : \r\n  - 2 Other Subjects Level >=2\r\n Does have : \r\n  - HL Level >= 4 ( 4)\r\n Does have : \r\n  - Lang2 Level >= 3 ( 3)",
+          "CodeSched": "PG"
+        }
+      ]
+    },
+    {
+      "table": "LearnerPromotionDefaultComments",
+      "column": "Comment",
+      "matchedKeywords": [
+        "ADJUSTMENT",
+        "CONCESSION"
+      ],
+      "sampleRows": [
+        {
+          "Id": 90,
+          "SortNo": 63,
+          "Comment": "Learner is progressed to the next grade due to special concession by SBST  (after meeting the requirements of 2, 3 and 4 of NA 1 of 2025)",
+          "AfrComment": "Leerder oorgeplaas na volgende graad weens spesiale consessie deur SBST (nadat voldoen is aan vereistes van 3,4,en 5 van NA 1 of 2025)",
+          "GradeFrom": 4,
+          "GradeTo": 9,
+          "ForTerm": 4
+        },
+        {
+          "Id": 26,
+          "SortNo": 26,
+          "Comment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "AfrComment": "Leerder word bevorder na punte aanpassing EN kondonering van Wiskunde punte (E1 van 2018)",
+          "GradeFrom": 10,
+          "GradeTo": 12,
+          "ForTerm": 4
+        },
+        {
+          "Id": 46,
+          "SortNo": 26,
+          "Comment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "AfrComment": "Leerder word bevorder na punte aanpassing EN kondonering van Wiskunde punte (E1 van 2018)",
+          "GradeFrom": 10,
+          "GradeTo": 12,
+          "ForTerm": 4
+        }
+      ]
+    },
+    {
+      "table": "Look_UpGE",
+      "column": "Keyword",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "PARTIAL EXEMPT",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "SUBSIDY",
+        "WRITE OFF",
+        "WRITEOFF"
+      ],
+      "sampleRows": [
+        {
+          "WordId": 1023,
+          "Dept": 2,
+          "Keyword": "Partial Exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1024,
+          "Dept": 2,
+          "Keyword": "exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1028,
+          "Dept": 2,
+          "Keyword": "conditional exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1388,
+          "Dept": 2,
+          "Keyword": "write off",
+          "KeyCounter": 0,
+          "CoaNo": 900
+        },
+        {
+          "WordId": 1029,
+          "Dept": 0,
+          "Keyword": "State Subsidy",
+          "KeyCounter": 0,
+          "CoaNo": 20
+        }
+      ]
+    },
+    {
+      "table": "Look_UpNC",
+      "column": "Keyword",
+      "matchedKeywords": [
+        "BURSARY",
+        "EXEMPT",
+        "EXEMPTION",
+        "PARTIAL EXEMPT",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "SUBSIDY",
+        "WRITE OFF",
+        "WRITEOFF"
+      ],
+      "sampleRows": [
+        {
+          "WordId": 650,
+          "Dept": 2,
+          "Keyword": "partial exemption fees",
+          "KeyCounter": 1,
+          "CoaNo": 21
+        },
+        {
+          "WordId": 652,
+          "Dept": 2,
+          "Keyword": "exemption",
+          "KeyCounter": 1,
+          "CoaNo": 21
+        },
+        {
+          "WordId": 653,
+          "Dept": 2,
+          "Keyword": "fee exemption",
+          "KeyCounter": 1,
+          "CoaNo": 21
+        },
+        {
+          "WordId": 700,
+          "Dept": 5,
+          "Keyword": "bursary",
+          "KeyCounter": 1,
+          "CoaNo": 23
+        },
+        {
+          "WordId": 629,
+          "Dept": 0,
+          "Keyword": "Subsidy",
+          "KeyCounter": 1,
+          "CoaNo": 11
+        }
+      ]
+    },
+    {
+      "table": "Look_UpWC",
+      "column": "Keyword",
+      "matchedKeywords": [
+        "EXEMPT",
+        "EXEMPTION",
+        "PARTIAL EXEMPT",
+        "SCHOOL FEE",
+        "SCHOOL FEES",
+        "SUBSIDY",
+        "WRITE OFF",
+        "WRITEOFF"
+      ],
+      "sampleRows": [
+        {
+          "WordId": 1023,
+          "Dept": 2,
+          "Keyword": "Partial Exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1024,
+          "Dept": 2,
+          "Keyword": "exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1028,
+          "Dept": 2,
+          "Keyword": "conditional exemption",
+          "KeyCounter": 0,
+          "CoaNo": 10
+        },
+        {
+          "WordId": 1388,
+          "Dept": 2,
+          "Keyword": "write off",
+          "KeyCounter": 0,
+          "CoaNo": 900
+        },
+        {
+          "WordId": 1029,
+          "Dept": 0,
+          "Keyword": "State Subsidy",
+          "KeyCounter": 0,
+          "CoaNo": 20
+        }
+      ]
+    },
+    {
+      "table": "Parent_Info",
+      "column": "Employer",
+      "matchedKeywords": [
+        "DISCOUNT",
+        "GL "
+      ],
+      "sampleRows": [
+        {
+          "ParentID": 948,
+          "Initials": "M",
+          "FName": "Mohammed",
+          "SName": "TIMOL",
+          "Title": "Mr",
+          "Employer": "DISCOUNT FASHIONS",
+          "Occupation": "MANAGER",
+          "StreetAddress1": "13 GOODCHILD STREET",
+          "StreetAddress2": "KISMET PARK",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "13 GOODCHILD STREET",
+          "PostalAddress2": "KISMET PARK",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "",
+          "Tel1": "",
+          "Tel2Code": "053",
+          "Tel2": "7120495",
+          "Tel3Code": null,
+          "Tel3": "0842732388",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "Employed",
+          "ID": null,
+          "Relship": "Father and Mother",
+          "IDNumber": "8001245212089",
+          "AccPayer": "Yes",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "Asian/Indian",
+          "Homelanguage": "English",
+          "CorrTitle": "Mr M",
+          "CorrSurname": "TIMOL",
+          "Spouse": "TIMOL",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "HOUSE WIFE",
+          "SpouseWorkTel": "",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "HAJIRA",
+          "SpouseID": "8010200034081",
+          "SpouseCell": "0846426601",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": "",
+          "Reason": "",
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": null,
+          "ReasonNoID": null,
+          "Religion": null,
+          "SACitizen": true,
+          "Notes": null
+        },
+        {
+          "ParentID": 950,
+          "Initials": "M Z",
+          "FName": "Mohammed",
+          "SName": "TIMOL",
+          "Title": "Mr",
+          "Employer": "DISCOUNT FASHIONS",
+          "Occupation": "STORE MANAGER",
+          "StreetAddress1": "6 GOODCHILD STREET",
+          "StreetAddress2": "",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "6 GOODCHILD STREET",
+          "PostalAddress2": "",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "",
+          "Tel1": "",
+          "Tel2Code": "053",
+          "Tel2": "7120498",
+          "Tel3Code": null,
+          "Tel3": "0842732388",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "Employed",
+          "ID": null,
+          "Relship": "Father and Mother",
+          "IDNumber": "8001245212089",
+          "AccPayer": "Yes",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "Asian/Indian",
+          "Homelanguage": "English",
+          "CorrTitle": "Mr & Mrs M Z",
+          "CorrSurname": "TIMOL",
+          "Spouse": "TIMOL",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "HOUSE WIFE",
+          "SpouseWorkTel": "",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "HAJIRA",
+          "SpouseID": "8010200034081",
+          "SpouseCell": "0846426601",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": "",
+          "Reason": "",
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": null,
+          "ReasonNoID": null,
+          "Religion": null,
+          "SACitizen": true,
+          "Notes": null
+        },
+        {
+          "ParentID": 952,
+          "Initials": "M",
+          "FName": "Mohammed",
+          "SName": "TIMOL",
+          "Title": "Mr",
+          "Employer": "DISCOUNT FASHION",
+          "Occupation": "MANAGER",
+          "StreetAddress1": "13 GOODCHILD STREET",
+          "StreetAddress2": "",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "6 GOODCHILD STREET",
+          "PostalAddress2": "",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "053",
+          "Tel1": "9273373",
+          "Tel2Code": "053",
+          "Tel2": "7120498",
+          "Tel3Code": null,
+          "Tel3": "0842169652",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "Employed",
+          "ID": null,
+          "Relship": "Father",
+          "IDNumber": "8001245212089",
+          "AccPayer": "Yes",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "Asian/Indian",
+          "Homelanguage": "English",
+          "CorrTitle": "Mr & Mrs M",
+          "CorrSurname": "TIMOL",
+          "Spouse": "TIMOL",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "HOUSE WIFE",
+          "SpouseWorkTel": "",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "HAJIRA",
+          "SpouseID": "",
+          "SpouseCell": "0745607978",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": "",
+          "Reason": "",
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": null,
+          "ReasonNoID": null,
+          "Religion": null,
+          "SACitizen": true,
+          "Notes": null
+        },
+        {
+          "ParentID": 1537,
+          "Initials": "HI",
+          "FName": "Hushen",
+          "SName": "IKHARIA",
+          "Title": "Mr",
+          "Employer": "DISCOUNT FASHION",
+          "Occupation": "MANAGER",
+          "StreetAddress1": "3 PAVIT STREET",
+          "StreetAddress2": "KISMET PARK",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "3 PAVIT STREET",
+          "PostalAddress2": "KISMET PARK",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "",
+          "Tel1": "",
+          "Tel2Code": "053",
+          "Tel2": "9273899",
+          "Tel3Code": null,
+          "Tel3": "0845381398",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "One Employed",
+          "ID": null,
+          "Relship": "Father and Mother",
+          "IDNumber": "8205315871183",
+          "AccPayer": "Yes",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "Asian/Indian",
+          "Homelanguage": "English",
+          "CorrTitle": "Mr HI",
+          "CorrSurname": "IKHARIA",
+          "Spouse": "PATEL",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "",
+          "SpouseWorkTel": "",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "Rehana",
+          "SpouseID": "",
+          "SpouseCell": "0843263985",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": null,
+          "Reason": null,
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": "19820531",
+          "ReasonNoID": "0",
+          "Religion": "Islam",
+          "SACitizen": true,
+          "Notes": null
+        }
+      ]
+    },
+    {
+      "table": "Parent_Info",
+      "column": "Occupation",
+      "matchedKeywords": [
+        "GL ",
+        "JOURNAL"
+      ],
+      "sampleRows": [
+        {
+          "ParentID": 906,
+          "Initials": "MD",
+          "FName": "Motloki",
+          "SName": "MODISE",
+          "Title": "Mr",
+          "Employer": "OFFICE OF THE PREMIER",
+          "Occupation": "INFO JOURNALIST",
+          "StreetAddress1": "2 STELLA STREET",
+          "StreetAddress2": "",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "P.O. BOX 302",
+          "PostalAddress2": "",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "",
+          "Tel1": "",
+          "Tel2Code": "053",
+          "Tel2": "9281100",
+          "Tel3Code": null,
+          "Tel3": "0798741424",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "Employed",
+          "ID": null,
+          "Relship": "Father",
+          "IDNumber": "621195878084",
+          "AccPayer": "No",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "African/Black",
+          "Homelanguage": "SeTswana",
+          "CorrTitle": "Mr & Mrs MD",
+          "CorrSurname": "MODISE",
+          "Spouse": "",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "",
+          "SpouseWorkTel": "",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "",
+          "SpouseID": "",
+          "SpouseCell": "0724090293",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": "",
+          "Reason": "",
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": null,
+          "ReasonNoID": null,
+          "Religion": null,
+          "SACitizen": true,
+          "Notes": null
+        },
+        {
+          "ParentID": 1543,
+          "Initials": "MA",
+          "FName": "Mahomad Aasim",
+          "SName": "KHAN",
+          "Title": "Mr",
+          "Employer": "ALZEERA",
+          "Occupation": "JOURNALIST",
+          "StreetAddress1": "29 DALE STREET",
+          "StreetAddress2": "KISMET PARK",
+          "StreetAddress3": "VRYBURG",
+          "StreetCode": "8601",
+          "PostalAddress1": "29 DALE STREET",
+          "PostalAddress2": "KISMET PARK",
+          "PostalAddress3": "VRYBURG",
+          "PostalCode": "8601",
+          "Tel1Code": "",
+          "Tel1": "",
+          "Tel2Code": "",
+          "Tel2": "",
+          "Tel3Code": null,
+          "Tel3": "0720535057",
+          "EMail": "",
+          "GovBody": null,
+          "ParentsAss": null,
+          "Poverty": "One Employed",
+          "ID": null,
+          "Relship": "Father and Mother",
+          "IDNumber": "7305295132084",
+          "AccPayer": "Yes",
+          "Custodial": null,
+          "Gender": "Male",
+          "Race": "Asian/Indian",
+          "Homelanguage": "English",
+          "CorrTitle": "Mr MA",
+          "CorrSurname": "KHAN",
+          "Spouse": "KHAN",
+          "FaxCode": "",
+          "FaxNo": "",
+          "SpouseOccupation": "",
+          "SpouseWorkTel": "0765483200",
+          "Status": "C",
+          "SpouseGender": "Female",
+          "SpouseFname": "Buthaina",
+          "SpouseID": "",
+          "SpouseCell": "",
+          "maritalstatus": "Married",
+          "SpouseEmail": "",
+          "DateLeft": null,
+          "Reason": null,
+          "Archive_Date": null,
+          "Archive_Reason": null,
+          "BirthDate": "19730529",
+          "ReasonNoID": "0",
+          "Religion": "Islam",
+          "SACitizen": true,
+          "Notes": null
+        }
+      ]
+    },
+    {
+      "table": "ReportGeneralComments",
+      "column": "Comment",
+      "matchedKeywords": [
+        "ADJUSTMENT",
+        "CONCESSION"
+      ],
+      "sampleRows": [
+        {
+          "Id": 84,
+          "SortNo": 63,
+          "Comment": "Learner is progressed to the next grade due to special concession by SBST  (after meeting the requirements of 2, 3 and 4 of NA 1 of 2025)",
+          "AfrComment": "Leerder oorgeplaas na volgende graad weens spesiale consessie deur SBST (nadat voldoen is aan vereistes van 3,4,en 5 van NA 1 of 2025)"
+        },
+        {
+          "Id": 21,
+          "SortNo": 29,
+          "Comment": "Learner is promoted after mark adjustments AND condonation of Mathematics mark (E1 of 2018)",
+          "AfrComment": "Leerder word bevorder na punte aanpassing EN kondonering van Wiskunde punte (E1 van 2018)"
+        }
+      ]
+    },
+    {
+      "table": "SNE_lu_Assessment_Support_Area",
+      "column": "Description",
+      "matchedKeywords": [
+        "ADJUSTMENT"
+      ],
+      "sampleRows": [
+        {
+          "ID": 3,
+          "Description": "3.1 Adjustments to regular curriculum"
+        }
+      ]
+    },
+    {
+      "table": "SubjectCriteriaActivities",
+      "column": "Activity",
+      "matchedKeywords": [
+        "JOURNAL"
+      ],
+      "sampleRows": [
+        {
+          "ActivityID": 82343,
+          "Activity": "Journal",
+          "RawMark": 25,
+          "Weight": 50.0,
+          "ActivityDate": "2020-02-26 00:00:00",
+          "CriterionID": 95754,
+          "ActivityAfr": "Joernaal",
+          "ActivityVern": "Journal",
+          "OffCriterionId": 73876,
+          "OffActivityID": 65102,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 0
+        },
+        {
+          "ActivityID": 82559,
+          "Activity": "Journal",
+          "RawMark": 25,
+          "Weight": 50.0,
+          "ActivityDate": "2020-02-26 00:00:00",
+          "CriterionID": 95746,
+          "ActivityAfr": "Joernaal",
+          "ActivityVern": "Journal",
+          "OffCriterionId": 73868,
+          "OffActivityID": 65091,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 0
+        },
+        {
+          "ActivityID": 101276,
+          "Activity": "PAT Process (Written - Journal)",
+          "RawMark": 30,
+          "Weight": 30.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111514,
+          "ActivityAfr": "PAT Proses (Geskrewe- Joernaal)",
+          "ActivityVern": "PAT Process (Written - Journal)",
+          "OffCriterionId": 98829,
+          "OffActivityID": 85921,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98819
+        },
+        {
+          "ActivityID": 101277,
+          "Activity": "PAT Process (Written - Journal)",
+          "RawMark": 30,
+          "Weight": 30.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111515,
+          "ActivityAfr": "PAT Proses (Geskrewe- Joernaal)",
+          "ActivityVern": "PAT Process (Written - Journal)",
+          "OffCriterionId": 98830,
+          "OffActivityID": 85922,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98820
+        },
+        {
+          "ActivityID": 101280,
+          "Activity": "PAT Product (Written - Journal)",
+          "RawMark": 20,
+          "Weight": 20.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111514,
+          "ActivityAfr": "PAT Produk (Geskrewe - Joernaal)",
+          "ActivityVern": "PAT Product (Written - Journal)",
+          "OffCriterionId": 98829,
+          "OffActivityID": 85925,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98827
+        }
+      ]
+    },
+    {
+      "table": "SubjectCriteriaActivities",
+      "column": "ActivityVern",
+      "matchedKeywords": [
+        "JOURNAL"
+      ],
+      "sampleRows": [
+        {
+          "ActivityID": 82343,
+          "Activity": "Journal",
+          "RawMark": 25,
+          "Weight": 50.0,
+          "ActivityDate": "2020-02-26 00:00:00",
+          "CriterionID": 95754,
+          "ActivityAfr": "Joernaal",
+          "ActivityVern": "Journal",
+          "OffCriterionId": 73876,
+          "OffActivityID": 65102,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 0
+        },
+        {
+          "ActivityID": 82559,
+          "Activity": "Journal",
+          "RawMark": 25,
+          "Weight": 50.0,
+          "ActivityDate": "2020-02-26 00:00:00",
+          "CriterionID": 95746,
+          "ActivityAfr": "Joernaal",
+          "ActivityVern": "Journal",
+          "OffCriterionId": 73868,
+          "OffActivityID": 65091,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 0
+        },
+        {
+          "ActivityID": 101276,
+          "Activity": "PAT Process (Written - Journal)",
+          "RawMark": 30,
+          "Weight": 30.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111514,
+          "ActivityAfr": "PAT Proses (Geskrewe- Joernaal)",
+          "ActivityVern": "PAT Process (Written - Journal)",
+          "OffCriterionId": 98829,
+          "OffActivityID": 85921,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98819
+        },
+        {
+          "ActivityID": 101277,
+          "Activity": "PAT Process (Written - Journal)",
+          "RawMark": 30,
+          "Weight": 30.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111515,
+          "ActivityAfr": "PAT Proses (Geskrewe- Joernaal)",
+          "ActivityVern": "PAT Process (Written - Journal)",
+          "OffCriterionId": 98830,
+          "OffActivityID": 85922,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98820
+        },
+        {
+          "ActivityID": 101280,
+          "Activity": "PAT Product (Written - Journal)",
+          "RawMark": 20,
+          "Weight": 20.0,
+          "ActivityDate": "2021-11-22 00:00:00",
+          "CriterionID": 111514,
+          "ActivityAfr": "PAT Produk (Geskrewe - Joernaal)",
+          "ActivityVern": "PAT Product (Written - Journal)",
+          "OffCriterionId": 98829,
+          "OffActivityID": 85925,
+          "RecLocked": true,
+          "GetFromOffCriterionId": 98827
+        }
+      ]
+    },
+    {
+      "table": "SubjectCriteriaTypes",
+      "column": "Desc_English",
+      "matchedKeywords": [
+        "JOURNAL"
+      ],
+      "sampleRows": [
+        {
+          "TaskType": 119,
+          "IsForLanguage": false,
+          "Desc_English": "Journal",
+          "Desc_Afrikaans": "Joernaal",
+          "Desc_IsiNdebele": "",
+          "Desc_IsiXhosa": "",
+          "Desc_IsiZulu": "",
+          "Desc_Sepedi": "",
+          "Desc_Sesotho": "",
+          "Desc_Setswana": "",
+          "Desc_SiSwati": "",
+          "Desc_Tshivenda": "",
+          "Desc_Xitsonga": ""
+        }
+      ]
+    },
+    {
+      "table": "SubjectsOfficial",
+      "column": "Key",
+      "matchedKeywords": [
+        "GL "
+      ],
+      "sampleRows": [
+        {
+          "SubjID": 1829,
+          "SubjName": "O: English Language (AS)",
+          "SubjAfrName": "O: Engels Taal (AS)",
+          "SubjLuritsCode": "50009093",
+          "SubjGrade": 12,
+          "SubjGroup": "Home",
+          "SubjReportSplit": false,
+          "SubjOfficialLangNo": null,
+          "SubjOfficialLangDesc": "0",
+          "SubjLocalID": 2106,
+          "Key": "ASEngL 12",
+          "SubjGroupName": "Home",
+          "NscCode": "0",
+          "NscCategory": "0"
+        }
+      ]
+    },
+    {
+      "table": "SubjectsOfficial_OLD",
+      "column": "Key",
+      "matchedKeywords": [
+        "GL "
+      ],
+      "sampleRows": [
+        {
+          "SubjID": 1829,
+          "SubjName": "O: English Language (AS)",
+          "SubjAfrName": "O: Engels Taal (AS)",
+          "SubjLuritsCode": "50009093",
+          "SubjGrade": 12,
+          "SubjGroup": "Home",
+          "SubjReportSplit": false,
+          "SubjOfficialLangNo": null,
+          "SubjOfficialLangDesc": "0",
+          "SubjLocalID": 2106,
+          "Key": "ASEngL 12",
+          "SubjGroupName": "Home",
+          "NscCode": "0",
+          "NscCategory": "0"
+        }
+      ]
+    },
+    {
+      "table": "SysSessions",
+      "column": "BusyWith",
+      "matchedKeywords": [
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "SessionID": 360837,
+          "SessionDateTime": "2026-03-24 07:51:19",
+          "UserID": 89,
+          "BusyDateTime": "2026-03-24 11:24:29",
+          "BusyWith": "Mnu: 11.5.  Debtors And School Fees",
+          "ComputerInfo": "PC: KANTOOR2 // User: Muhammad Cassim // Os: Windows 10  (v10.0.19045) // CPU: Intel64 Family 6 Model 60 Stepping 3 - 3700 Mhz"
+        }
+      ]
+    },
+    {
+      "table": "__Patches",
+      "column": "Patch_Jobs",
+      "matchedKeywords": [
+        "ADJUSTMENT",
+        "GL "
+      ],
+      "sampleRows": [
+        {
+          "Patch_Ver": "13.5.0",
+          "Patch_Jobs": "2013/08/27 10:49:36\r\nStart: 2013/08/27 10:49:36\r\n- Patching ANA Menu and Menu Security\r\nStart: 2013/08/27 10:49:36\r\n - Exec: UPDATE GlobalSecMenus SET MnuNo = '8', MnuTitle = 'ANNUAL NATIONAL ASSESSMENT MODULE (Gr 1 to 6 and 9)', MnuOpt0 = 'MAIN MENU', MnuOpt1 = 'View National Rating Codes', MnuOpt2 = 'View Total Marks', MnuOpt3 = '', MnuOpt4 = 'Final Marks : View', MnuOpt5 = 'Final Marks : Capture', MnuOpt6 = 'Final Marks : HOD Verification', MnuOpt7 = 'Final Marks : Principal Verification', Mn…",
+          "Patch_Buccessful": true,
+          "Patch_DateTimeStart": "2013-08-27 10:49:36",
+          "Patch_DateTimeEnd": "2013-08-27 10:49:37",
+          "Patch_ExeVer": "13.5.0 07-16"
+        },
+        {
+          "Patch_Ver": "15.3.0",
+          "Patch_Jobs": "2016/01/19 09:53:33\r\nStart: 2016/01/19 09:53:33\r\n- Table Fix 1\r\nStart: 2016/01/19 09:53:33\r\n - Exec: DROP TABLE [ExtraMural_V14_0_1]\r\nEnd: 2016/01/19 09:53:33\r\nEnd: 2016/01/19 09:53:33\r\nStart: 2016/01/19 09:53:33\r\n- LSM Fix, 9730 Records\r\nStart: 2016/01/19 09:53:33\r\n - Exec: UPDATE GlobalSecMenus SET MnuOpt1 = 'LSM Subject Areas: Maintain', MnuOpt2 = 'LSM Items: Maintain', MnuOpt3 = '', MnuOpt4 = 'LSM Items: Maintain Stock Quantities', MnuOpt5 = '', MnuOpt6 = 'LSM Items: Issue / Return (by Perso…",
+          "Patch_Buccessful": true,
+          "Patch_DateTimeStart": "2016-01-19 09:53:33",
+          "Patch_DateTimeEnd": "2016-01-19 09:54:13",
+          "Patch_ExeVer": "15.3.0 01-11"
+        },
+        {
+          "Patch_Ver": "16.2.0",
+          "Patch_Jobs": "2016/10/17 08:43:46\r\nStart: 2016/10/17 08:43:46\r\n- LSM Table Cleanup, 6 Records\r\nStart: 2016/10/17 08:43:46\r\n - Exec: DROP TABLE [LSMLoans_v15_3_0]\r\nEnd: 2016/10/17 08:43:46\r\nStart: 2016/10/17 08:43:46\r\n - Exec: DROP TABLE [LSMPurchases_v15_3_0]\r\nEnd: 2016/10/17 08:43:46\r\nStart: 2016/10/17 08:43:46\r\n - Exec: DROP TABLE [LSMQuantities_v15_3_0]\r\nEnd: 2016/10/17 08:43:46\r\nStart: 2016/10/17 08:43:46\r\n - Exec: DROP TABLE [LSMStock_v15_3_0]\r\nEnd: 2016/10/17 08:43:46\r\nStart: 2016/10/17 08:43:46\r\n - Exe…",
+          "Patch_Buccessful": true,
+          "Patch_DateTimeStart": "2016-10-17 08:43:46",
+          "Patch_DateTimeEnd": "2016-10-17 08:43:47",
+          "Patch_ExeVer": "16.2.0 10-07"
+        },
+        {
+          "Patch_Ver": "18.1.0",
+          "Patch_Jobs": "2021/04/22 08:25:55\r\n<Patch: 18.1.0><Login: Administrator>\r\n<DB: H:\\Databases\\KISMET 167 (12).mdb>\r\n<PC: BSTNOVIOURSTUDI // User: Saviour Tong // Os: Windows 10  (v10.0.19041) // CPU: Intel64 Family 6 Model 142 Stepping 9 - 2511 Mhz>\r\nStart: 2021/04/22 08:25:55\r\n- Removing Old Tables, 17 Records\r\n - 2021/04/22 08:25:55 <Exec><DROP TABLE [17_0_0_LearnerCass]\r\nErr: -2147217865, Table '17_0_0_LearnerCass' does not exist.\r\n - 2021/04/22 08:25:55 <Exec><DROP TABLE [17_0_0_LearnerCassActivities]\r\nErr:…",
+          "Patch_Buccessful": true,
+          "Patch_DateTimeStart": "2021-04-22 08:25:55",
+          "Patch_DateTimeEnd": "2021-04-22 08:26:09",
+          "Patch_ExeVer": "21.1.1 03-26"
+        },
+        {
+          "Patch_Ver": "18.1.2",
+          "Patch_Jobs": "2021/04/22 08:26:51\r\n<Patch: 18.1.2><Login: Administrator>\r\n<DB: H:\\Databases\\KISMET 167 (12).mdb>\r\n<PC: BSTNOVIOURSTUDI // User: Saviour Tong // Os: Windows 10  (v10.0.19041) // CPU: Intel64 Family 6 Model 142 Stepping 9 - 2511 Mhz>\r\nStart: 2021/04/22 08:26:51\r\n-  Fix LO, 2 Records\r\n - 2021/04/22 08:26:51 <Exec><UPDATE SubjectCriteria SET SBAWeight=25, FixedSBAWeight=0 WHERE OffCriterionId in (46693)><End 29 (Ms)>\r\n - 2021/04/22 08:26:51 <Exec><UPDATE SubjectCriteria SET Weighting=80, FixedWeig…",
+          "Patch_Buccessful": true,
+          "Patch_DateTimeStart": "2021-04-22 08:26:51",
+          "Patch_DateTimeEnd": "2021-04-22 08:26:54",
+          "Patch_ExeVer": "21.1.1 10-12"
+        }
+      ]
+    },
+    {
+      "table": "DebtorsTrans",
+      "column": "Desc",
+      "matchedKeywords": [
+        "SCHOOL FEE",
+        "SCHOOL FEES"
+      ],
+      "sampleRows": [
+        {
+          "TransID": 1,
+          "DebAcc": 985,
+          "Date": "2016-09-15 00:00:00",
+          "DebitAmount": "0.0000",
+          "Desc": "Receipt : 4930001 : 2 Payment for School Fees",
+          "CreditAmt": "1500.0000",
+          "Month": 9,
+          "Year": "2016",
+          "EntryDate": "2017-01-31 00:00:00",
+          "TransNum": 380
+        },
+        {
+          "TransID": 2,
+          "DebAcc": 960,
+          "Date": "2016-09-19 00:00:00",
+          "DebitAmount": "0.0000",
+          "Desc": "Receipt : 4930001 : 3 Payment for School Fees",
+          "CreditAmt": "1500.0000",
+          "Month": 9,
+          "Year": "2016",
+          "EntryDate": "2017-01-31 00:00:00",
+          "TransNum": 381
+        },
+        {
+          "TransID": 3,
+          "DebAcc": 972,
+          "Date": "2016-09-19 00:00:00",
+          "DebitAmount": "0.0000",
+          "Desc": "Receipt : 4930001 : 4 Payment for School Fees",
+          "CreditAmt": "1200.0000",
+          "Month": 9,
+          "Year": "2016",
+          "EntryDate": "2017-01-31 00:00:00",
+          "TransNum": 382
+        },
+        {
+          "TransID": 4,
+          "DebAcc": 961,
+          "Date": "2016-09-19 00:00:00",
+          "DebitAmount": "0.0000",
+          "Desc": "Receipt : 4930001 : 5 Payment for School Fees",
+          "CreditAmt": "1000.0000",
+          "Month": 9,
+          "Year": "2016",
+          "EntryDate": "2017-01-31 00:00:00",
+          "TransNum": 383
+        },
+        {
+          "TransID": 5,
+          "DebAcc": 970,
+          "Date": "2016-09-19 00:00:00",
+          "DebitAmount": "0.0000",
+          "Desc": "Receipt : 4930001 : 6 Payment for School Fees",
+          "CreditAmt": "1500.0000",
+          "Month": 9,
+          "Year": "2016",
+          "EntryDate": "2017-01-31 00:00:00",
+          "TransNum": 384
+        }
+      ],
+      "priorityColumn": true
+    }
+  ],
+  "valueKeywordsUsed": [
+    "EXEMPT",
+    "EXEMPTION",
+    "BURSARY",
+    "REMISSION",
+    "DISCOUNT",
+    "JOURNAL",
+    "KORTING",
+    "REBATE",
+    "WRITE OFF",
+    "WRITEOFF",
+    "CREDIT NOTE",
+    "SUBSIDY",
+    "WAIVER",
+    "CONCESSION",
+    "REMIT",
+    "ALLOWANCE",
+    "ADJUSTMENT",
+    "GL ",
+    "DEBT RELIEF",
+    "FEE REDUCT",
+    "PART PAY",
+    "SCHOLARSHIP",
+    "SPONSOR",
+    "VRYSTELLING",
+    "AFSLAG",
+    "SCHOOL FEES",
+    "SCHOOL FEE",
+    "PARTIAL EXEMPT"
+  ],
+  "nameKeywordsUsed": [
+    "exempt",
+    "exemption",
+    "bursary",
+    "remission",
+    "discount",
+    "journal",
+    "korting",
+    "rebate",
+    "subsidy",
+    "waiver",
+    "concession",
+    "remit",
+    "fee",
+    "debtor",
+    "creditor",
+    "ledger",
+    "gltrans"
+  ]
+}

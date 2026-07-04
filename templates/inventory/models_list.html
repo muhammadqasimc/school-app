@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Asset inventory — Models{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">Asset models</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <h6>New category</h6>
+    <form method="post" action="{{ url_for('inventory_category_new') }}" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-8"><input class="form-control" name="name" placeholder="e.g. Classroom IT"></div>
+      <div class="col-md-4"><button class="btn btn-secondary w-100" type="submit">Add category</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead><tr><th>Name</th><th>Type</th><th>Mfr</th><th>Requestable</th><th>Low stock Δ</th><th></th></tr></thead>
+      <tbody>
+      {% for m in rows %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td>{{ m.item_type }}</td>
+        <td>{{ m.manufacturer or '—' }}</td>
+        <td>{% if m.is_requestable %}<span class="badge bg-info">yes</span>{% else %}—{% endif %}</td>
+        <td>{{ m.low_stock_threshold if m.low_stock_threshold is not none else '—' }}</td>
+        <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('inventory_model_edit', mid=m.id) }}">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-muted py-4 text-center">No models yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<a href="{{ url_for('inventory_model_new') }}" class="btn btn-primary">New model</a>
+{% endblock %}

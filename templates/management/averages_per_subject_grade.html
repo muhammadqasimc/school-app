@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h3 class="mb-0">{{ report.title }}</h3><a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a></div>
+<div class="card mb-3"><div class="card-body"><div class="row g-2"><div class="col-md-3"><select id="f-year" class="form-select form-select-sm"></select></div><div class="col-md-3"><select id="f-term" class="form-select form-select-sm"></select></div><div class="col-md-2"><button id="apply" class="btn btn-primary btn-sm w-100">Apply</button></div></div></div></div>
+<div id="meta" class="small text-muted mb-2"></div><div id="host"></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+async function load(){const f=await (await fetch('/api/management-report-filters')).json();const y=document.getElementById("f-year"),t=document.getElementById("f-term");if(!y.options.length){y.innerHTML=(f?.filters?.years||[]).map(v=>`<option value="${v}">${v}</option>`).join("");t.innerHTML=(f?.filters?.terms||[]).map(v=>`<option value="${v}">Term ${v}</option>`).join("");}
+const p=new URLSearchParams();if(y.value)p.set("year",y.value);if(t.value)p.set("term",t.value);const d=await (await fetch(`/api/management-averages-per-subject-per-grade?${p.toString()}`)).json();
+document.getElementById("meta").textContent=`Year ${d.meta?.year||"-"} Term ${d.meta?.term||"-"}`;
+const grades=[1,2,3,4,5,6,7,8,9,10,11,12];document.getElementById("host").innerHTML=`<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Subject</th>${grades.map(g=>`<th>${g}</th>`).join("")}</tr></thead><tbody>${(d.groups||[]).map(g=>`<tr class="table-light fw-semibold"><td colspan="13">${g.groupName}</td></tr>${(g.subjects||[]).map(r=>`<tr><td>${r.subject||""}</td>${grades.map(k=>`<td>${r['g'+k]==null?'':Number(r['g'+k]).toFixed(2)}</td>`).join("")}</tr>`).join("")}`).join("")}</tbody></table></div>`;}
+document.getElementById("apply").addEventListener("click",load);load();
+</script>
+{% endblock %}

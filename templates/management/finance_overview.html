@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = true %}
+{% include "management/_report_frame.html" %}
+
+<!-- KPI Summary Cards -->
+<div class="row g-3 mb-3">
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Active Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Expected Fees</div><div id="k-expected" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Credits (Paid)</div><div id="k-credits" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Outstanding</div><div id="k-outstanding" class="fs-5 fw-bold text-danger">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">High-Risk Families</div><div id="k-highrisk" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Fee Recovery</div><div id="k-recovery" class="fs-5 fw-bold">-</div></div></div>
+</div>
+
+<!-- Fee Schedule + Chart -->
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-lg-4">
+        <h6 class="fw-semibold mb-2">Fee Schedule</h6>
+        <div class="table-responsive" style="max-height:300px">
+          <table class="table table-sm table-striped mb-0">
+            <thead><tr><th>Grade</th><th>Year</th><th>Fees</th></tr></thead>
+            <tbody id="tbl-fee-schedule"><tr><td colspan="3" class="text-muted">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="col-lg-8">
+        <h6 class="fw-semibold mb-2">Collection by Grade</h6>
+        <div class="chart-container bg-white rounded" style="height:300px"><canvas id="chart-fee-grade"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Grade Completion -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h6 class="fw-semibold mb-2">Grade Completion (% Fully Paid, % Fee Recovery)</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Grade</th><th>Learners</th><th>Fully Paid</th><th>% Learners Fully Paid</th><th>Expected Total</th><th>Credits</th><th>% Fee Recovery</th></tr></thead>
+        <tbody id="tbl-grade-completion"><tr><td colspan="7" class="text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- High-Risk Non-Payers -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h6 class="fw-semibold mb-2">High-Risk Non-Payers (Parent / Guardian, Learner, Grade)</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Parent / Guardian</th><th>Learner</th><th>Learner ID</th><th>Grade</th><th>Annual Fee</th><th>Paid</th><th>Outstanding</th><th>% Paid</th></tr></thead>
+        <tbody id="tbl-high-risk"><tr><td colspan="8" class="text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Exemptions & Discounts -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-2">Exemption Lines</h6>
+        <div class="table-responsive" style="max-height:300px">
+          <table class="table table-sm table-striped mb-0">
+            <thead><tr><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th></tr></thead>
+            <tbody id="tbl-exemptions"><tr><td colspan="5" class="text-muted">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-2">Discounts & Journal Lines</h6>
+        <div class="table-responsive" style="max-height:300px">
+          <table class="table table-sm table-striped mb-0">
+            <thead><tr><th>Source</th><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th></tr></thead>
+            <tbody id="tbl-discounts"><tr><td colspan="6" class="text-muted">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const reportKey = "{{ report.key }}";
+let chartFeeGrade = null;
+
+function fmtMoney(v) {
+  if (v == null || isNaN(v)) return "R 0";
+  return "R " + Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return "0%";
+  return Number(v).toFixed(1) + "%";
+}
+
+function params() {
+  const p = new URLSearchParams();
+  ["year", "term", "phase", "grade", "subject"].forEach(k => {
+    const val = document.getElementById("f-" + k).value.trim();
+    if (val) p.set(k, val);
+  });
+  return p;
+}
+
+function fillSelect(id, values) {
+  const el = document.getElementById(id);
+  const keep = el.value;
+  while (el.options.length > 1) el.remove(1);
+  (values || []).forEach(v => {
+    const o = document.createElement("option");
+    o.value = String(v);
+    o.textContent = String(v);
+    el.appendChild(o);
+  });
+  el.value = keep;
+}
+
+async function loadFilters() {
+  const r = await fetch("/api/management-report-filters?" + params().toString());
+  const d = await r.json();
+  if (!d.filters) return;
+  fillSelect("f-year", d.filters.years);
+  fillSelect("f-term", d.filters.terms);
+  fillSelect("f-phase", d.filters.phases);
+  fillSelect("f-grade", d.filters.grades);
+  fillSelect("f-subject", d.filters.subjects);
+}
+
+async function loadReport() {
+  const p = params();
+  p.set("report_key", reportKey);
+  const r = await fetch("/api/management-report?" + p.toString());
+  const data = await r.json();
+
+  if (data.error) {
+    document.getElementById("k-learners").textContent = "Error";
+    return;
+  }
+
+  const fi = data.financeInsights || {};
+  const sum = fi.summary || {};
+
+  // KPI cards
+  document.getElementById("k-learners").textContent = sum.activeLearners ?? "-";
+  document.getElementById("k-expected").textContent = fmtMoney(sum.expectedFeesTotal);
+  document.getElementById("k-credits").textContent = fmtMoney(sum.creditsTotal);
+  document.getElementById("k-outstanding").textContent = fmtMoney(sum.outstandingTotal);
+  document.getElementById("k-highrisk").textContent = sum.highRiskCount ?? "-";
+  const recoveryPct = sum.expectedFeesTotal > 0
+    ? ((sum.creditsTotal / sum.expectedFeesTotal) * 100).toFixed(1) + "%"
+    : "0%";
+  document.getElementById("k-recovery").textContent = recoveryPct;
+
+  // Fee schedule table
+  const feeSched = fi.feeSchedule || [];
+  document.getElementById("tbl-fee-schedule").innerHTML = feeSched.length
+    ? feeSched.map(r => `<tr><td>${r.grade || ""}</td><td>${r.year || ""}</td><td>${fmtMoney(r.fees)}</td></tr>`).join("")
+    : '<tr><td colspan="3" class="text-muted">No fee schedule data.</td></tr>';
+
+  // Grade completion table
+  const gc = fi.gradeCompletion || [];
+  document.getElementById("tbl-grade-completion").innerHTML = gc.length
+    ? gc.map(r => `<tr><td>${r.grade || ""}</td><td>${r.learners ?? 0}</td><td>${r.learnersFullyPaid ?? 0}</td><td>${fmtPct(r.learnersFullyPaidPct)}</td><td>${fmtMoney(r.expectedFeeTotal)}</td><td>${fmtMoney(r.creditsTotal)}</td><td>${fmtPct(r.feeRecoveryPct)}</td></tr>`).join("")
+    : '<tr><td colspan="7" class="text-muted">No grade completion data.</td></tr>';
+
+  // High-risk table
+  const hr = fi.highRiskNonPayers || [];
+  document.getElementById("tbl-high-risk").innerHTML = hr.length
+    ? hr.map(r => `<tr><td>${r.parentGuardianName || ""}</td><td>${r.learner || ""}</td><td>${r.learnerId || ""}</td><td>${r.grade || ""}</td><td>${fmtMoney(r.annualFee)}</td><td>${fmtMoney(r.paid)}</td><td>${fmtMoney(r.outstanding)}</td><td>${fmtPct(r.pctPaid)}</td></tr>`).join("")
+    : '<tr><td colspan="8" class="text-muted">No high-risk data.</td></tr>';
+
+  // Exemption journal lines
+  const exJ = fi.exemptionJournalLines || [];
+  document.getElementById("tbl-exemptions").innerHTML = exJ.length
+    ? exJ.map(r => `<tr><td>${r.date || ""}</td><td>${r.debAcc || ""}</td><td>${fmtMoney(r.debit)}</td><td>${fmtMoney(r.credit)}</td><td>${(r.description || "").substring(0, 60)}</td></tr>`).join("")
+    : '<tr><td colspan="5" class="text-muted">No exemption lines.</td></tr>';
+
+  // Discount journal lines
+  const dJ = fi.discountJournalLines || [];
+  document.getElementById("tbl-discounts").innerHTML = dJ.length
+    ? dJ.map(r => `<tr><td>${r.lineSource || ""}</td><td>${r.date || ""}</td><td>${r.debAcc || ""}</td><td>${fmtMoney(r.debit)}</td><td>${fmtMoney(r.credit)}</td><td>${(r.description || "").substring(0, 60)}</td></tr>`).join("")
+    : '<tr><td colspan="6" class="text-muted">No discount/journal lines.</td></tr>';
+
+  // Collection by grade chart
+  if (chartFeeGrade) { chartFeeGrade.destroy(); chartFeeGrade = null; }
+  const ctx = document.getElementById("chart-fee-grade");
+  if (ctx && window.Chart && gc.length) {
+    chartFeeGrade = new Chart(ctx.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: gc.map(r => "Gr " + r.grade),
+        datasets: [
+          { label: "Expected", data: gc.map(r => Number(r.expectedFeeTotal || 0)), backgroundColor: "#dce9f7" },
+          { label: "Credits", data: gc.map(r => Number(r.creditsTotal || 0)), backgroundColor: "#24bfd1" },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+}
+
+["f-year", "f-term", "f-phase", "f-grade", "f-subject"].forEach(id => {
+  document.getElementById(id).addEventListener("change", loadFilters);
+});
+document.getElementById("apply-filters").addEventListener("click", loadReport);
+
+(async () => {
+  await loadFilters();
+  await loadReport();
+})();
+</script>
+{% endblock %}

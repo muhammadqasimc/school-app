@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}WhatsApp - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fab fa-whatsapp text-success"></i> WhatsApp (OTP channel)</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <p class="text-muted">
+                    OTPs are sent via WhatsApp first. If WhatsApp is not connected or the message fails, the app falls back to SMS.
+                    Scan the QR code below with WhatsApp on your phone to connect.
+                </p>
+
+                <div id="whatsapp-status" class="mb-3">
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                    <span>Checking status…</span>
+                </div>
+
+                <div id="whatsapp-qr-container" class="text-center mb-3" style="display: none;">
+                    <p class="text-muted small">Open WhatsApp on your phone → Settings → Linked devices → Link a device</p>
+                    <img id="whatsapp-qr" src="" alt="QR Code" class="img-fluid border" style="max-width: 280px;">
+                </div>
+
+                <div id="whatsapp-ready" class="alert alert-success" style="display: none;">
+                    <i class="fab fa-whatsapp"></i> WhatsApp is connected. OTPs will be sent via WhatsApp when possible.
+                </div>
+
+                <div id="whatsapp-error" class="alert alert-warning" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i> <span id="whatsapp-error-text">Service unreachable.</span>
+                    Ensure the WhatsApp service is running (e.g. <code>cd whatsapp-service && npm start</code>).
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const statusEl = document.getElementById('whatsapp-status');
+    const qrContainer = document.getElementById('whatsapp-qr-container');
+    const qrImg = document.getElementById('whatsapp-qr');
+    const readyEl = document.getElementById('whatsapp-ready');
+    const errorEl = document.getElementById('whatsapp-error');
+    const errorText = document.getElementById('whatsapp-error-text');
+
+    function setStatus(ready, qr, error) {
+        statusEl.innerHTML = ready
+            ? '<i class="fas fa-check-circle text-success"></i> Connected'
+            : (qr ? '<span class="text-muted">Scan the QR code with WhatsApp</span>' : '<span class="text-muted">Waiting for QR…</span>');
+        if (qr) {
+            qrContainer.style.display = 'block';
+            qrImg.src = qr;
+        } else {
+            qrContainer.style.display = 'none';
+        }
+        readyEl.style.display = ready ? 'block' : 'none';
+        errorEl.style.display = error ? 'block' : 'none';
+        if (error) errorText.textContent = error;
+    }
+
+    function poll() {
+        fetch('{{ url_for("admin_whatsapp_status") }}', { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ready) {
+                    setStatus(true, null, null);
+                    return;
+                }
+                if (data.error) {
+                    setStatus(false, null, data.error);
+                    setTimeout(poll, 5000);
+                    return;
+                }
+                setStatus(false, data.qr || null, null);
+                setTimeout(poll, 3000);
+            })
+            .catch(function() {
+                setStatus(false, null, 'Could not reach status.');
+                setTimeout(poll, 5000);
+            });
+    }
+    poll();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+import pyodbc
+p = r"C:\Users\User\Documents\Reporting_app\Reporting App\KISMET SECONDARY 2026  JAN (1).mdb"
+conn = pyodbc.connect(r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=" + p + ";PWD=Sit@dbe;")
+cur = conn.cursor()
+cur.execute("SELECT TOP 1 * FROM Educators")
+print("EDUCATORS_COLUMNS", [d[0] for d in cur.description])
+cur.execute("SELECT COUNT(*) FROM Educators WHERE RegisterClass IS NOT NULL AND RegisterClass <> ''")
+print("EDUCATORS_WITH_REGISTERCLASS", cur.fetchone()[0])
+cur.execute("SELECT TOP 30 EdID, FName, SName, Actual, Status, RegisterClass FROM Educators WHERE RegisterClass IS NOT NULL AND RegisterClass <> '' ORDER BY RegisterClass, SName, FName")
+rows = cur.fetchall()
+print("REGISTERCLASS_SAMPLE_COUNT", len(rows))
+for r in rows:
+    print(tuple(r))
+cur.execute("SELECT TOP 1 * FROM Educatorgroups")
+print("EDUCATORGROUPS_COLUMNS", [d[0] for d in cur.description])
+cur.execute("SELECT COUNT(*) FROM Educatorgroups")
+print("EDUCATORGROUPS_TOTAL", cur.fetchone()[0])
+cur.execute("SELECT TOP 40 EducatorId, Grade, Class, Subject, DataYear FROM Educatorgroups ORDER BY DataYear DESC, Grade, Class")
+rows2 = cur.fetchall()
+print("EDUCATORGROUPS_SAMPLE_COUNT", len(rows2))
+for r in rows2:
+    print(tuple(r))
+cur.execute("SELECT COUNT(DISTINCT EducatorId) FROM Educatorgroups WHERE EducatorId IS NOT NULL")
+print("EDUCATORGROUPS_DISTINCT_EDUCATORS", cur.fetchone()[0])
+conn.close()

@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-cog"></i> Admin Dashboard</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Home
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary mb-3">
+                    <i class="fas fa-tachometer-alt"></i> User Dashboard
+                </a>
+                {% if endpoint_available('management_dashboard') %}
+                <a href="{{ url_for('management_dashboard') }}" class="btn btn-outline-success mb-3 ms-0 ms-md-2">
+                    <i class="fas fa-chart-line"></i> Management Reports
+                </a>
+                {% endif %}
+                {% if is_manager and endpoint_available('portal_select') %}
+                <a href="{{ url_for('portal_select') }}" class="btn btn-outline-info mb-3 ms-0 ms-md-2">
+                    <i class="fas fa-layer-group"></i> Portals
+                </a>
+                {% endif %}
+
+                <div class="row g-4 mt-2">
+                    {% if endpoint_available('sync_accounts') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('sync_accounts') }}" class="text-decoration-none">
+                            <div class="card h-100 border-primary hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-database fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Sync Accounts</h5>
+                                    <p class="card-text small text-muted">Create or sync user accounts from the database (Learner_Info).</p>
+                                    <span class="btn btn-primary btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_slideshow') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_slideshow') }}" class="text-decoration-none">
+                            <div class="card h-100 border-primary hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-images fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Slideshow</h5>
+                                    <p class="card-text small text-muted">Upload and manage homepage slideshow images.</p>
+                                    <span class="btn btn-primary btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_whatsapp') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_whatsapp') }}" class="text-decoration-none">
+                            <div class="card h-100 border-success hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fab fa-whatsapp fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">WhatsApp</h5>
+                                    <p class="card-text small text-muted">Scan QR to use WhatsApp for OTP (fallback to SMS).</p>
+                                    <span class="btn btn-success btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_communication') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_communication') }}" class="text-decoration-none">
+                            <div class="card h-100 border-info hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-comments fa-3x text-info mb-3"></i>
+                                    <h5 class="card-title">Communication</h5>
+                                    <p class="card-text small text-muted">Send SMS or WhatsApp to parents by grade, learner or surname.</p>
+                                    <span class="btn btn-info btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_users') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_users') }}" class="text-decoration-none">
+                            <div class="card h-100 border-secondary hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-user-shield fa-3x text-secondary mb-3"></i>
+                                    <h5 class="card-title">Users</h5>
+                                    <p class="card-text small text-muted">Manage manager access and view activity.</p>
+                                    <span class="btn btn-secondary btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_profile_change_requests') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_profile_change_requests') }}" class="text-decoration-none">
+                            <div class="card h-100 border-dark hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-user-edit fa-3x text-dark mb-3"></i>
+                                    <h5 class="card-title">Profile Approvals</h5>
+                                    <p class="card-text small text-muted">Review parent-submitted learner and parent profile changes.</p>
+                                    <span class="btn btn-dark btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_users') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_users') }}" class="text-decoration-none">
+                            <div class="card h-100 border-warning hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-chalkboard-teacher fa-3x text-warning mb-3"></i>
+                                    <h5 class="card-title">Teacher Provisioning</h5>
+                                    <p class="card-text small text-muted">Grant teacher role, set role tiers, assign classes, and configure permissions.</p>
+                                    <span class="btn btn-warning btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if can_access_asset_inventory and endpoint_available('inventory_dashboard') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('inventory_dashboard') }}" class="text-decoration-none">
+                            <div class="card h-100 border-primary hover-shadow" style="border-width: 2px; border-color: #764ba2 !important;">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-boxes-stacked fa-3x mb-3" style="color: #764ba2;"></i>
+                                    <h5 class="card-title">Asset inventory</h5>
+                                    <p class="card-text small text-muted">Equipment, accessories, consumables — check-outs, QR labels, imports, and low-stock reports.</p>
+                                    <span class="btn btn-sm text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_detention_notices') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_detention_notices') }}" class="text-decoration-none">
+                            <div class="card h-100 border-danger hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-pdf fa-3x text-danger mb-3"></i>
+                                    <h5 class="card-title">Detention Notices</h5>
+                                    <p class="card-text small text-muted">Generate detention letters and attendance registers directly from MDB records.</p>
+                                    <span class="btn btn-danger btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_sick_notes') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_sick_notes') }}" class="text-decoration-none">
+                            <div class="card h-100 border-success hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-notes-medical fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Sick notes</h5>
+                                    <p class="card-text small text-muted">Review parent-uploaded sick notes and doctor letters.</p>
+                                    <span class="btn btn-success btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_sync_control') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_sync_control') }}" class="text-decoration-none">
+                            <div class="card h-100 border-primary hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-sync-alt fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Sync Control</h5>
+                                    <p class="card-text small text-muted">Run MDB/PostgreSQL sync and watch progress logs live.</p>
+                                    <span class="btn btn-primary btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if endpoint_available('admin_reset_user_password') %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-key"></i> Reset User Password</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Enter the user's username (e.g. accession number) and set a new password. They will be required to change it on next login.</p>
+                <form method="POST" action="{{ url_for('admin_reset_user_password') }}" class="row g-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="col-md-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="e.g. accession number" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" required minlength="8" placeholder="Min 8 characters">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="confirm_password" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="8">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Reset Password
+                        </button>
+                    </div>
+                </form>
+                <small class="form-text text-muted">Password must be at least 8 characters with uppercase, lowercase, number, and special character.</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.hover-shadow:hover { box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15); }
+</style>
+{% endblock %}

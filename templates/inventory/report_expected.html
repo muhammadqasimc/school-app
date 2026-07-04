@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Expected check-in{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">Expected check-in report</h4>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <table class="table mb-0">
+    <thead><tr><th>Due</th><th>Assignee</th><th>Tag</th><th>Open since</th><th></th></tr></thead>
+    <tbody>
+      {% for co, it, ou in rows %}
+      <tr class="{% if co.expected_return_at and co.expected_return_at < now %}table-warning{% endif %}">
+        <td>{{ co.expected_return_at.strftime('%Y-%m-%d %H:%M') if co.expected_return_at else '—' }}</td>
+        <td>{{ ou.username if ou else co.assignee_user_id }}</td>
+        <td><a href="{{ url_for('inventory_item_detail', item_id=it.id) }}">{{ it.tag }}</a></td>
+        <td>{{ co.checked_out_at.strftime('%Y-%m-%d') if co.checked_out_at }}</td>
+        <td>{% if co.expected_return_at and co.expected_return_at < now %}<span class="badge bg-danger">past due</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted text-center py-4">Nothing with an expected date on file.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

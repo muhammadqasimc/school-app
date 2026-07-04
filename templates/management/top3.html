@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-trophy"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Year</label>
+        <select id="f-year" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Term</label>
+        <select id="f-term" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Grade</label>
+        <select id="f-grade" class="form-select form-select-sm"><option value="">All Grades</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Show Top</label>
+        <div class="btn-group btn-group-sm w-100" role="group">
+          <input type="radio" class="btn-check" name="top-n" id="top3" value="3" checked autocomplete="off">
+          <label class="btn btn-outline-primary" for="top3">3</label>
+          <input type="radio" class="btn-check" name="top-n" id="top5" value="5" autocomplete="off">
+          <label class="btn btn-outline-primary" for="top5">5</label>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button id="apply" class="btn btn-primary btn-sm w-100">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="meta" class="small text-muted mb-2"></div>
+<div id="host">
+  <div class="text-center text-muted py-5">Select filters and click Apply to load data.</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function load() {
+  // Load filter options
+  const fu = new URLSearchParams();
+  ["year","term","grade"].forEach(k => {
+    const v = document.getElementById("f-" + k).value.trim();
+    if (v) fu.set(k, v);
+  });
+  const f = await (await fetch("/api/management-report-filters?" + fu.toString())).json();
+  const ySel = document.getElementById("f-year"), tSel = document.getElementById("f-term"), gSel = document.getElementById("f-grade");
+  const sy = ySel.value, st = tSel.value, sg = gSel.value;
+
+  if (!ySel.options.length) {
+    ySel.innerHTML = (f?.filters?.years || []).map(v => '<option value="' + v + '">' + v + '</option>').join("");
+    tSel.innerHTML = (f?.filters?.terms || []).map(v => '<option value="' + v + '">Term ' + v + '</option>').join("");
+    gSel.innerHTML = '<option value="">All Grades</option>' + (f?.filters?.grades || []).map(v => '<option value="' + v + '">Grade ' + v + '</option>').join("");
+  }
+
+  if (sy && [...ySel.options].some(o => o.value === sy)) ySel.value = sy;
+  if (st && [...tSel.options].some(o => o.value === st)) tSel.value = st;
+  if (sg && [...gSel.options].some(o => o.value === sg)) gSel.value = sg;
+
+  // Build request
+  const q = new URLSearchParams();
+  if (ySel.value) q.set("year", ySel.value);
+  if (tSel.value) q.set("term", tSel.value);
+  if (gSel.value) q.set("grade", gSel.value);
+
+  const topVal = document.querySelector('input[name="top-n"]:checked')?.value || "3";
+  q.set("top", topVal);
+
+  const d = await (await fetch("/api/management-top3?" + q.toString())).json();
+  const meta = d.meta || {};
+  document.getElementById("meta").textContent = "Year " + (meta.year || "-") + " | Term " + (meta.term || "-") + " | Top " + (d.topN || 3);
+
+  const groups = d.groups || [];
+  if (!groups.length) {
+    document.getElementById("host").innerHTML = '<div class="alert alert-info mb-0">No data found for the selected filters.</div>';
+    return;
+  }
+
+  let html = "";
+  for (const grp of groups) {
+    const rank = grp.rank || [];
+    html += '<div class="card mb-3">';
+    html += '<div class="card-header fw-semibold bg-light"><i class="fas fa-users me-1"></i> ' + grp.grade + '</div>';
+    html += '<div class="card-body p-0"><div class="table-responsive"><table class="table table-sm table-striped mb-0">';
+    html += '<thead><tr><th>#</th><th>Learner</th><th>Class</th><th>Avg %</th><th>Subjects</th></tr></thead><tbody>';
+    for (let i = 0; i < rank.length; i++) {
+      const r = rank[i];
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+      const marksStr = (r.marks || []).map(m => m.subject + ": " + Number(m.pct || 0).toFixed(1) + "%").join(", ");
+      html += '<tr>';
+      html += '<td class="fw-bold text-center">' + (medal || (i + 1)) + '</td>';
+      html += '<td>' + escHtml(r.learnerName || r.learnerId || "") + '</td>';
+      html += '<td>' + escHtml(r.class || "") + '</td>';
+      html += '<td class="fw-semibold">' + Number(r.averagePct || 0).toFixed(2) + '%</td>';
+      html += '<td class="small text-muted">' + escHtml(marksStr) + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table></div></div></div>';
+  }
+  document.getElementById("host").innerHTML = html;
+}
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+document.getElementById("apply").addEventListener("click", load);
+
+// Toggle top-n changes auto-reload
+document.querySelectorAll('input[name="top-n"]').forEach(el => {
+  el.addEventListener("change", load);
+});
+
+// Load filter options on page load
+(async () => {
+  const f = await (await fetch("/api/management-report-filters")).json();
+  const ySel = document.getElementById("f-year"), tSel = document.getElementById("f-term"), gSel = document.getElementById("f-grade");
+  ySel.innerHTML = (f?.filters?.years || []).map(v => '<option value="' + v + '">' + v + '</option>').join("");
+  tSel.innerHTML = (f?.filters?.terms || []).map(v => '<option value="' + v + '">Term ' + v + '</option>').join("");
+  gSel.innerHTML = '<option value="">All Grades</option>' + (f?.filters?.grades || []).map(v => '<option value="' + v + '">Grade ' + v + '</option>').join("");
+  await load();
+})();
+</script>
+{% endblock %}

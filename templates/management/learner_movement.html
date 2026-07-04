@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-user-graduate"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small mb-1">Select an option to view</label>
+        <div class="small">
+          <label class="d-block"><input type="radio" name="mode" value="repeating" checked> View Learners repeating a grade</label>
+          <label class="d-block"><input type="radio" name="mode" value="progressed"> View Learners that progressed</label>
+          <label class="d-block"><input type="radio" name="mode" value="dropped_out"> View Learners who dropped out</label>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Filter by Grade</label>
+        <select id="f-grade" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Select Year to View Data</label>
+        <select id="f-year" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <button id="apply-filters" class="btn btn-primary btn-sm w-100" type="button">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div id="meta-title" class="fw-semibold mb-2">Loading...</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Accession No</th>
+            <th>Surname</th>
+            <th>Name</th>
+            <th>Gender</th>
+            <th>Grade</th>
+            <th>Class</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="7" class="text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function queryParams() {
+  const p = new URLSearchParams();
+  const mode = document.querySelector('input[name="mode"]:checked')?.value || "repeating";
+  const grade = (document.getElementById("f-grade")?.value || "").trim();
+  const year = (document.getElementById("f-year")?.value || "").trim();
+  p.set("mode", mode);
+  if (grade) p.set("grade", grade);
+  if (year) p.set("year", year);
+  return p;
+}
+
+function fillSelect(id, values, selectedValue) {
+  const el = document.getElementById(id);
+  el.innerHTML = (values || []).map((v) => `<option value="${String(v)}">${id === "f-grade" ? `Grade ${String(v).padStart(2, "0")}` : String(v)}</option>`).join("");
+  if (selectedValue && [...el.options].some((o) => o.value === String(selectedValue))) el.value = String(selectedValue);
+}
+
+function renderRows(rows) {
+  const body = document.getElementById("rows");
+  if (!rows || !rows.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-muted">No learners found for selected filters.</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${r.no ?? ""}</td>
+      <td>${r.accessionNo ?? ""}</td>
+      <td>${r.surname ?? ""}</td>
+      <td>${r.name ?? ""}</td>
+      <td>${r.gender ?? ""}</td>
+      <td>${r.grade ?? ""}</td>
+      <td>${r.className ?? ""}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadData() {
+  const r = await fetch(`/api/management-learner-movement?${queryParams().toString()}`);
+  const data = await r.json();
+  if (data.error) {
+    document.getElementById("meta-title").textContent = data.error;
+    renderRows([]);
+    return;
+  }
+  const selected = data.selected || {};
+  const filters = data.filters || {};
+  fillSelect("f-grade", filters.grades || [], selected.grade);
+  fillSelect("f-year", filters.years || [], selected.year);
+  document.querySelectorAll('input[name="mode"]').forEach((el) => {
+    el.checked = el.value === (selected.mode || "repeating");
+  });
+  document.getElementById("meta-title").textContent = data.meta?.title || "Learner movement";
+  renderRows(data.rows || []);
+}
+
+document.getElementById("apply-filters").addEventListener("click", loadData);
+document.querySelectorAll('input[name="mode"]').forEach((el) => el.addEventListener("change", loadData));
+document.getElementById("f-grade").addEventListener("change", loadData);
+document.getElementById("f-year").addEventListener("change", loadData);
+
+loadData();
+</script>
+{% endblock %}

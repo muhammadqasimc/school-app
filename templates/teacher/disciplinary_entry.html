@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Disciplinary Entry{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Disciplinary Entry</h4></div>
+  <div class="card-body">
+    <form id="disciplinary-entry-form" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <select class="form-select" id="grade" name="grade">
+            <option value="">Select grade</option>
+          </select>
+        </div>
+      </div>
+      <div class="row g-2 mt-2">
+        <div class="col-md-6">
+          <label class="form-label small text-muted mb-1">Learners (multi-select)</label>
+          <select class="form-select" id="learner_ids" name="learner_ids" multiple size="8" required></select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small text-muted mb-1">Level of Misconduct</label>
+          <select class="form-select" id="level_misconduct" name="level_misconduct">
+            <option value="">All levels</option>
+          </select>
+          <label class="form-label small text-muted mb-1">Misconduct</label>
+          <select class="form-select" id="misconduct_id" name="misconduct_id" required></select>
+          <label class="form-label small text-muted mt-2 mb-1">Notes</label>
+          <textarea class="form-control" id="notes" name="notes" rows="5" placeholder="Capture incident notes..."></textarea>
+          <label class="form-label small text-muted mt-2 mb-1">Attach photo(s)</label>
+          <input class="form-control" type="file" id="photos" name="photos" accept="image/*" capture="environment" multiple>
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-danger">Submit Disciplinary Entry</button>
+        <button type="button" id="reload-options" class="btn btn-outline-secondary">Reload Options</button>
+      </div>
+    </form>
+    <div id="entry-message" class="small mt-3"></div>
+    <div class="table-responsive mt-3">
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr><th>Learner</th><th>Record ID</th><th>PDF</th></tr>
+        </thead>
+        <tbody id="entry-results"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const gradeEl = document.getElementById("grade");
+const levelEl = document.getElementById("level_misconduct");
+const learnerEl = document.getElementById("learner_ids");
+const misconductEl = document.getElementById("misconduct_id");
+const msgEl = document.getElementById("entry-message");
+const resultsEl = document.getElementById("entry-results");
+
+function selectedLearners() {
+  return Array.from(learnerEl.selectedOptions || []).map(o => o.value).filter(Boolean);
+}
+
+async function loadOptions() {
+  const p = new URLSearchParams();
+  if (gradeEl.value) p.set("grade", gradeEl.value);
+  if (levelEl.value) p.set("level", levelEl.value);
+  const res = await fetch(`{{ url_for('api_teacher_disciplinary_entry_options') }}?${p.toString()}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  const grades = data.grades || [];
+  const levels = data.levels || [];
+  const learners = data.learners || [];
+  const misconducts = data.misconducts || [];
+
+  const selectedGrade = gradeEl.value || "";
+  gradeEl.innerHTML = `<option value="">Select grade</option>` + grades.map(g => `<option value="${g}">${g}</option>`).join("");
+  if (selectedGrade && grades.includes(selectedGrade)) {
+    gradeEl.value = selectedGrade;
+  }
+  const selectedLevel = levelEl.value || "";
+  levelEl.innerHTML = `<option value="">All levels</option>` + levels.map(l => `<option value="${l}">${l}</option>`).join("");
+  if (selectedLevel && levels.includes(selectedLevel)) {
+    levelEl.value = selectedLevel;
+  }
+  learnerEl.innerHTML = learners.map(l => {
+    const label = `${l.surname || ""}, ${l.name || ""} (${l.id}) - G${l.grade || ""}`;
+    return `<option value="${l.id}">${label}</option>`;
+  }).join("");
+  misconductEl.innerHTML = `<option value="">Select misconduct</option>` + misconducts.map(m => {
+    const text = `${m.description || "Unknown"} (${m.point || 0} pts)`;
+    return `<option value="${m.id}">${text}</option>`;
+  }).join("");
+}
+
+gradeEl.addEventListener("change", loadOptions);
+levelEl.addEventListener("change", loadOptions);
+document.getElementById("reload-options").addEventListener("click", loadOptions);
+
+document.getElementById("disciplinary-entry-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const picked = selectedLearners();
+  if (!picked.length) {
+    msgEl.textContent = "Select at least one learner.";
+    return;
+  }
+  const fd = new FormData(e.target);
+  fd.delete("learner_ids");
+  picked.forEach(v => fd.append("learner_ids", v));
+  fd.set("idempotency_key", crypto.randomUUID());
+  const res = await fetch("{{ url_for('api_teacher_disciplinary_entry_save') }}", { method: "POST", body: fd });
+  const data = await res.json();
+  msgEl.textContent = data.message || data.error || "Completed";
+  if (!res.ok) return;
+  const rows = data.results || [];
+  resultsEl.innerHTML = rows.map(r => {
+    const pdf = r.pdf ? `<a href="/static/${r.pdf}" target="_blank" rel="noopener">View PDF</a>` : "";
+    return `<tr><td>${r.learner_id || ""}</td><td>${r.record_id || ""}</td><td>${pdf}</td></tr>`;
+  }).join("");
+});
+
+loadOptions();
+</script>
+{% endblock %}

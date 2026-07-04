@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Sick notes — Admin{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h3 class="mb-0"><i class="fas fa-notes-medical"></i> Sick note uploads</h3>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm">Admin home</a>
+    </div>
+    <p class="text-muted small">Documents submitted by parents from the parent portal (doctor letters, sick notes, photos).</p>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Submitted</th>
+                        <th>Learner ID</th>
+                        <th>Parent account</th>
+                        <th>File</th>
+                        <th>Note</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not rows %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No sick notes uploaded yet.</td>
+                    </tr>
+                    {% else %}
+                    {% for r in rows %}
+                    {% set u = users_map.get(r.submitted_by_user_id) %}
+                    <tr>
+                        <td class="text-nowrap small">{{ r.submitted_at.strftime('%Y-%m-%d %H:%M') if r.submitted_at else '—' }}</td>
+                        <td><code>{{ r.learner_id }}</code></td>
+                        <td class="small">
+                            {% if u %}
+                                {{ (u.phone or u.username or ('#' ~ u.id))|e }}
+                            {% else %}
+                                #{{ r.submitted_by_user_id }}
+                            {% endif %}
+                        </td>
+                        <td class="small text-break">{{ r.original_filename }}</td>
+                        <td class="small text-muted">{{ (r.parent_note or '—')[:120] }}{% if r.parent_note and r.parent_note|length > 120 %}…{% endif %}</td>
+                        <td class="text-nowrap">
+                            <a class="btn btn-sm btn-primary" href="{{ url_for('admin_sick_note_file', submission_id=r.id) }}" target="_blank" rel="noopener">Open</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

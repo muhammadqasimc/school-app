@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-chart-bar"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="row g-2">
+      <div class="col-md-2"><select id="f-year" class="form-select"><option value="">All Years</option></select></div>
+      <div class="col-md-2"><select id="f-term" class="form-select"><option value="">All Terms</option></select></div>
+      <div class="col-md-2"><select id="f-grade" class="form-select"><option value="">All Grades</option></select></div>
+      <div class="col-md-2"><select id="f-phase" class="form-select"><option value="">All Phases</option></select></div>
+      <div class="col-md-2"><select id="f-subject" class="form-select"><option value="">All Subjects</option></select></div>
+      <div class="col-md-2"><button id="apply-filters" class="btn btn-light w-100">Apply</button></div>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <div class="col-md-3"><div class="border rounded p-2"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
+      <div class="col-md-3"><div class="border rounded p-2"><div class="small text-muted">Records</div><div id="k-records" class="fs-5 fw-bold">-</div></div></div>
+      <div class="col-md-3"><div class="border rounded p-2"><div class="small text-muted">Average %</div><div id="k-avg" class="fs-5 fw-bold">-</div></div></div>
+      <div class="col-md-3"><div class="border rounded p-2"><div class="small text-muted">Pass Rate</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
+    </div>
+    <div class="row">
+      <div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-a"></canvas></div></div>
+      <div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-b"></canvas></div></div>
+    </div>
+    <div class="table-responsive mt-3">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Label</th><th>Value</th><th>Pass Rate</th></tr></thead>
+        <tbody id="report-rows"><tr><td colspan="3" class="text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const reportKey = "{{ report.key }}";
+let chartA = null;
+let chartB = null;
+
+function fillSelect(id, values) {
+  const el = document.getElementById(id);
+  const current = el.value;
+  while (el.options.length > 1) el.remove(1);
+  values.forEach(v => {
+    const op = document.createElement("option");
+    op.value = String(v);
+    op.textContent = String(v);
+    el.appendChild(op);
+  });
+  el.value = current;
+}
+
+function params() {
+  const p = new URLSearchParams();
+  ["year","term","grade","phase","subject"].forEach(k => {
+    const val = document.getElementById(`f-${k}`).value.trim();
+    if (val) p.set(k, val);
+  });
+  return p;
+}
+
+async function loadFilters() {
+  const r = await fetch(`/api/management-report-filters?${params().toString()}`);
+  const data = await r.json();
+  if (!data.filters) return;
+  fillSelect("f-year", data.filters.years || []);
+  fillSelect("f-term", data.filters.terms || []);
+  fillSelect("f-grade", data.filters.grades || []);
+  fillSelect("f-phase", data.filters.phases || []);
+  fillSelect("f-subject", data.filters.subjects || []);
+}
+
+function updateTable(rows) {
+  const body = document.getElementById("report-rows");
+  if (!rows || !rows.length) {
+    body.innerHTML = '<tr><td colspan="3" class="text-muted">No data for selected filters.</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.slice(0, 30).map(r => `<tr><td>${r.label || ""}</td><td>${r.value ?? ""}</td><td>${r.passRate ?? ""}</td></tr>`).join("");
+}
+
+function renderChart(canvasId, rows, label, type = "bar") {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  const labels = (rows || []).map(r => r.label);
+  const values = (rows || []).map(r => Number(r.value || 0));
+  return new Chart(ctx, {
+    type,
+    data: { labels, datasets: [{ label, data: values, borderWidth: 1, backgroundColor: "rgba(102,126,234,0.5)", borderColor: "rgba(102,126,234,1)" }] },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+}
+
+async function loadReport() {
+  const p = params();
+  p.set("report_key", reportKey);
+  const r = await fetch(`/api/management-report?${p.toString()}`);
+  const data = await r.json();
+  const s = data.summary || {};
+  document.getElementById("k-learners").textContent = s.learners ?? "-";
+  document.getElementById("k-records").textContent = s.records ?? "-";
+  document.getElementById("k-avg").textContent = s.averagePercent != null ? `${s.averagePercent}%` : "-";
+  document.getElementById("k-pass").textContent = s.passRate != null ? `${s.passRate}%` : "-";
+
+  const primary = data.termPerformance?.length ? data.termPerformance : (data.enrolmentTrend?.length ? data.enrolmentTrend : data.gradeBreakdown);
+  const secondary = data.subjectPerformance?.length ? data.subjectPerformance : (data.achievementBands?.length ? data.achievementBands : data.attendanceByMonth);
+  updateTable(data.subjectPerformance?.length ? data.subjectPerformance : primary);
+
+  if (chartA) chartA.destroy();
+  if (chartB) chartB.destroy();
+  chartA = renderChart("chart-a", primary || [], "Primary");
+  chartB = renderChart("chart-b", secondary || [], "Secondary", "line");
+}
+
+document.getElementById("apply-filters").addEventListener("click", async () => {
+  await loadReport();
+});
+
+(async () => {
+  await Promise.all([loadFilters(), loadReport()]);
+})();
+</script>
+{% endblock %}

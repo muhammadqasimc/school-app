@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = true %}{% include "management/_report_frame.html" %}
+<p class="small text-muted mb-2">Subject filter is disabled; promotion metrics are calculated at learner level.</p>
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Eligible Learners</div><div id="k-e" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Promoted Learners</div><div id="k-p" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Promotion Rate</div><div id="k-r" class="fs-5 fw-bold">-</div></div></div>
+</div>
+<div class="row"><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-trend"></canvas></div></div><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-grade"></canvas></div></div></div>
+<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Grade</th><th>Learners</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
+{% endblock %}
+{% block extra_js %}<script>
+let c1=null,c2=null;const reportKey="learner-promotion-rate";const f=["year","term","phase","grade"];
+const p=()=>{const x=new URLSearchParams();f.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)x.set(k,v);});return x;};
+const fs=(id,v)=>{const e=document.getElementById(id),k=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(i=>{const o=document.createElement("option");o.value=i;o.textContent=i;e.appendChild(o);});e.value=k;};
+async function lf(){const r=await fetch(`/api/management-report-filters?${p()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);}
+function draw(id,t,l,rows,c){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(r=>r.label),datasets:[{label:l,data:(rows||[]).map(r=>Number(r.value||0)),backgroundColor:c,borderColor:c}]},options:{responsive:true,maintainAspectRatio:false}});}
+async function lr(){const x=p();x.set("report_key",reportKey);const r=await fetch(`/api/management-report?${x}`);const d=await r.json();const k=(d.reportData||{}).kpis||{};document.getElementById("k-e").textContent=k.eligibleLearners??"-";document.getElementById("k-p").textContent=k.promotedLearners??"-";document.getElementById("k-r").textContent=k.promotionRate!=null?`${k.promotionRate}%`:"-";
+const ch=(d.reportData||{}).charts||{};if(c1)c1.destroy();if(c2)c2.destroy();c1=draw("chart-trend","line","Promotion Trend",ch.promotionTrend||[],"rgba(32,201,151,0.8)");c2=draw("chart-grade","bar","Grade Distribution",ch.gradeDistribution||[],"rgba(111,66,193,0.8)");
+const rows=((d.reportData||{}).tables||{}).gradeDistribution||[];document.getElementById("tbl").innerHTML=rows.length?rows.map(r=>`<tr><td>${r.label||""}</td><td>${r.value??""}</td></tr>`).join(""):'<tr><td colspan="2" class="text-muted">No data.</td></tr>';}
+["f-year","f-term","f-phase","f-grade"].forEach(i=>document.getElementById(i).addEventListener("change",lf));document.getElementById("apply-filters").addEventListener("click",lr);(async()=>{await lf();await lr();})();
+</script>{% endblock %}

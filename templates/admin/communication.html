@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}Communication - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-comments"></i> Admin Communication Center</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <p class="text-muted">Category-based communication for Custom, Discipline, and Finance with immediate delivery and per-run report tracking.</p>
+                <ul class="nav nav-tabs mb-3" id="commTabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-category="custom" type="button">Custom</button></li>
+                    <li class="nav-item"><button class="nav-link" data-category="discipline" type="button">Discipline</button></li>
+                    <li class="nav-item"><button class="nav-link" data-category="finance" type="button">Finance</button></li>
+                </ul>
+
+                <div class="row">
+                    <div class="col-lg-4">
+                        <div class="card border-primary mb-3">
+                            <div class="card-header bg-primary text-white py-2"><h6 class="mb-0">1. Filter</h6></div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label">Year</label>
+                                    <input type="number" id="filterYear" class="form-control" min="2000" max="2100" value="{{ current_year or 2026 }}">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Grade</label>
+                                    <select id="filterGrade" class="form-select">
+                                        <option value="">-- Any grade --</option>
+                                        {% for g in (initial_grades or []) %}
+                                        <option value="{{ g }}">{{ g }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Learner ID</label>
+                                    <input type="text" id="filterLearnerId" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Surname</label>
+                                    <input type="text" id="filterSurname" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Start Date (Discipline)</label>
+                                    <input type="date" id="filterStartDate" class="form-control">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">End Date (Discipline)</label>
+                                    <input type="date" id="filterEndDate" class="form-control">
+                                </div>
+                                <button type="button" id="btnFindRows" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="card border-secondary mb-3">
+                            <div class="card-header bg-secondary text-white py-2"><h6 class="mb-0">2. Select Targets</h6></div>
+                            <div class="card-body" style="max-height: 240px; overflow-y: auto;">
+                                <div id="targetList" class="small text-muted">Run a search first.</div>
+                            </div>
+                            <div class="card-footer py-2">
+                                <button type="button" id="btnSelectAllTargets" class="btn btn-outline-secondary btn-sm" disabled>Select all</button>
+                                <button type="button" id="btnDeselectAllTargets" class="btn btn-outline-secondary btn-sm" disabled>Deselect all</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-success mb-3">
+                    <div class="card-header bg-success text-white py-2"><h6 class="mb-0">3. Preview & Send (Immediate)</h6></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Channel</label>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input channel-cb" type="checkbox" id="channelSms" value="sms">
+                                    <label class="form-check-label" for="channelSms">SMS</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input channel-cb" type="checkbox" id="channelWhatsapp" value="whatsapp">
+                                    <label class="form-check-label" for="channelWhatsapp">WhatsApp</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-2" id="customMessageWrap">
+                            <label class="form-label">Custom Message <span id="charCount" class="text-muted">0 / {{ sms_max_chars }}</span></label>
+                            <textarea id="messageText" class="form-control" rows="3" maxlength="{{ sms_max_chars }}"></textarea>
+                        </div>
+                        <div class="mb-2" id="financeTemplateWrap" style="display:none;">
+                            <label class="form-label">Finance Message Template</label>
+                            <textarea id="financeTemplateText" class="form-control" rows="4">Dear {parent_name}, this is a reminder that {learner_name} (Grade {grade}) has an outstanding school fee balance of {outstanding_amount} for {year}. Please contact the school office if you have already paid or need assistance.</textarea>
+                            <div class="small text-muted mt-1">
+                                Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{outstanding_amount}</code> <code>{school_name}</code>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-2" id="previewHint">Discipline and Finance messages are generated from selected records.</div>
+                        <button type="button" id="btnSend" class="btn btn-success">
+                            <i class="fas fa-paper-plane"></i> Send Now
+                        </button>
+                        <div id="sendResult" class="mt-2 small"></div>
+                    </div>
+                </div>
+
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white py-2"><h6 class="mb-0">4. Delivery Report</h6></div>
+                    <div class="card-body">
+                        <div class="input-group">
+                            <input type="text" id="reportBatchId" class="form-control" placeholder="Batch ID from last send">
+                            <button type="button" id="btnLoadReport" class="btn btn-outline-info">Load</button>
+                        </div>
+                        <div id="reportResult" class="small mt-2 text-muted">No report loaded.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sendPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-eye"></i> Message Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sendPreviewSummary" class="mb-2 small text-muted"></div>
+                <pre id="sendPreviewBody" class="border rounded p-2 bg-light small" style="white-space: pre-wrap;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="btnConfirmSend">Confirm Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const SMS_MAX = {{ sms_max_chars }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    let category = 'custom';
+    let currentRows = [];
+    let pendingSend = null;
+
+    function fetchJson(url) {
+        return fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+    }
+
+    function postJson(url, data) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken || ''
+            },
+            body: JSON.stringify(data)
+        }).then(r => r.json());
+    }
+
+    fetchJson('{{ url_for("admin_communication_grades") }}').then(data => {
+        const sel = document.getElementById('filterGrade');
+        const existing = new Set(Array.from(sel.options).map(o => String(o.value || '')));
+        (data.grades || []).forEach(g => {
+            if (existing.has(String(g))) return;
+            const opt = document.createElement('option');
+            opt.value = g;
+            opt.textContent = g;
+            sel.appendChild(opt);
+        });
+    }).catch(() => {});
+
+    document.querySelectorAll('#commTabs .nav-link').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('#commTabs .nav-link').forEach(x => x.classList.remove('active'));
+            this.classList.add('active');
+            category = this.getAttribute('data-category');
+            document.getElementById('customMessageWrap').style.display = category === 'custom' ? 'block' : 'none';
+            document.getElementById('financeTemplateWrap').style.display = category === 'finance' ? 'block' : 'none';
+            document.getElementById('targetList').innerHTML = '<span class="text-muted">Run a search first.</span>';
+            currentRows = [];
+        });
+    });
+
+    document.getElementById('btnFindRows').addEventListener('click', function() {
+        const year = document.getElementById('filterYear').value.trim();
+        const grade = document.getElementById('filterGrade').value.trim();
+        const learnerId = document.getElementById('filterLearnerId').value.trim();
+        const surname = document.getElementById('filterSurname').value.trim();
+        const startDate = document.getElementById('filterStartDate').value.trim();
+        const endDate = document.getElementById('filterEndDate').value.trim();
+        let url = '';
+        if (category === 'custom') {
+            url = '{{ url_for("admin_communication_learners") }}?';
+            if (learnerId) url += 'learner_id=' + encodeURIComponent(learnerId);
+            else if (grade) url += 'grade=' + encodeURIComponent(grade);
+            else if (surname) url += 'surname=' + encodeURIComponent(surname);
+            else {
+                document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a filter.</span>';
+                return;
+            }
+        } else if (category === 'discipline') {
+            if (!startDate && !endDate) {
+                document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a start or end date for discipline search.</span>';
+                return;
+            }
+            url = '{{ url_for("admin_communication_discipline_incidents") }}?';
+            if (year) url += '&year=' + encodeURIComponent(year);
+            if (learnerId) url += '&learner_id=' + encodeURIComponent(learnerId);
+            if (grade) url += '&grade=' + encodeURIComponent(grade);
+            if (surname) url += '&surname=' + encodeURIComponent(surname);
+            if (startDate) url += '&start_date=' + encodeURIComponent(startDate);
+            if (endDate) url += '&end_date=' + encodeURIComponent(endDate);
+        } else {
+            if (!grade) {
+                document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a grade to load outstanding finance records.</span>';
+                return;
+            }
+            url = '{{ url_for("admin_communication_finance_outstanding") }}?';
+            if (year) url += '&year=' + encodeURIComponent(year);
+            if (grade) url += '&grade=' + encodeURIComponent(grade);
+            if (surname) url += '&surname=' + encodeURIComponent(surname);
+        }
+        document.getElementById('targetList').innerHTML = '<span class="text-muted">Loading...</span>';
+        fetchJson(url).then(data => {
+            const rows = data.learners || data.incidents || [];
+            currentRows = rows;
+            const container = document.getElementById('targetList');
+            if (rows.length === 0) {
+                container.innerHTML = '<span class="text-muted">No learners found.</span>';
+            } else {
+                container.innerHTML = rows.map((r, i) =>
+                    '<div class="form-check"><input class="form-check-input target-cb" type="checkbox" value="' + i + '" id="target_' + i + '">' +
+                    '<label class="form-check-label" for="target_' + i + '">' +
+                    (category === 'custom'
+                        ? ((r.surname || '') + ', ' + (r.name || '') + ' (Grade ' + (r.grade || '') + ')')
+                        : (category === 'discipline'
+                            ? (((r.incident_date || '').toString().slice(0, 10) + ' - ' + (r.preview_message || (r.learner_name || ''))).trim().replace(/^-\s*/, ''))
+                            : (r.preview_message || (r.learner_name || ''))))
+                    + '</label></div>'
+                ).join('');
+            }
+            document.getElementById('btnSelectAllTargets').disabled = rows.length === 0;
+            document.getElementById('btnDeselectAllTargets').disabled = rows.length === 0;
+        }).catch(() => {
+            document.getElementById('targetList').innerHTML = '<span class="text-danger">Error loading data.</span>';
+        });
+    });
+
+    document.getElementById('btnSelectAllTargets').addEventListener('click', function() {
+        document.querySelectorAll('.target-cb').forEach(function(cb) { cb.checked = true; });
+    });
+    document.getElementById('btnDeselectAllTargets').addEventListener('click', function() {
+        document.querySelectorAll('.target-cb').forEach(function(cb) { cb.checked = false; });
+    });
+
+    function updateMessageLimitUi() {
+        const channels = Array.from(document.querySelectorAll('.channel-cb:checked')).map(cb => cb.value);
+        const smsSelected = channels.includes('sms');
+        const msgEl = document.getElementById('messageText');
+        const n = msgEl.value.length;
+        if (smsSelected) {
+            msgEl.setAttribute('maxlength', String(SMS_MAX));
+            document.getElementById('charCount').textContent = n + ' / ' + SMS_MAX + ' (SMS limit)';
+            msgEl.placeholder = 'Type your message (max ' + SMS_MAX + ' characters when SMS selected)';
+        } else {
+            msgEl.removeAttribute('maxlength');
+            document.getElementById('charCount').textContent = n + ' (WhatsApp only - no app limit)';
+            msgEl.placeholder = 'Type your message (WhatsApp only)';
+        }
+    }
+
+    document.querySelectorAll('.channel-cb').forEach(function(cb) {
+        cb.addEventListener('change', updateMessageLimitUi);
+    });
+    document.getElementById('messageText').addEventListener('input', updateMessageLimitUi);
+    updateMessageLimitUi();
+
+    document.getElementById('btnSend').addEventListener('click', function() {
+        const sendBtn = this;
+        const selectedIndexes = Array.from(document.querySelectorAll('.target-cb:checked')).map(cb => Number(cb.value));
+        const selectedRows = selectedIndexes.map(i => currentRows[i]).filter(Boolean);
+        const message = document.getElementById('messageText').value.trim();
+        const financeTemplate = document.getElementById('financeTemplateText').value.trim();
+        const channels = Array.from(document.querySelectorAll('.channel-cb:checked')).map(cb => cb.value);
+        if (selectedRows.length === 0) {
+            document.getElementById('sendResult').innerHTML = '<span class="text-warning">Select at least one item.</span>';
+            return;
+        }
+        if (channels.length === 0) {
+            document.getElementById('sendResult').innerHTML = '<span class="text-warning">Select at least one channel (SMS and/or WhatsApp).</span>';
+            return;
+        }
+        if (category === 'custom' && !message) {
+            document.getElementById('sendResult').innerHTML = '<span class="text-warning">Enter a message.</span>';
+            return;
+        }
+        if (category === 'custom' && channels.includes('sms') && message.length > SMS_MAX) {
+            document.getElementById('sendResult').innerHTML = '<span class="text-warning">SMS selected: message must be at most ' + SMS_MAX + ' characters.</span>';
+            return;
+        }
+        const previewLines = [];
+        if (category === 'custom') {
+            previewLines.push(message);
+        } else if (category === 'discipline') {
+            selectedRows.slice(0, 8).forEach(r => {
+                const d = ((r.incident_date || '').toString().slice(0, 10));
+                previewLines.push((d ? d + ' - ' : '') + (r.preview_message || ''));
+            });
+        } else {
+            const tpl = financeTemplate || '';
+            selectedRows.slice(0, 8).forEach(r => {
+                let line = tpl
+                    .replaceAll('{parent_name}', 'Parent/Guardian')
+                    .replaceAll('{learner_name}', r.learner_name || '')
+                    .replaceAll('{grade}', r.grade || '')
+                    .replaceAll('{year}', String(r.year || ''))
+                    .replaceAll('{outstanding_amount}', String(r.outstanding || ''))
+                    .replaceAll('{school_name}', 'School');
+                previewLines.push(line);
+            });
+        }
+        document.getElementById('sendPreviewSummary').textContent = 'Category: ' + category + ' | Selected: ' + selectedRows.length + ' | Channels: ' + channels.join(', ');
+        document.getElementById('sendPreviewBody').textContent = previewLines.join('\n\n') + (selectedRows.length > 8 ? '\n\n... and more' : '');
+        pendingSend = { category, selectedRows, message, channels, financeTemplate, sendBtn };
+        const modalEl = document.getElementById('sendPreviewModal');
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else {
+            if (!confirm('Preview first message:\n\n' + (previewLines[0] || '') + '\n\nProceed to send?')) return;
+            executeSend();
+        }
+    });
+
+    document.getElementById('btnConfirmSend').addEventListener('click', function() {
+        const modalEl = document.getElementById('sendPreviewModal');
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        }
+        executeSend();
+    });
+
+    function executeSend() {
+        if (!pendingSend) return;
+        const category = pendingSend.category;
+        const selectedRows = pendingSend.selectedRows;
+        const message = pendingSend.message;
+        const channels = pendingSend.channels;
+        const financeTemplate = pendingSend.financeTemplate;
+        const sendBtn = pendingSend.sendBtn;
+        pendingSend = null;
+        document.getElementById('sendResult').innerHTML = '<span class="text-muted">Sending...</span>';
+        sendBtn.disabled = true;
+        let url = '';
+        let payload = { channels: channels };
+        if (category === 'custom') {
+            url = '{{ url_for("admin_communication_send") }}';
+            const learnerIds = selectedRows.map(x => x.id);
+            fetchJson('{{ url_for("admin_communication_parents") }}?learner_ids=' + learnerIds.join(',')).then(data => {
+                payload.phone_numbers = (data.parents || []).map(p => p.phone);
+                payload.message = message;
+                return postJson(url, payload);
+            }).then(afterSend).catch(onSendError);
+            return;
+        } else if (category === 'discipline') {
+            url = '{{ url_for("admin_communication_discipline_send") }}';
+            payload.incidents = selectedRows;
+        } else {
+            url = '{{ url_for("admin_communication_finance_send") }}';
+            payload.learners = selectedRows;
+            payload.finance_template = financeTemplate;
+        }
+        postJson(url, payload).then(afterSend).catch(onSendError);
+
+        function afterSend(data) {
+            sendBtn.disabled = false;
+            if (data.ok) {
+                document.getElementById('sendResult').innerHTML = 
+                    '<span class="text-success">Sent: ' + (data.sent || 0) + ' deliveries.' +
+                    (data.failed && data.failed.length ? ' Failed: ' + data.failed.length + '.' : '') +
+                    (data.batch_id ? ' Batch: ' + data.batch_id : '') + '</span>';
+                if (data.batch_id) document.getElementById('reportBatchId').value = data.batch_id;
+            } else {
+                document.getElementById('sendResult').innerHTML = '<span class="text-danger">' + (data.error || 'Send failed') + '</span>';
+            }
+        }
+        function onSendError() {
+            sendBtn.disabled = false;
+            document.getElementById('sendResult').innerHTML = '<span class="text-danger">Request failed.</span>';
+        }
+    }
+
+    document.getElementById('btnLoadReport').addEventListener('click', function() {
+        const batchId = document.getElementById('reportBatchId').value.trim();
+        if (!batchId) return;
+        fetchJson('{{ url_for("admin_communication_delivery_report", batch_id="__BATCH__") }}'.replace('__BATCH__', encodeURIComponent(batchId))).then(data => {
+            const report = data.report || {};
+            document.getElementById('reportResult').innerHTML =
+                '<span class="text-dark">Total: ' + (report.total || 0) + ', Sent: ' + (report.sent || 0) + ', Failed: ' + (report.failed || 0) + '</span>';
+        }).catch(() => {
+            document.getElementById('reportResult').innerHTML = '<span class="text-danger">Failed to load report.</span>';
+        });
+    });
+})();
+</script>
+{% endblock %}

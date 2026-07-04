@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Teacher Announcements{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Announcements</h4></div>
+  <div class="card-body">
+    <form id="ann-form" class="mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2">
+        <div class="col-md-3"><input class="form-control" name="title" placeholder="Title" required></div>
+        <div class="col-md-2"><input class="form-control" name="grade" placeholder="Grade"></div>
+        <div class="col-md-2"><input class="form-control" name="class_id" placeholder="Class"></div>
+        <div class="col-md-5"><input class="form-control" name="body" placeholder="Announcement body" required></div>
+      </div>
+      <button class="btn btn-primary mt-2" type="submit">Publish</button>
+    </form>
+    <div id="ann-msg" class="small mb-2"></div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped"><thead><tr><th>Title</th><th>Body</th><th>Grade</th><th>Class</th><th>Created</th></tr></thead><tbody id="ann-body"></tbody></table>
+    </div>
+  </div>
+</div>
+<script>
+async function loadAnnouncements() {
+  const r = await fetch("{{ url_for('api_teacher_announcements') }}");
+  if (!r.ok) return;
+  const data = await r.json();
+  document.getElementById("ann-body").innerHTML = (data.rows || []).map(x => `<tr><td>${x.title || ""}</td><td>${x.body || ""}</td><td>${x.targetGrade || ""}</td><td>${x.targetClass || ""}</td><td>${x.createdAt || ""}</td></tr>`).join("");
+}
+document.getElementById("ann-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const r = await fetch("{{ url_for('api_teacher_announcements_save') }}", {method:"POST", body:fd});
+  const data = await r.json();
+  document.getElementById("ann-msg").textContent = data.error || (data.success ? "Announcement published." : "Failed");
+  if (r.ok) { e.target.reset(); loadAnnouncements(); }
+});
+loadAnnouncements();
+</script>
+{% endblock %}

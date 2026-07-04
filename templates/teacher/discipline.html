@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Teacher Discipline{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Discipline</h4></div>
+  <div class="card-body">
+    <form id="discipline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2">
+        <div class="col-md-2"><input class="form-control" name="academic_year" value="2026" placeholder="Year"></div>
+        <div class="col-md-1"><input class="form-control" name="term" value="1" placeholder="Term"></div>
+        <div class="col-md-2"><input class="form-control" name="learner_id" placeholder="Learner ID" required></div>
+        <div class="col-md-2"><input class="form-control" type="date" name="date"></div>
+        <div class="col-md-2">
+          <select class="form-select" name="type"><option>Demerit</option><option>Merit</option></select>
+        </div>
+        <div class="col-md-1"><input class="form-control" name="points" value="1" type="number" min="0" max="10"></div>
+        <div class="col-md-2"><input class="form-control" name="comment" placeholder="Comment"></div>
+      </div>
+      <button class="btn btn-primary mt-2" type="submit">Save Discipline</button>
+    </form>
+    <div id="discipline-msg" class="small mt-2"></div>
+    <hr>
+    <button id="load-discipline" class="btn btn-outline-secondary btn-sm mb-2">Reload Discipline</button>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped"><thead><tr><th>Date</th><th>Learner</th><th>Type</th><th>Demerit</th><th>Merit</th><th>Comment</th></tr></thead><tbody id="discipline-body"></tbody></table>
+    </div>
+  </div>
+</div>
+<script>
+async function loadDiscipline() {
+  const res = await fetch("{{ url_for('api_teacher_discipline') }}");
+  if (!res.ok) return;
+  const data = await res.json();
+  document.getElementById("discipline-body").innerHTML = (data.rows || []).map(r => `<tr><td>${r.Date || ""}</td><td>${r.Learnerid || ""}</td><td>${r.Type || ""}</td><td>${r.Demerit || 0}</td><td>${r.Merit || 0}</td><td>${r.Comment || ""}</td></tr>`).join("");
+}
+document.getElementById("discipline-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  fd.set("idempotency_key", crypto.randomUUID());
+  const res = await fetch("{{ url_for('api_teacher_discipline_save') }}", {method:"POST", body:fd});
+  const data = await res.json();
+  document.getElementById("discipline-msg").textContent = data.message || data.error || "Done";
+  if (res.ok) loadDiscipline();
+});
+document.getElementById("load-discipline").addEventListener("click", loadDiscipline);
+loadDiscipline();
+</script>
+{% endblock %}

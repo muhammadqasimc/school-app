@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Teacher Chat{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Teacher Chat</h4></div>
+  <div class="card-body">
+    <input type="hidden" id="chat-csrf" value="{{ csrf_token() }}">
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="mb-2 d-flex gap-2">
+          <input id="chat-search" class="form-control form-control-sm" placeholder="Search users">
+          <button class="btn btn-sm btn-outline-primary" id="chat-refresh">Refresh</button>
+        </div>
+        <div class="list-group" id="thread-list" style="max-height: 65vh; overflow:auto;"></div>
+      </div>
+      <div class="col-lg-8">
+        <div class="border rounded p-2 mb-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="form-label small mb-1">Start thread with user</label>
+              <select id="candidate-user" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">Learner ID (required)</label>
+              <input id="thread-learner" class="form-control form-control-sm" placeholder="Learner ID">
+            </div>
+            <div class="col-md-2">
+              <button id="create-thread" class="btn btn-sm btn-primary w-100">Start</button>
+            </div>
+          </div>
+        </div>
+        <div class="border rounded p-2 mb-2" id="message-box" style="height: 45vh; overflow:auto; background:#f8f9fa;"></div>
+        <form id="composer" class="row g-2">
+          <div class="col-12">
+            <textarea id="message-body" class="form-control" rows="3" placeholder="Type your message"></textarea>
+          </div>
+          <div class="col-md-8">
+            <input type="file" id="attachments" class="form-control" multiple>
+          </div>
+          <div class="col-md-4 d-grid">
+            <button class="btn btn-primary" type="submit">Send</button>
+          </div>
+        </form>
+        <div id="chat-status" class="small text-muted mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const chatState = { threads: [], activeThreadId: null, socket: null };
+const csrf = document.getElementById("chat-csrf").value;
+const threadListEl = document.getElementById("thread-list");
+const messageBoxEl = document.getElementById("message-box");
+const statusEl = document.getElementById("chat-status");
+const setStatus = (msg) => { statusEl.textContent = msg || ""; };
+
+function renderThreads() {
+  threadListEl.innerHTML = (chatState.threads || []).map(t => {
+    const participants = (t.participants || []).map(p => p.username).join(", ");
+    const active = Number(t.id) === Number(chatState.activeThreadId) ? "active" : "";
+    return `<button class="list-group-item list-group-item-action ${active}" data-thread-id="${t.id}">
+      <div class="d-flex justify-content-between">
+        <strong>${t.title || participants || ("Thread #" + t.id)}</strong>
+        <span class="badge bg-primary">${t.unreadCount || 0}</span>
+      </div>
+      <div class="small text-muted">${t.latestMessage || ""}</div>
+    </button>`;
+  }).join("");
+}
+
+function renderMessages(rows) {
+  messageBoxEl.innerHTML = (rows || []).map(m => {
+    const files = (m.attachments || []).map(a => `<a class="d-block small" href="${a.downloadUrl}" target="_blank">${a.name}</a>`).join("");
+    return `<div class="mb-2">
+      <div><strong>${m.senderName || "User"}</strong> <span class="text-muted small">${m.createdAt || ""}</span></div>
+      <div>${m.body || ""}</div>
+      <div>${files}</div>
+    </div>`;
+  }).join("");
+  messageBoxEl.scrollTop = messageBoxEl.scrollHeight;
+}
+
+async function loadCandidates() {
+  const q = document.getElementById("chat-search").value.trim();
+  const r = await fetch(`/api/chat/candidates?q=${encodeURIComponent(q)}`);
+  const data = await r.json();
+  const sel = document.getElementById("candidate-user");
+  sel.innerHTML = `<option value="">Select user</option>` + (data.rows || []).map(x => `<option value="${x.userId}">${x.username} (${x.role})</option>`).join("");
+}
+
+async function loadThreads() {
+  const r = await fetch("/api/chat/threads");
+  const data = await r.json();
+  chatState.threads = data.threads || [];
+  renderThreads();
+}
+
+async function openThread(threadId) {
+  chatState.activeThreadId = Number(threadId);
+  renderThreads();
+  const r = await fetch(`/api/chat/threads/${threadId}/messages?limit=80`);
+  const data = await r.json();
+  renderMessages(data.rows || []);
+  const fd = new FormData();
+  fd.append("csrf_token", csrf);
+  await fetch(`/api/chat/threads/${threadId}/read`, { method: "POST", body: fd });
+}
+
+threadListEl.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-thread-id]");
+  if (!button) return;
+  openThread(button.getAttribute("data-thread-id"));
+});
+
+document.getElementById("chat-search").addEventListener("input", loadCandidates);
+document.getElementById("chat-refresh").addEventListener("click", async () => {
+  await loadThreads();
+  await loadCandidates();
+});
+
+document.getElementById("create-thread").addEventListener("click", async () => {
+  const userId = document.getElementById("candidate-user").value;
+  const learnerId = document.getElementById("thread-learner").value.trim();
+  if (!userId || !learnerId) {
+    setStatus("Pick a user and learner ID.");
+    return;
+  }
+  const fd = new FormData();
+  fd.append("csrf_token", csrf);
+  fd.append("thread_type", "direct");
+  fd.append("learner_id", learnerId);
+  fd.append("participant_ids", userId);
+  const r = await fetch("/api/chat/threads", { method: "POST", body: fd });
+  const data = await r.json();
+  if (!r.ok) {
+    setStatus(data.error || "Failed to create thread.");
+    return;
+  }
+  setStatus("Thread created.");
+  await loadThreads();
+  if (data.thread?.id) openThread(data.thread.id);
+});
+
+document.getElementById("composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!chatState.activeThreadId) {
+    setStatus("Select a thread first.");
+    return;
+  }
+  const body = document.getElementById("message-body").value.trim();
+  const files = document.getElementById("attachments").files;
+  const fd = new FormData();
+  fd.append("csrf_token", csrf);
+  fd.append("body", body);
+  for (const f of files) fd.append("attachments", f);
+  const r = await fetch(`/api/chat/threads/${chatState.activeThreadId}/messages`, { method: "POST", body: fd });
+  const data = await r.json();
+  if (!r.ok) {
+    setStatus(data.error || "Failed to send message.");
+    return;
+  }
+  document.getElementById("message-body").value = "";
+  document.getElementById("attachments").value = "";
+  setStatus("Message sent.");
+  await openThread(chatState.activeThreadId);
+  await loadThreads();
+});
+
+function initSocket() {
+  chatState.socket = io();
+  chatState.socket.on("chat_new_message", (payload) => {
+    if (Number(payload?.threadId) === Number(chatState.activeThreadId)) openThread(chatState.activeThreadId);
+    loadThreads();
+  });
+  chatState.socket.on("chat_thread_updated", () => loadThreads());
+}
+
+async function boot() {
+  await loadCandidates();
+  await loadThreads();
+  initSocket();
+}
+boot();
+</script>
+{% endblock %}
+{% extends "base.html" %}
+{% block title %}Teacher Parent Messaging{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Message Parents</h4></div>
+  <div class="card-body">
+    <form id="msg-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2 mb-2">
+        <div class="col-md-2"><input class="form-control" name="grade" placeholder="Grade"></div>
+        <div class="col-md-2"><input class="form-control" name="class_id" placeholder="Class"></div>
+        <div class="col-md-2">
+          <select class="form-select" name="channel"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select>
+        </div>
+      </div>
+      <label class="form-label">Message</label>
+      <textarea class="form-control" name="message" rows="4" required minlength="5"></textarea>
+      <button class="btn btn-primary mt-2" type="submit">Send</button>
+    </form>
+    <div id="msg-result" class="small mt-2"></div>
+  </div>
+</div>
+<script>
+document.getElementById("msg-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const r = await fetch("{{ url_for('api_teacher_messages_send') }}", {method:"POST", body:fd});
+  const data = await r.json();
+  if (!r.ok) {
+    document.getElementById("msg-result").textContent = data.error || "Failed";
+    return;
+  }
+  document.getElementById("msg-result").textContent = `Sent ${data.sent || 0}/${data.totalRecipients || 0}. Failed: ${(data.failed || []).length}`;
+});
+</script>
+{% endblock %}

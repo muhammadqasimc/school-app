@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Asset inventory — Overview{% endblock %}
+{% block extra_css %}
+<style>
+  .inventory-hero { border-radius: 15px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: rgba(255,255,255,0.12); color: #fff; }
+  .inventory-metric { background: #fff; border-radius: 12px; padding: 1rem; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+  .inventory-metric strong { font-size: 1.75rem; display: block; color: #764ba2; }
+  .inventory-card { background: #fff; border-radius: 14px; overflow: hidden; }
+  .activity-feed { max-height: 480px; overflow-y: auto; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="inventory-hero">
+  {% include "inventory/_nav.html" %}
+  <h3 class="mb-1"><i class="fas fa-boxes-stacked"></i> School asset inventory</h3>
+  <p class="mb-0 small opacity-75">At-a-glance counts, rollout status, and recent check-ins, check-outs, and updates.</p>
+</div>
+
+<form action="{{ url_for('inventory_lookup') }}" method="post" class="row g-2 mb-4 align-items-end">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-md-8">
+    <label class="form-label text-white">Quick lookup / barcode scanner</label>
+    <input class="form-control form-control-lg" name="code" autofocus autocomplete="off" placeholder="Scan QR, paste token, tag, or serial number…">
+  </div>
+  <div class="col-md-4">
+    <button class="btn btn-light btn-lg w-100" type="submit"><i class="fas fa-search"></i> Go</button>
+  </div>
+</form>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-sm-6">
+    <div class="inventory-metric"><i class="fas fa-cubes text-secondary"></i><strong>{{ item_total }}</strong><span class="small text-muted">Active items</span></div>
+  </div>
+  <div class="col-md-3 col-sm-6">
+    <div class="inventory-metric"><i class="fas fa-user-tag text-secondary"></i><strong>{{ deployed_ct }}</strong><span class="small text-muted">Checked out now</span></div>
+  </div>
+  {% for t in ['asset', 'accessory', 'consumable', 'component'] %}
+  <div class="col-md-3 col-sm-6">
+    <div class="inventory-metric">
+      <strong>{{ type_counts[t] }}</strong>
+      <span class="small text-muted text-capitalize">{{ t }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="inventory-card card border-0 shadow-sm">
+      <div class="card-header bg-transparent"><h6 class="mb-0">Rollout &amp; lifecycle</h6></div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          {% for k, v in status_totals.items() %}
+          <li class="list-group-item d-flex justify-content-between">{{ k.replace('_',' ') }} <span class="badge bg-primary rounded-pill">{{ v }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="inventory-card card border-0 shadow-sm">
+      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Recent activity</h6>
+        <span class="small text-muted">Check-ins, edits, deletes…</span>
+      </div>
+      <div class="card-body p-0 activity-feed">
+        <table class="table table-sm mb-0">
+          <tbody>
+          {% for a, actor in recent_activity %}
+            <tr>
+              <td class="small text-muted text-nowrap">{{ a.created_at.strftime('%Y-%m-%d %H:%M') if a.created_at else '' }}</td>
+              <td><span class="badge bg-secondary">{{ a.action }}</span></td>
+              <td class="small">{{ a.summary }}</td>
+              <td class="small text-muted">{{ actor.username if actor else '' }}</td>
+              <td>{% if a.item_id %}<a href="{{ url_for('inventory_item_detail', item_id=a.item_id) }}">#{{ a.item_id }}</a>{% endif %}</td>
+            </tr>
+          {% else %}
+            <tr><td class="text-muted p-3">No activity yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="text-center mt-4">
+  <a class="btn btn-primary" href="{{ url_for('inventory_item_new') }}"><i class="fas fa-plus"></i> Add item</a>
+  <a class="btn btn-outline-primary" href="{{ url_for('inventory_models_list') }}">Manage models</a>
+</div>
+{% endblock %}

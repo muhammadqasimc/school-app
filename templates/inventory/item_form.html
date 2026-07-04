@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{% if item %}Edit{% else %}New{% endif %} item{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">{% if item %}Edit {{ item.tag }}{% else %}New inventory item{% endif %}</h4>
+  {% if not item %}
+  <p class="small mb-0 mt-2 opacity-90">Fill in the asset <strong>tag</strong> (unique id) and describe <strong>what it is</strong>. The system groups many items under the same description for reports — you usually do <em>not</em> need the separate &ldquo;Models&rdquo; page first.</p>
+  {% endif %}
+</div>
+
+{% set mo = namespace(name='', itype='') %}
+{% for m in models %}
+  {% if item and m.id == item.model_id %}{% set mo.name = m.name %}{% set mo.itype = m.item_type %}{% endif %}
+{% endfor %}
+
+<div class="card border-0 shadow-sm">
+<div class="card-body">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% if item %}
+    <div class="mb-3">
+      <label class="form-label">Kind (grouping)</label>
+      <input class="form-control" disabled value="{{ mo.name }} ({{ mo.itype }})">
+    </div>
+  {% elif preset_model %}
+    <input type="hidden" name="model_id" value="{{ preset_model.id }}">
+    <div class="mb-3 alert alert-light border">
+      <strong>Kind:</strong> {{ preset_model.name }} <span class="badge bg-secondary">{{ preset_model.item_type }}</span>
+      <div class="small text-muted mt-1">Optional fields for this kind are below. <a href="{{ url_for('inventory_item_new') }}">Start over without a preset</a>.</div>
+    </div>
+  {% else %}
+    <div class="mb-4 p-3 rounded border bg-light">
+      <label class="form-label fw-semibold">What is this?</label>
+      <input class="form-control mb-2" name="model_name" maxlength="200" value="{{ draft_model_name }}"
+        placeholder='e.g. "Class set — Texas TI-84" or "Staff laptop — Dell Latitude 5430"'>
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label small mb-0">Item type</label>
+          <select class="form-select" name="item_type">
+            {% for t in item_types %}
+            <option value="{{ t }}" {% if draft_item_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label small mb-0">Manufacturer (optional)</label>
+          <input class="form-control" name="manufacturer" maxlength="160" value="{{ draft_manufacturer }}" placeholder="Optional">
+        </div>
+      </div>
+      <p class="small text-muted mt-2 mb-0">Adding another row with the same name and type attaches to the existing group.</p>
+      <hr class="my-3">
+      <label class="form-label small text-muted">Or pick an existing kind (optional)</label>
+      <select name="model_id" id="model_id" class="form-select">
+        <option value="">— None — use the name above —</option>
+        {% for m in models %}
+        <option value="{{ m.id }}">{{ m.name }} ({{ m.item_type }})</option>
+        {% endfor %}
+      </select>
+      <small class="text-muted">If you choose one, the fields above are ignored.</small>
+    </div>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label">Tag {% if not item %}<span class="text-danger">*</span>{% endif %}</label>
+    <input class="form-control" name="tag" required value="{{ item.tag if item else '' }}" placeholder="e.g. LAPTOP-042 — unique barcode / asset number">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Serial number</label>
+    <input class="form-control" name="serial_number" maxlength="120" value="{{ item.serial_number if item and item.serial_number else '' }}" placeholder="Manufacturer serial / IMEI — optional but recommended for devices">
+    <small class="text-muted">Used for lookups, warranty, and printable labels.</small>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Operational status</label>
+    <select name="ops_status" class="form-select">
+      {% for s in ops_statuses %}
+      <option value="{{ s }}" {% if item and item.ops_status == s %}selected{% elif not item and s == 'ready' %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <small class="text-muted">Mark <strong>archived</strong> here to retire an item; use checkout for <strong>deployed</strong>.</small>
+  </div>
+
+  {% if item and item.ops_status == 'archived' %}
+  <div class="mb-3">
+    <label class="form-label">Archive reason</label>
+    <select name="archived_reason" class="form-select">
+      <option value="">—</option>
+      {% for r in archived_reasons %}
+      <option value="{{ r }}" {% if item.archived_reason == r %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  {% if item %}
+    {% if mo.itype == 'consumable' %}
+    <div class="mb-3">
+      <label class="form-label">Quantity on hand</label>
+      <input type="number" class="form-control" name="quantity_on_hand" min="0" value="{{ item.quantity_on_hand }}">
+    </div>
+    {% endif %}
+    <div class="mb-3">
+      <label class="form-label">Requestable override</label>
+      <select name="req_override" class="form-select">
+        <option value="" {% if item.is_requestable_override is none %}selected{% endif %}>Inherit model default</option>
+        <option value="1" {% if item.is_requestable_override is sameas true %}selected{% endif %}>Always requestable</option>
+        <option value="0" {% if item.is_requestable_override is sameas false %}selected{% endif %}>Not requestable</option>
+      </select>
+    </div>
+  {% else %}
+    <div class="mb-3">
+      <label class="form-label">Quantity on hand</label>
+      <input type="number" class="form-control" name="quantity_on_hand" min="0" value="1">
+      <small class="text-muted">For consumables only; unique devices stay at 1.</small>
+    </div>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label">Physical location</label>
+    <input class="form-control" name="physical_location" value="{{ item.physical_location if item else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Notes</label>
+    <textarea class="form-control" name="notes" rows="2">{{ item.notes if item else '' }}</textarea>
+  </div>
+
+  {% for cf in custom_fields %}
+  <div class="mb-3">
+    <label class="form-label">{{ cf.field_label }}{% if cf.is_required %} *{% endif %}</label>
+    {% if cf.field_type == 'bool' %}
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" name="cf_{{ cf.field_key }}" id="cf_{{ cf.field_key }}"
+          {% if custom_values.get(cf.field_key) %}checked{% endif %}>
+        <label class="form-check-label" for="cf_{{ cf.field_key }}">Yes</label>
+      </div>
+    {% elif cf.field_type == 'number' %}
+      <input type="number" step="any" class="form-control" name="cf_{{ cf.field_key }}" value="{{ custom_values.get(cf.field_key, '') }}">
+    {% elif cf.field_type == 'date' %}
+      <input type="date" class="form-control" name="cf_{{ cf.field_key }}" value="{{ custom_values.get(cf.field_key, '') }}">
+    {% else %}
+      <input type="text" class="form-control" name="cf_{{ cf.field_key }}" value="{{ custom_values.get(cf.field_key, '') }}">
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <button class="btn btn-primary" type="submit">Save</button>
+  {% if item %}<a class="btn btn-link" href="{{ url_for('inventory_item_detail', item_id=item.id) }}">Cancel</a>{% endif %}
+</form>
+</div>
+</div>
+{% endblock %}

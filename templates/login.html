@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Login - Kismet Secondary School{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --panel-bg: #f2f4f6;
+        --teal: #24bfd1;
+        --teal-soft: #d5eef3;
+        --text-main: #2f3e46;
+        --border-soft: #e7e7e7;
+    }
+    .auth-shell .card {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: none;
+    }
+    .auth-shell .card-header {
+        background: var(--teal-soft);
+        color: var(--text-main);
+        border-bottom: 1px solid var(--border-soft);
+        font-weight: 700;
+    }
+    .auth-shell .card-body { background: #fff; }
+    .auth-shell .btn-primary {
+        background-color: var(--teal);
+        border-color: var(--teal);
+    }
+    .auth-shell .btn-primary:hover,
+    .auth-shell .btn-primary:focus {
+        background-color: #1ea3b3;
+        border-color: #1ea3b3;
+    }
+    .auth-shell .btn-outline-primary {
+        color: var(--teal);
+        border-color: var(--teal);
+    }
+    .auth-shell .btn-outline-primary:hover,
+    .auth-shell .btn-outline-primary:focus {
+        color: #fff;
+        background-color: var(--teal);
+        border-color: var(--teal);
+    }
+</style>
+<div class="row justify-content-center mt-5 auth-shell">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="fas fa-lock"></i> Portal Login</h4>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted mb-4">Parents use cellphone number; teachers can login with EdID.</p>
+                
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">
+                            <i class="fas fa-user"></i> Cellphone Number or EdID
+                        </label>
+                        <input type="text" class="form-control" id="username" name="username" 
+                               placeholder="+2782XXXXXXX or TCH001" required autofocus>
+                        <small class="form-text text-muted">Use school-registered phone (parents) or EdID (teachers)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            <i class="fas fa-key"></i> Password
+                        </label>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </form>
+                <div class="mt-3 text-end">
+                    <a href="{{ url_for('forgot_password') }}" class="small">
+                        <i class="fas fa-unlock-alt"></i> Forgot password?
+                    </a>
+                </div>
+                
+                <div class="mt-3 text-center">
+                    <a href="{{ url_for('index') }}" class="text-muted">
+                        <i class="fas fa-arrow-left"></i> Back to Home
+                    </a>
+                </div>
+                <details class="small mt-2 text-center">
+                    <summary class="text-primary" style="cursor:pointer;">
+                        <i class="fas fa-chalkboard-teacher"></i> Staff/Teacher first-time signup
+                    </summary>
+                    <p class="text-muted text-start mt-2 mb-0 small">
+                        Use your <strong>EdID</strong> and password in the form above. If this is your first login,
+                        you will be prompted to verify your phone and set a password.
+                        Contact the school if you need your staff account activated.
+                    </p>
+                </details>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fas fa-user-plus"></i> New here?</h6>
+                <p class="card-text small text-muted">
+                    If you don’t have an account yet, register with your cellphone number and an OTP.
+                </p>
+                <a class="btn btn-outline-primary w-100" href="{{ url_for('register') }}">
+                    <i class="fas fa-user-plus"></i> Register
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

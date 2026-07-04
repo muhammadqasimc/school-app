@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Print label — {{ item.tag }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f0f0;
+      color: #111;
+    }
+    .toolbar {
+      padding: 12px 16px;
+      background: #333;
+      color: #fff;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .toolbar a { color: #9cf; }
+    .sheet {
+      max-width: 520px;
+      margin: 24px auto;
+      padding: 28px 24px 32px;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .sheet h1 {
+      margin: 0 0 4px;
+      font-size: 1.35rem;
+      letter-spacing: 0.02em;
+    }
+    .meta { margin: 0 0 20px; color: #444; font-size: 0.95rem; }
+    .serial { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .qr-wrap { text-align: center; margin: 16px 0; }
+    .qr-wrap img {
+      width: 240px;
+      height: 240px;
+      image-rendering: pixelated;
+      border: 2px solid #111;
+      background: #fff;
+    }
+    .hint {
+      font-size: 11px;
+      color: #666;
+      word-break: break-all;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none !important; }
+      .sheet {
+        margin: 0;
+        padding: 12px;
+        border: none;
+        box-shadow: none;
+        max-width: none;
+      }
+      .qr-wrap img { width: 200px; height: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button type="button" onclick="window.print()" style="padding:8px 16px;cursor:pointer;font-weight:600;">Print</button>
+    <a href="{{ url_for('inventory_item_detail', item_id=item.id) }}">← Back to item</a>
+    <a href="{{ url_for('inventory_item_label_pdf', item_id=item.id) }}">Download PDF label</a>
+  </div>
+  <div class="sheet">
+    <h1>{{ item.tag }}</h1>
+    <p class="meta">{{ model.name if model else '' }} · {{ model.item_type if model else '' }}</p>
+    {% if item.serial_number %}
+    <p class="serial">Serial: {{ item.serial_number }}</p>
+    {% else %}
+    <p class="meta" style="font-style:italic;">No serial number on file — add one on the item edit page.</p>
+    {% endif %}
+    <div class="qr-wrap">
+      <img src="{{ url_for('inventory_item_qr_png', item_id=item.id) }}" width="240" height="240" alt="QR code">
+    </div>
+    <p class="hint">Scan opens this item in inventory (staff login). URL: {{ ext_scan_url }}</p>
+  </div>
+</body>
+</html>

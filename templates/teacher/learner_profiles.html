@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Learner Profiles{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Learner Profiles</h4></div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-7 position-relative">
+        <label class="form-label">Quick Search Learner</label>
+        <input id="quick_search" class="form-control" placeholder="Type learner surname, first name, learner ID or internal ID...">
+        <div id="search_results" class="list-group position-absolute w-100 shadow-sm" style="z-index: 20; max-height: 260px; overflow-y: auto;"></div>
+      </div>
+    </div>
+
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-md-2">
+        <label class="form-label">Grade</label>
+        <select id="grade" class="form-select"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Class</label>
+        <select id="class_id" class="form-select"></select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Learner</label>
+        <select id="learner_id" class="form-select"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">View</label>
+        <select id="view_mode" class="form-select">
+          <option value="table">Table</option>
+          <option value="card">Cards</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button id="load_profiles" class="btn btn-primary w-100">Load</button>
+      </div>
+    </div>
+
+    <div id="table_wrap" class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr><th>LearnerID</th><th>Name</th><th>Grade</th><th>Class</th><th>Discipline</th><th>Academic Avg %</th></tr>
+        </thead>
+        <tbody id="profiles_body"></tbody>
+      </table>
+    </div>
+    <div id="cards_wrap" class="row g-2 d-none"></div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><h5 class="mb-0">Learner Detail</h5></div>
+  <div class="card-body" id="detail_body">
+    <div class="text-muted small">Select a learner row/card to load full profile details.</div>
+  </div>
+</div>
+
+<script>
+function setOptions(sel, arr, valueKey, labelKey, includeAll=true) {
+  sel.innerHTML = "";
+  if (includeAll) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "All";
+    sel.appendChild(opt);
+  }
+  (arr || []).forEach(x => {
+    const opt = document.createElement("option");
+    opt.value = valueKey ? (x[valueKey] ?? "") : x;
+    opt.textContent = labelKey ? (x[labelKey] ?? "") : x;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadFilters() {
+  const g = document.getElementById("grade").value || "";
+  const c = document.getElementById("class_id").value || "";
+  const p = new URLSearchParams();
+  if (g) p.set("grade", g);
+  if (c) p.set("class_id", c);
+  const r = await fetch("{{ url_for('api_teacher_learner_profiles_filters') }}?" + p.toString());
+  if (!r.ok) return;
+  const d = await r.json();
+  setOptions(document.getElementById("grade"), d.grades || [], null, null, true);
+  setOptions(document.getElementById("class_id"), d.classes || [], null, null, true);
+  setOptions(document.getElementById("learner_id"), (d.learners || []).map(x => ({id:x.id,label:x.label})), "id", "label", true);
+}
+
+async function loadProfiles() {
+  const p = new URLSearchParams();
+  ["grade","class_id","learner_id"].forEach(k => {
+    const v = document.getElementById(k).value || "";
+    if (v) p.set(k, v);
+  });
+  const r = await fetch("{{ url_for('api_teacher_learner_profiles') }}?" + p.toString());
+  if (!r.ok) return;
+  const d = await r.json();
+  const rows = d.rows || [];
+  const tbody = document.getElementById("profiles_body");
+  tbody.innerHTML = rows.map(x =>
+    `<tr data-id="${x.id}" class="profile-row" style="cursor:pointer;"><td>${x.learnerId || ""}</td><td>${x.sname || ""}, ${x.fname || ""}</td><td>${x.grade || ""}</td><td>${x.classId || ""}</td><td>${x.disciplineCount || 0}</td><td>${x.academicAvgPct || 0}</td></tr>`
+  ).join("");
+
+  const cards = document.getElementById("cards_wrap");
+  cards.innerHTML = rows.map(x =>
+    `<div class="col-md-3"><div class="card border profile-card" data-id="${x.id}" style="cursor:pointer;"><div class="card-body p-2"><div class="fw-bold small">${x.sname || ""}, ${x.fname || ""}</div><div class="small text-muted">Grade ${x.grade || ""} | Class ${x.classId || ""}</div><div class="small">Disc: ${x.disciplineCount || 0} | Avg: ${x.academicAvgPct || 0}%</div></div></div></div>`
+  ).join("");
+  bindProfileClicks();
+  applyViewMode();
+}
+
+function applyViewMode() {
+  const mode = document.getElementById("view_mode").value;
+  document.getElementById("table_wrap").classList.toggle("d-none", mode !== "table");
+  document.getElementById("cards_wrap").classList.toggle("d-none", mode !== "card");
+}
+
+async function loadProfileDetail(id) {
+  const r = await fetch(`/api/teacher/learner-profiles/${id}`);
+  if (!r.ok) {
+    const t = await r.text();
+    document.getElementById("detail_body").textContent = t;
+    return;
+  }
+  const d = await r.json();
+  const li = d.learnerInfo || {};
+  const parents = d.parents || [];
+  const discipline = d.discipline || [];
+  const academics = (d.academics || {}).rows || [];
+  const learnerRows = Object.entries(li).map(([k,v]) => `<tr><td class="small text-muted">${k}</td><td class="small">${v ?? ""}</td></tr>`).join("");
+  const parentRows = parents.map(p => `<tr><td>${p.name || ""}</td><td>${p.tel1 || ""}</td><td>${p.tel2 || ""}</td><td>${p.tel3 || ""}</td><td>${p.spouseCell || ""}</td></tr>`).join("");
+  const discRows = discipline.slice(0,20).map(x => `<tr><td>${x.Date || ""}</td><td>${x.Type || ""}</td><td>${x.Demerit || 0}</td><td>${x.Merit || 0}</td><td>${x.Comment || ""}</td></tr>`).join("");
+  const acadRows = academics.slice(0,30).map(x => `<tr><td>${x.subject || ""}</td><td>${x.mark ?? ""}</td><td>${x.totalMark ?? ""}</td><td>${x.percentage ?? ""}</td></tr>`).join("");
+  document.getElementById("detail_body").innerHTML = `
+    <div class="row g-3">
+      <div class="col-md-6"><h6>Learner_Info</h6><div class="table-responsive" style="max-height:260px;"><table class="table table-sm table-striped"><tbody>${learnerRows}</tbody></table></div></div>
+      <div class="col-md-6"><h6>Parents</h6><div class="table-responsive" style="max-height:260px;"><table class="table table-sm table-striped"><thead><tr><th>Name</th><th>Tel1</th><th>Tel2</th><th>Tel3</th><th>Spouse</th></tr></thead><tbody>${parentRows || '<tr><td colspan=\"5\" class=\"text-muted\">No parent info</td></tr>'}</tbody></table></div></div>
+      <div class="col-md-6"><h6>Discipline</h6><div class="table-responsive" style="max-height:260px;"><table class="table table-sm table-striped"><thead><tr><th>Date</th><th>Type</th><th>Demerit</th><th>Merit</th><th>Comment</th></tr></thead><tbody>${discRows || '<tr><td colspan=\"5\" class=\"text-muted\">No discipline rows</td></tr>'}</tbody></table></div></div>
+      <div class="col-md-6"><h6>Academics</h6><div class="table-responsive" style="max-height:260px;"><table class="table table-sm table-striped"><thead><tr><th>Subject</th><th>Mark</th><th>Total</th><th>%</th></tr></thead><tbody>${acadRows || '<tr><td colspan=\"4\" class=\"text-muted\">No marks rows</td></tr>'}</tbody></table></div></div>
+    </div>`;
+}
+
+function bindProfileClicks() {
+  document.querySelectorAll(".profile-row,.profile-card").forEach(el => {
+    el.addEventListener("click", () => loadProfileDetail(el.getAttribute("data-id")));
+  });
+}
+
+document.getElementById("grade").addEventListener("change", loadFilters);
+document.getElementById("class_id").addEventListener("change", loadFilters);
+document.getElementById("view_mode").addEventListener("change", applyViewMode);
+document.getElementById("load_profiles").addEventListener("click", loadProfiles);
+
+let searchTimer = null;
+const quickSearch = document.getElementById("quick_search");
+const searchResults = document.getElementById("search_results");
+
+function clearSearchResults() {
+  searchResults.innerHTML = "";
+}
+
+async function runQuickSearch(term) {
+  const p = new URLSearchParams({ q: term });
+  const r = await fetch("/api/teacher/learner-profiles/search?" + p.toString());
+  if (!r.ok) { clearSearchResults(); return; }
+  const d = await r.json();
+  const rows = d.results || [];
+  if (!rows.length) {
+    searchResults.innerHTML = `<div class="list-group-item small text-muted">No learners found</div>`;
+    return;
+  }
+  searchResults.innerHTML = rows.map(x => `
+    <button type="button" class="list-group-item list-group-item-action search-item"
+      data-id="${x.id}" data-grade="${x.grade || ''}" data-class="${x.classId || ''}">
+      <div class="fw-semibold">${x.label || ''}</div>
+      <div class="small text-muted">LearnerID: ${x.learnerId || ''} | Grade: ${x.grade || ''} | Class: ${x.classId || ''}</div>
+    </button>
+  `).join("");
+  document.querySelectorAll(".search-item").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id") || "";
+      const grade = btn.getAttribute("data-grade") || "";
+      const klass = btn.getAttribute("data-class") || "";
+      if (grade) document.getElementById("grade").value = grade;
+      if (klass) document.getElementById("class_id").value = klass;
+      await loadFilters();
+      document.getElementById("learner_id").value = id;
+      clearSearchResults();
+      await loadProfiles();
+      await loadProfileDetail(id);
+    });
+  });
+}
+
+quickSearch.addEventListener("input", () => {
+  const term = quickSearch.value.trim();
+  if (searchTimer) clearTimeout(searchTimer);
+  if (term.length < 2) { clearSearchResults(); return; }
+  searchTimer = setTimeout(() => runQuickSearch(term), 200);
+});
+
+document.addEventListener("click", (e) => {
+  if (!searchResults.contains(e.target) && e.target !== quickSearch) clearSearchResults();
+});
+
+loadFilters().then(loadProfiles);
+</script>
+{% endblock %}

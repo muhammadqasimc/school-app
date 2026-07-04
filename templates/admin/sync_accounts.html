@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Student Accounts - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-users-cog"></i> Sync Student Accounts</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">Home</a>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> This will create accounts for all students in the Learner_Info table using their LearnerID as the username. Random passwords will be generated for each account.
+                </div>
+                
+                <form method="POST" action="{{ url_for('sync_accounts') }}" onsubmit="return confirm('This will create accounts for all students. Continue?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-sync"></i> Sync Accounts from Database
+                    </button>
+                </form>
+                
+                {% if results and results.error %}
+                <div class="alert alert-danger mt-4">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Error</h5>
+                    <p><strong>{{ results.error }}</strong></p>
+                </div>
+                {% elif results %}
+                <div class="mt-4">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Total Students</h5>
+                                    <h3 class="text-primary">{{ results.total_students }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Created</h5>
+                                    <h3 class="text-success">{{ results.created }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Already Exist</h5>
+                                    <h3 class="text-warning">{{ results.existing }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Errors</h5>
+                                    <h3 class="text-danger">{{ results.errors }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if results.created_accounts %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="fas fa-check-circle text-success"></i> Created Accounts ({{ results.created }})</h5>
+                            <button class="btn btn-sm btn-success" onclick="exportToCSV('created')">
+                                <i class="fas fa-download"></i> Export CSV
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-striped table-hover" id="createdTable">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>Accession No (Username)</th>
+                                            <th>Name</th>
+                                            <th>Surname</th>
+                                            <th>Grade</th>
+                                            <th>Learner ID</th>
+                                            <th>Password</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for account in results.created_accounts %}
+                                        <tr>
+                                            <td><strong>{{ account.accession_no }}</strong></td>
+                                            <td>{{ account.name or '-' }}</td>
+                                            <td>{{ account.surname or '-' }}</td>
+                                            <td>{{ account.grade or '-' }}</td>
+                                            <td>{{ account.learner_id }}</td>
+                                            <td><code>{{ account.password }}</code></td>
+                                            <td><span class="badge bg-success">{{ account.status }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.existing_accounts %}
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-info-circle text-warning"></i> Existing Accounts ({{ results.existing }})</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-striped">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>Learner ID (Username)</th>
+                                            <th>Name</th>
+                                            <th>Surname</th>
+                                            <th>Grade</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for account in results.existing_accounts %}
+                                        <tr>
+                                            <td><strong>{{ account.learner_id }}</strong></td>
+                                            <td>{{ account.name or '-' }}</td>
+                                            <td>{{ account.surname or '-' }}</td>
+                                            <td>{{ account.grade or '-' }}</td>
+                                            <td><span class="badge bg-warning">{{ account.status }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.errors_list %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-exclamation-triangle text-danger"></i> Errors ({{ results.errors }})</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                {% for error in results.errors_list %}
+                                <li class="list-group-item text-danger">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function exportToCSV(type) {
+    const table = document.getElementById('createdTable');
+    if (!table) return;
+    
+    let csv = [];
+    const rows = table.querySelectorAll('tr');
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = [], cols = rows[i].querySelectorAll('td, th');
+        
+        for (let j = 0; j < cols.length; j++) {
+            let data = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, '').replace(/"/g, '""');
+            row.push('"' + data + '"');
+        }
+        
+        csv.push(row.join(','));
+    }
+    
+    // Download CSV file
+    const csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+    const downloadLink = document.createElement('a');
+    downloadLink.download = 'student_accounts_' + new Date().getTime() + '.csv';
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = 'none';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+}
+</script>
+{% endblock %}

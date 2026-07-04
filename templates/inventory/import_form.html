@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Import inventory{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">CSV import</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <p>Columns: <code>tag</code>, <code>model_name</code>, <code>serial_number</code> (optional), <code>qty_on_hand</code> (optional), <code>ops_status</code> (optional),
+    <code>location</code> (optional), <code>notes</code> (optional). Model must exist first.</p>
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3"><input type="file" name="file" class="form-control" accept=".csv,text/csv"></div>
+      <div class="mb-3"><label class="form-label">Or paste CSV:</label><textarea name="csv_data" rows="8" class="form-control"></textarea></div>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

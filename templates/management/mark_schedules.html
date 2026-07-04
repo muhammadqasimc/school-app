@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-table"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Grade</label>
+        <select id="f-grade" class="form-select"><option value="">All Grades</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Class</label>
+        <select id="f-class" class="form-select"><option value="">All Classes</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Year</label>
+        <select id="f-year" class="form-select"><option value="">Latest Year</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Cycle</label>
+        <select id="f-cycle" class="form-select"><option value="">All Cycles</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Learner Filter</label>
+        <select id="f-learner_filter" class="form-select"></select>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small mb-1">Code</label>
+        <select id="f-code" class="form-select"></select>
+      </div>
+      <div class="col-md-1 d-flex align-items-end">
+        <button id="apply-filters" class="btn btn-primary w-100">Generate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Passed</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Not Passed</div><div id="k-np" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Average %</div><div id="k-avg" class="fs-5 fw-bold">-</div></div></div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="d-flex justify-content-end mb-2">
+      <button id="download-pdf" class="btn btn-outline-secondary btn-sm">Download PDF</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead id="preview-head"></thead>
+        <tbody id="preview-body"><tr><td class="text-muted">Select filters and click Generate.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Insights</h5>
+      <small class="opacity-75">Visual analytics based on the current preview selection.</small>
+    </div>
+  </div>
+  <div class="card-body">
+    <div id="insights-empty" class="alert alert-light border text-muted mb-3">
+      Generate results to view insights.
+    </div>
+    <div id="insights-content" class="d-none">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3 col-sm-6">
+          <div class="border rounded p-3 h-100 bg-light">
+            <div class="small text-muted">Pass Rate</div>
+            <div id="i-pass-rate" class="fs-5 fw-bold">-</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="border rounded p-3 h-100 bg-light">
+            <div class="small text-muted">High Performers (>=70%)</div>
+            <div id="i-high-perf" class="fs-5 fw-bold">-</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="border rounded p-3 h-100 bg-light">
+            <div class="small text-muted">At Risk (&lt;50%)</div>
+            <div id="i-at-risk" class="fs-5 fw-bold">-</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="border rounded p-3 h-100 bg-light">
+            <div class="small text-muted">Avg Absence Days</div>
+            <div id="i-absent-avg" class="fs-5 fw-bold">-</div>
+          </div>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold small text-muted mb-2">Pass vs Not Pass</div>
+            <div style="height: 260px;"><canvas id="chart-pass-split"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold small text-muted mb-2">Gender Mix</div>
+            <div style="height: 260px;"><canvas id="chart-gender-mix"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold small text-muted mb-2">Mark Bands</div>
+            <div style="height: 260px;"><canvas id="chart-mark-bands"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold small text-muted mb-2">Average Subject Trend</div>
+            <div style="height: 300px;"><canvas id="chart-subject-trend"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold small text-muted mb-2">Subject Performance Snapshot</div>
+            <div style="height: 300px;"><canvas id="chart-subject-bars"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const FILTER_KEYS = ["grade", "class", "year", "cycle", "learner_filter", "code"];
+let lastPayload = null;
+const insightCharts = {};
+
+function params() {
+  const p = new URLSearchParams();
+  FILTER_KEYS.forEach((k) => {
+    const v = (document.getElementById(`f-${k}`)?.value || "").trim();
+    if (v) p.set(k, v);
+  });
+  return p;
+}
+
+function refillSelect(id, values, mapFn = (x) => ({ value: String(x), label: String(x) })) {
+  const el = document.getElementById(id);
+  const keep = el.value;
+  while (el.options.length > 1) el.remove(1);
+  (values || []).forEach((item) => {
+    const optData = mapFn(item);
+    const option = document.createElement("option");
+    option.value = String(optData.value);
+    option.textContent = String(optData.label);
+    el.appendChild(option);
+  });
+  if ([...el.options].some((o) => o.value === keep)) {
+    el.value = keep;
+  }
+}
+
+async function loadFilters() {
+  const r = await fetch(`/api/management-mark-schedules/filters?${params().toString()}`);
+  const data = await r.json();
+  const f = data.filters || {};
+  refillSelect("f-grade", f.grades || []);
+  refillSelect("f-class", f.classes || []);
+  refillSelect("f-year", f.years || []);
+  refillSelect("f-cycle", f.cycles || []);
+  refillSelect("f-learner_filter", f.learnerFilters || [], (x) => ({ value: x.value, label: x.label }));
+  refillSelect("f-code", f.codes || []);
+}
+
+function renderPreview(payload) {
+  lastPayload = payload || {};
+  const rows = payload.rows || [];
+  const subjects = payload.subjects || [];
+  const summary = payload.summary || {};
+
+  document.getElementById("k-learners").textContent = summary.learners ?? 0;
+  document.getElementById("k-pass").textContent = summary.passCount ?? 0;
+  document.getElementById("k-np").textContent = summary.notPassCount ?? 0;
+  document.getElementById("k-avg").textContent = summary.averagePercent != null ? `${summary.averagePercent}%` : "-";
+
+  const head = document.getElementById("preview-head");
+  const staticHead = ["No", "Admission #", "Learner Name", "DOB", "Gender", "Years in Grade", "Years in Phase", "Absent Days"];
+  const subjectHead = subjects.map((s) => `${s} %`);
+  const finalHead = ["Average %", "Code"];
+  const allHead = [...staticHead, ...subjectHead, ...finalHead];
+  head.innerHTML = `<tr>${allHead.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+
+  const body = document.getElementById("preview-body");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="${allHead.length}" class="text-muted">No records found for selected filters.</td></tr>`;
+    renderInsights(payload);
+    return;
+  }
+  body.innerHTML = rows.map((r) => {
+    const subjectMap = {};
+    (r.subjectScores || []).forEach((s) => { subjectMap[s.subject] = s.percent; });
+    return `<tr>
+      <td>${r.no ?? ""}</td>
+      <td>${r.admissionNumber ?? ""}</td>
+      <td>${r.learnerName ?? ""}</td>
+      <td>${r.dateOfBirth ?? ""}</td>
+      <td>${r.gender ?? ""}</td>
+      <td>${r.yearsInGrade ?? ""}</td>
+      <td>${r.yearsInPhase ?? ""}</td>
+      <td>${r.daysAbsent ?? ""}</td>
+      ${subjects.map((s) => `<td>${subjectMap[s] ?? ""}</td>`).join("")}
+      <td>${r.averagePercent ?? ""}</td>
+      <td><span class="badge ${r.code === "P" ? "bg-success" : "bg-warning text-dark"}">${r.code ?? ""}</span></td>
+    </tr>`;
+  }).join("");
+  renderInsights(payload);
+}
+
+function destroyInsightCharts() {
+  Object.keys(insightCharts).forEach((key) => {
+    if (insightCharts[key]) {
+      insightCharts[key].destroy();
+      insightCharts[key] = null;
+    }
+  });
+}
+
+function pct(val) {
+  return `${Number(val || 0).toFixed(1)}%`;
+}
+
+function renderInsights(payload) {
+  const rows = payload?.rows || [];
+  const subjects = payload?.subjects || [];
+  const summary = payload?.summary || {};
+  const empty = document.getElementById("insights-empty");
+  const content = document.getElementById("insights-content");
+  destroyInsightCharts();
+
+  if (!rows.length) {
+    empty.classList.remove("d-none");
+    empty.textContent = "No insight data available for selected filters.";
+    content.classList.add("d-none");
+    return;
+  }
+
+  empty.classList.add("d-none");
+  content.classList.remove("d-none");
+
+  const learners = Number(summary.learners || rows.length || 0);
+  const passCount = Number(summary.passCount || 0);
+  const notPassCount = Number(summary.notPassCount || 0);
+  const passRate = learners > 0 ? (passCount / learners) * 100 : 0;
+  const highPerformers = rows.filter((r) => Number(r.averagePercent || 0) >= 70).length;
+  const atRisk = rows.filter((r) => Number(r.averagePercent || 0) < 50).length;
+  const avgAbsent = rows.reduce((sum, r) => sum + Number(r.daysAbsent || 0), 0) / (learners || 1);
+
+  document.getElementById("i-pass-rate").textContent = pct(passRate);
+  document.getElementById("i-high-perf").textContent = `${highPerformers} (${pct((highPerformers / (learners || 1)) * 100)})`;
+  document.getElementById("i-at-risk").textContent = `${atRisk} (${pct((atRisk / (learners || 1)) * 100)})`;
+  document.getElementById("i-absent-avg").textContent = Number(avgAbsent).toFixed(2);
+
+  const genderCounts = rows.reduce((acc, r) => {
+    const g = String(r.gender || "Unknown").trim() || "Unknown";
+    acc[g] = (acc[g] || 0) + 1;
+    return acc;
+  }, {});
+  const markBands = { "0-39": 0, "40-49": 0, "50-59": 0, "60-69": 0, "70-100": 0 };
+  rows.forEach((r) => {
+    const avg = Number(r.averagePercent || 0);
+    if (avg < 40) markBands["0-39"] += 1;
+    else if (avg < 50) markBands["40-49"] += 1;
+    else if (avg < 60) markBands["50-59"] += 1;
+    else if (avg < 70) markBands["60-69"] += 1;
+    else markBands["70-100"] += 1;
+  });
+  const subjectAverages = subjects.map((subject) => {
+    let total = 0;
+    let count = 0;
+    rows.forEach((row) => {
+      const score = (row.subjectScores || []).find((s) => s.subject === subject);
+      if (score && score.percent != null) {
+        total += Number(score.percent || 0);
+        count += 1;
+      }
+    });
+    return count ? Number((total / count).toFixed(2)) : 0;
+  });
+
+  insightCharts.passSplit = new Chart(document.getElementById("chart-pass-split").getContext("2d"), {
+    type: "doughnut",
+    data: {
+      labels: ["Pass", "Not Pass"],
+      datasets: [{ data: [passCount, notPassCount], backgroundColor: ["#198754", "#dc3545"] }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } },
+  });
+
+  insightCharts.genderMix = new Chart(document.getElementById("chart-gender-mix").getContext("2d"), {
+    type: "pie",
+    data: {
+      labels: Object.keys(genderCounts),
+      datasets: [{ data: Object.values(genderCounts), backgroundColor: ["#0d6efd", "#fd7e14", "#6f42c1", "#20c997", "#6c757d"] }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } },
+  });
+
+  insightCharts.markBands = new Chart(document.getElementById("chart-mark-bands").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: Object.keys(markBands),
+      datasets: [{ label: "Learners", data: Object.values(markBands), backgroundColor: "#6610f2" }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+
+  insightCharts.subjectTrend = new Chart(document.getElementById("chart-subject-trend").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: subjects,
+      datasets: [{
+        label: "Average %",
+        data: subjectAverages,
+        borderColor: "#0dcaf0",
+        backgroundColor: "rgba(13,202,240,0.25)",
+        fill: true,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 100 } },
+      plugins: { legend: { display: true } },
+    },
+  });
+
+  insightCharts.subjectBars = new Chart(document.getElementById("chart-subject-bars").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: subjects,
+      datasets: [{ label: "Average %", data: subjectAverages, backgroundColor: "#20c997" }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 100 } },
+    },
+  });
+}
+
+async function generatePreview() {
+  const p = params();
+  const r = await fetch(`/api/management-mark-schedules/preview?${p.toString()}`);
+  const data = await r.json();
+  renderPreview(data);
+}
+
+function downloadPdf() {
+  const p = params();
+  window.location.href = `/api/management-mark-schedules/pdf?${p.toString()}`;
+}
+
+["f-grade", "f-class", "f-year", "f-cycle", "f-learner_filter", "f-code"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", async () => {
+    await loadFilters();
+    await generatePreview();
+  });
+});
+document.getElementById("apply-filters").addEventListener("click", generatePreview);
+document.getElementById("download-pdf").addEventListener("click", downloadPdf);
+
+(async () => {
+  await loadFilters();
+  await generatePreview();
+})();
+</script>
+{% endblock %}

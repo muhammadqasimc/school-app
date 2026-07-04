@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h3 class="mb-0">{{ report.title }}</h3><a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a></div>
+<div class="card mb-3"><div class="card-body"><div class="row g-2"><div class="col-md-2"><select id="f-year" class="form-select form-select-sm"></select></div><div class="col-md-2"><select id="f-term" class="form-select form-select-sm"></select></div><div class="col-md-2"><select id="f-grade" class="form-select form-select-sm"></select></div><div class="col-md-2"><button id="apply" class="btn btn-primary btn-sm w-100">Apply</button></div></div></div></div>
+<div id="meta" class="small text-muted mb-2"></div><div id="host"></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+async function load(){const f=await (await fetch('/api/management-report-filters')).json();const y=document.getElementById("f-year"),t=document.getElementById("f-term"),g=document.getElementById("f-grade");if(!y.options.length){y.innerHTML=(f?.filters?.years||[]).map(v=>`<option value="${v}">${v}</option>`).join("");t.innerHTML=(f?.filters?.terms||[]).map(v=>`<option value="${v}">Term ${v}</option>`).join("");g.innerHTML=(f?.filters?.grades||[]).map(v=>`<option value="${v}">Grade ${v}</option>`).join("");}
+const p=new URLSearchParams();if(y.value)p.set("year",y.value);if(t.value)p.set("term",t.value);if(g.value)p.set("grade",g.value);const d=await (await fetch(`/api/management-results-per-grade-subject?${p.toString()}`)).json();
+document.getElementById("meta").textContent=`Year ${d.meta?.year||"-"} Term ${d.meta?.term||"-"} | Grade ${d.meta?.grade||"-"}`;
+document.getElementById("host").innerHTML=`<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Subject</th><th>Avg%</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>Absent</th><th>Total</th></tr></thead><tbody>${(d.rows||[]).map(r=>`<tr><td>${r.subject||""}</td><td>${Number(r.averagePct||0).toFixed(2)}</td><td>${r.level1||0}</td><td>${r.level2||0}</td><td>${r.level3||0}</td><td>${r.level4||0}</td><td>${r.level5||0}</td><td>${r.level6||0}</td><td>${r.level7||0}</td><td>${r.absent||0}</td><td>${r.total||0}</td></tr>`).join("")}</tbody></table></div>`;}
+document.getElementById("apply").addEventListener("click",load);load();
+</script>
+{% endblock %}

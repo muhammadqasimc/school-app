@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Teacher Classes{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">My Classes</h4></div>
+  <div class="card-body">
+    <div id="assignment-list" class="mb-3 small text-muted">Loading assignments...</div>
+    <div class="row g-2 mb-3">
+      <div class="col-md-3"><input id="grade" class="form-control" placeholder="Grade"></div>
+      <div class="col-md-3"><input id="class_id" class="form-control" placeholder="Class"></div>
+      <div class="col-md-2"><button id="loadRoster" class="btn btn-primary w-100">Load Roster</button></div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead><tr><th>LearnerID</th><th>Name</th><th>Surname</th><th>Grade</th><th>Class</th></tr></thead>
+        <tbody id="roster-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+async function loadClasses() {
+  const res = await fetch("{{ url_for('api_teacher_classes') }}");
+  if (!res.ok) return;
+  const data = await res.json();
+  const a = data.assignments || [];
+  document.getElementById("assignment-list").textContent = a.length
+    ? a.map(x => `${x.classId || "-"} | Grade ${x.grade || "-"} | ${x.subject || "-"}`).join(" ; ")
+    : "No assignments configured.";
+}
+async function loadRoster() {
+  const p = new URLSearchParams();
+  const g = document.getElementById("grade").value.trim();
+  const c = document.getElementById("class_id").value.trim();
+  if (g) p.set("grade", g);
+  if (c) p.set("class_id", c);
+  const res = await fetch("{{ url_for('api_teacher_roster') }}?" + p.toString());
+  if (!res.ok) return;
+  const data = await res.json();
+  const rows = data.learners || [];
+  document.getElementById("roster-body").innerHTML = rows.map(r => `<tr><td>${r.learnerId || ""}</td><td>${r.name || ""}</td><td>${r.surname || ""}</td><td>${r.grade || ""}</td><td>${r.classId || ""}</td></tr>`).join("");
+}
+document.getElementById("loadRoster").addEventListener("click", loadRoster);
+loadClasses();
+</script>
+{% endblock %}

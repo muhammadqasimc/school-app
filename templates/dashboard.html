@@ -1,0 +1,3155 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - School Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --panel-bg: #f2f4f6;
+        --teal: #24bfd1;
+        --teal-soft: #d5eef3;
+        --text-main: #2f3e46;
+        --border-soft: #e7e7e7;
+    }
+
+    /* Management-style shell + cards */
+    .tab-content .card {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: none;
+        background: #fff;
+    }
+    .tab-content .card-header {
+        background: var(--teal-soft);
+        color: var(--text-main);
+        border-bottom: 1px solid var(--border-soft);
+        font-weight: 700;
+    }
+    .tab-content .card-body {
+        background: #fff;
+    }
+
+    /* Modern Tab Styling */
+    .nav-tabs {
+        border-bottom: 1px solid var(--border-soft);
+        background: var(--panel-bg);
+        padding: 0.5rem;
+        border-radius: 10px 10px 0 0;
+    }
+    
+    .nav-tabs .nav-link {
+        border: none;
+        border-radius: 8px 8px 0 0;
+        margin-right: 0.5rem;
+        padding: 1rem 1.5rem;
+        color: #6c757d;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        background: transparent;
+    }
+    
+    .nav-tabs .nav-link:hover {
+        color: var(--text-main);
+        background: rgba(36, 191, 209, 0.14);
+    }
+    
+    .nav-tabs .nav-link.active {
+        color: var(--text-main);
+        background: white;
+        border-bottom: 3px solid var(--teal);
+        font-weight: 600;
+    }
+    
+    .nav-tabs .nav-link i {
+        margin-right: 0.5rem;
+    }
+    
+    /* Learner Profile Card */
+    .learner-profile-card {
+        background: linear-gradient(135deg, #24bfd1 0%, #1ea3b3 100%);
+        color: #fff;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .profile-photo-container {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }
+    
+    .profile-photo {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid white;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    
+    /* Profile photo upload overlay removed (keeps avatar stable, prevents flicker) */
+    
+    .profile-info h4 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .profile-info p {
+        margin: 0.5rem 0;
+        opacity: 0.9;
+    }
+    
+    .profile-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.24);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+
+    .btn-primary {
+        background-color: var(--teal);
+        border-color: var(--teal);
+        color: #fff;
+    }
+    .btn-primary:hover,
+    .btn-primary:focus {
+        background-color: #1ea3b3;
+        border-color: #1ea3b3;
+        color: #fff;
+    }
+
+    /* Mobile horizontal swipe for wide content */
+    .scroll-x {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+    }
+    .scroll-x::-webkit-scrollbar {
+        height: 8px;
+    }
+    .scroll-x::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.2);
+        border-radius: 999px;
+    }
+    /* Give charts a minimum width so they can scroll on small screens */
+    .scroll-x .chart-min-width {
+        min-width: 720px;
+    }
+
+    /* Mobile: fit charts/tables to viewport (no horizontal scroll) */
+    @media (max-width: 576px) {
+        .scroll-x {
+            overflow-x: visible !important;
+            overflow-y: visible !important;
+            touch-action: auto;
+        }
+
+        .scroll-x .chart-min-width {
+            min-width: 0 !important;
+            width: 100% !important;
+        }
+
+        /* `base.html` sets overflow hidden for `.table-responsive`, which would
+           clip the report on mobile if we remove horizontal scrolling. */
+        .table-responsive {
+            overflow-x: visible !important;
+            overflow-y: visible !important;
+        }
+
+        .chart-container {
+            height: 280px !important;
+        }
+
+        .scroll-hint {
+            display: none !important;
+        }
+    }
+    .scroll-hint {
+        display: none;
+        margin-top: .5rem;
+        color: rgba(255,255,255,0.85);
+        font-size: 0.85rem;
+    }
+</style>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <h3 class="mb-0"><i class="fas fa-tachometer-alt"></i> {% if graphs_unrestricted %}Admin/Management Analytics Dashboard{% else %}Parent Dashboard{% endif %}</h3>
+                    {% if linked_learners and linked_learners|length > 1 and not graphs_unrestricted %}
+                    <form method="POST" action="{{ url_for('select_learner') }}" class="d-flex align-items-center gap-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <label class="mb-0 small" for="learner_id"><i class="fas fa-children"></i> Select Child</label>
+                        <select class="form-select form-select-sm" id="learner_id" name="learner_id" onchange="this.form.submit()" style="min-width: 240px;">
+                            {% for ll in linked_learners %}
+                                <option value="{{ ll.id }}" {% if active_learner_id and (ll.id|string) == (active_learner_id|string) %}selected{% endif %}>
+                                    {{ (ll.name ~ ' ' ~ ll.surname)|trim if (ll.name or ll.surname) else 'Learner' }}{% if ll.learner_id %} • {{ ll.learner_id }}{% endif %}{% if ll.grade %} • Grade {{ ll.grade }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs Navigation -->
+{% set active_tab = 'academics' %}
+{% if not can_view_academics %}
+    {% if can_view_disciplinary %}
+        {% set active_tab = 'disciplinary' %}
+    {% elif can_view_attendance %}
+        {% set active_tab = 'attendance' %}
+    {% elif can_view_finance %}
+        {% set active_tab = 'finance' %}
+    {% endif %}
+{% endif %}
+<ul class="nav nav-tabs mb-4" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        {% if can_view_academics %}
+        <button class="nav-link {% if active_tab == 'academics' %}active{% endif %}" id="academics-tab" data-bs-toggle="tab" data-bs-target="#academics" type="button">
+            <i class="fas fa-book"></i> Academics
+        </button>
+        {% else %}
+        <button class="nav-link {% if active_tab == 'academics' %}active{% endif %}" id="academics-tab" data-bs-toggle="tab" data-bs-target="#academics" type="button" disabled aria-disabled="true">
+            <i class="fas fa-book"></i> Academics
+        </button>
+        {% endif %}
+    </li>
+    <li class="nav-item" role="presentation">
+        {% if can_view_disciplinary %}
+        <button class="nav-link {% if active_tab == 'disciplinary' %}active{% endif %}" id="disciplinary-tab" data-bs-toggle="tab" data-bs-target="#disciplinary" type="button">
+            <i class="fas fa-exclamation-triangle"></i> Disciplinary Issues
+        </button>
+        {% else %}
+        <button class="nav-link {% if active_tab == 'disciplinary' %}active{% endif %}" id="disciplinary-tab" data-bs-toggle="tab" data-bs-target="#disciplinary" type="button" disabled aria-disabled="true">
+            <i class="fas fa-exclamation-triangle"></i> Disciplinary Issues
+        </button>
+        {% endif %}
+    </li>
+    <li class="nav-item" role="presentation">
+        {% if can_view_attendance %}
+        <button class="nav-link {% if active_tab == 'attendance' %}active{% endif %}" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button">
+            <i class="fas fa-calendar-check"></i> Attendance
+        </button>
+        {% else %}
+        <button class="nav-link {% if active_tab == 'attendance' %}active{% endif %}" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button" disabled aria-disabled="true">
+            <i class="fas fa-calendar-check"></i> Attendance
+        </button>
+        {% endif %}
+    </li>
+    <li class="nav-item" role="presentation">
+        {% if can_view_finance %}
+        <button class="nav-link {% if active_tab == 'finance' %}active{% endif %}" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button">
+            <i class="fas fa-money-bill-wave"></i> Finance & Billing
+        </button>
+        {% else %}
+        <button class="nav-link {% if active_tab == 'finance' %}active{% endif %}" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" disabled aria-disabled="true">
+            <i class="fas fa-money-bill-wave"></i> Finance & Billing
+        </button>
+        {% endif %}
+    </li>
+    {% if active_learner_id or graphs_unrestricted %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sick-note-tab" data-bs-toggle="tab" data-bs-target="#sick-note" type="button">
+            <i class="fas fa-notes-medical"></i> Sick note
+        </button>
+    </li>
+    {% endif %}
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="dashboardTabContent">
+    <!-- Academics Tab -->
+    {% if can_view_academics %}
+    <div class="tab-pane fade {% if active_tab == 'academics' %}show active{% endif %}" id="academics" role="tabpanel">
+        <!-- Learner Profile Section -->
+        <div class="learner-profile-card" id="learnerProfileAcademics">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <div class="profile-photo-container">
+                        <img id="profilePhotoAcademics" src="{{ url_for('static', filename='images/default-avatar.png') }}" 
+                             alt="" class="profile-photo" 
+                             onerror="this.onerror=null;">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="profile-info">
+                        <h4 id="learnerNameAcademics">{{ learner_info.name if learner_info else '' }} {{ learner_info.surname if learner_info else '' }}</h4>
+                        <p><i class="fas fa-id-card"></i> Learner ID: <strong id="learnerIdAcademics">{{ learner_info.learner_id if learner_info else user.username }}</strong></p>
+                        <p><i class="fas fa-graduation-cap"></i> Grade: <strong id="learnerGradeAcademics">{{ learner_info.grade if learner_info else 'N/A' }}</strong></p>
+                        <span class="profile-badge"><i class="fas fa-user"></i> {% if graphs_unrestricted %}All Learners View{% else %}Student Profile{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Academics Flow: Filters -> Reports -->
+        <div id="academicsFiltersScreen">
+            <!-- Filters -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-filter"></i> Choose Filters</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-2 mb-3">
+                                    <label for="filterYear" class="form-label">Year</label>
+                                    <select class="form-select" id="filterYear" onchange="onYearChange()">
+                                        <option value="">All Years</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <label for="filterGrade" class="form-label">Grade</label>
+                                    <select class="form-select" id="filterGrade" onchange="onGradeChange()">
+                                        <option value="">All Grades</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <label for="filterTerm" class="form-label">Term</label>
+                                    <select class="form-select" id="filterTerm">
+                                        <option value="">All Terms</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="filterSubject" class="form-label">Subject</label>
+                                    <select class="form-select" id="filterSubject">
+                                        <option value="">All Subjects</option>
+                                    </select>
+                                </div>
+                                {% if graphs_unrestricted %}
+                                <div class="col-md-3 mb-3">
+                                    <label for="adminLearnerFilter" class="form-label">Learner ID (optional)</label>
+                                    <input type="text" class="form-control" id="adminLearnerFilter" placeholder="All learners">
+                                </div>
+                                {% endif %}
+                                <div class="col-md-3 mb-3 d-flex align-items-end">
+                                    <button class="btn btn-primary w-100" onclick="applyFilters()">
+                                        <i class="fas fa-arrow-right"></i> View Report
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block">
+                                Select filters, then view the full report on the next screen.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="academicsReportsScreen" style="display: none;">
+            <div class="row mb-3">
+                <div class="col-12 d-flex justify-content-between align-items-center">
+                    <button class="btn btn-primary" type="button" onclick="showAcademicsFiltersScreen()">
+                        <i class="fas fa-arrow-left"></i> Back to Filters
+                    </button>
+                    <div class="text-muted small" id="academicsActiveFiltersLabel"></div>
+                </div>
+            </div>
+
+        <!-- Report View (Table) -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-table"></i> Report View - Subject Marks by Term</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive scroll-x">
+                            <table class="table table-sm table-hover align-middle" id="reportViewTable">
+                                <thead class="table-light" id="reportViewTableHead">
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th class="text-center">Loading...</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportViewTableBody">
+                                    <tr>
+                                        <td colspan="99" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-light" id="reportViewTableFoot"></tfoot>
+                            </table>
+                        </div>
+                        <small class="text-muted d-block">
+                            Values show average percentage per subject per term for the selected filters.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Bar Chart -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Academic Performance Overview - Subject Marks</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="scroll-x">
+                            <div class="chart-min-width">
+                                <div class="chart-container">
+                                    <canvas id="academicChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Graphs Row -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Trend Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive scroll-x">
+                            <table class="table table-sm table-hover align-middle mb-0" id="trendTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Term</th>
+                                        <th class="text-end">Average (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trendTableBody">
+                                    <tr>
+                                        <td colspan="2" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject Analysis Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Subject Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <h6>Subject Ranking (Horizontal)</h6>
+                                <div class="scroll-x">
+                                    <div class="chart-min-width">
+                                        <div class="chart-container" style="height: 400px;">
+                                            <canvas id="horizontalBarChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Term Analysis Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Term-by-Term Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <h6>Subject Performance Across Terms</h6>
+                                <div class="scroll-x">
+                                    <div class="chart-min-width">
+                                        <div class="chart-container" style="height: 400px;">
+                                            <canvas id="multiLineChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <h6>Performance Heatmap</h6>
+                                <div class="scroll-x">
+                                    <div class="chart-min-width">
+                                        <div class="chart-container" style="height: 400px;">
+                                            <canvas id="heatmapChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h6>Performance Progression (Area Chart)</h6>
+                                <div class="scroll-x">
+                                    <div class="chart-min-width">
+                                        <div class="chart-container" style="height: 300px;">
+                                            <canvas id="areaChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historical Analysis Section -->
+        <div class="row mb-4" id="historicalPerformanceSection">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-history"></i> Historical Performance</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="scroll-x">
+                            <div class="chart-min-width">
+                                <div class="chart-container" style="height: 400px;">
+                                    <canvas id="yearComparisonChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        </div>
+    </div>
+    {% else %}
+    <div class="tab-pane fade" id="academics" role="tabpanel"></div>
+    {% endif %}
+
+    <!-- Disciplinary Tab -->
+    {% if can_view_disciplinary %}
+    <div class="tab-pane fade {% if active_tab == 'disciplinary' %}show active{% endif %}" id="disciplinary" role="tabpanel">
+        <!-- Learner Profile Section -->
+        <div class="learner-profile-card" id="learnerProfileDisciplinary">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <div class="profile-photo-container">
+                        <img id="profilePhotoDisciplinary" src="{{ url_for('static', filename='images/default-avatar.png') }}" 
+                             alt="" class="profile-photo" 
+                             onerror="this.onerror=null;">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="profile-info">
+                        <h4 id="learnerNameDisciplinary">{{ learner_info.name if learner_info else '' }} {{ learner_info.surname if learner_info else '' }}</h4>
+                        <p><i class="fas fa-id-card"></i> Learner ID: <strong id="learnerIdDisciplinary">{{ learner_info.learner_id if learner_info else user.username }}</strong></p>
+                        <p><i class="fas fa-graduation-cap"></i> Grade: <strong id="learnerGradeDisciplinary">{{ learner_info.grade if learner_info else 'N/A' }}</strong></p>
+                        <span class="profile-badge"><i class="fas fa-user"></i> {% if graphs_unrestricted %}All Learners View{% else %}Student Profile{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-pills mb-3" id="disciplinarySubTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="disciplinary-overview-tab" data-bs-toggle="pill" data-bs-target="#disciplinary-overview" type="button" role="tab">
+                    <i class="fas fa-clipboard-list"></i> Overview
+                </button>
+            </li>
+            {% if not hide_disciplinary_pdfs %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="disciplinary-documents-tab" data-bs-toggle="pill" data-bs-target="#disciplinary-documents" type="button" role="tab">
+                    <i class="fas fa-file-pdf"></i> Documents
+                </button>
+            </li>
+            {% endif %}
+        </ul>
+
+        <div class="tab-content" id="disciplinarySubTabContent">
+            <div class="tab-pane fade show active" id="disciplinary-overview" role="tabpanel">
+                <!-- Detention Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card" id="detentionCard">
+                            <div class="card-header" id="detentionCardHeader">
+                                <h5 class="mb-0"><i class="fas fa-gavel"></i> Detention Status</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <h6 class="text-muted mb-2">Total Demerits</h6>
+                                            <h3 class="text-danger mb-0" id="totalDemerits">0</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <h6 class="text-muted mb-2">Total Merits</h6>
+                                            <h3 class="text-success mb-0" id="totalMerits">0</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <h6 class="text-muted mb-2">Balance (Demerits - Merits)</h6>
+                                            <h3 class="mb-0" id="balance">0</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <div class="alert" id="detentionAlert" role="alert">
+                                            <strong id="detentionStatus"></strong>
+                                            <p class="mb-0" id="detentionMessage"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disciplinary Records -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Disciplinary Records</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive scroll-x">
+                                    <table class="table table-hover" id="disciplinaryTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Type</th>
+                                                <th>Points</th>
+                                                <th>Incident Type</th>
+                                                <th>Description</th>
+                                                <th>Severity</th>
+                                                <th>Status</th>
+                                                {% if not hide_disciplinary_pdfs %}
+                                                <th>Document</th>
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody id="disciplinaryTableBody">
+                                            <tr>
+                                                <td colspan="{% if hide_disciplinary_pdfs %}7{% else %}8{% endif %}" class="text-center">Loading...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if not hide_disciplinary_pdfs %}
+            <div class="tab-pane fade" id="disciplinary-documents" role="tabpanel">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-file-pdf"></i> Documents</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive scroll-x">
+                                    <table class="table table-hover" id="disciplinaryDocumentsTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Created</th>
+                                                <th>Category</th>
+                                                <th>Document</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="disciplinaryDocumentsBody">
+                                            <tr>
+                                                <td colspan="4" class="text-center">Loading...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="tab-pane fade" id="disciplinary" role="tabpanel"></div>
+    {% endif %}
+
+    <!-- Attendance Tab -->
+    {% if can_view_attendance %}
+    <div class="tab-pane fade {% if active_tab == 'attendance' %}show active{% endif %}" id="attendance" role="tabpanel">
+        <!-- Learner Profile Section -->
+        <div class="learner-profile-card" id="learnerProfileAttendance">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <div class="profile-photo-container">
+                        <img id="profilePhotoAttendance" src="{{ url_for('static', filename='images/default-avatar.png') }}" 
+                             alt="" class="profile-photo" 
+                             onerror="this.onerror=null;">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="profile-info">
+                        <h4 id="learnerNameAttendance">{{ learner_info.name if learner_info else '' }} {{ learner_info.surname if learner_info else '' }}</h4>
+                        <p><i class="fas fa-id-card"></i> Learner ID: <strong id="learnerIdAttendance">{{ learner_info.learner_id if learner_info else user.username }}</strong></p>
+                        <p><i class="fas fa-graduation-cap"></i> Grade: <strong id="learnerGradeAttendance">{{ learner_info.grade if learner_info else 'N/A' }}</strong></p>
+                        <span class="profile-badge"><i class="fas fa-user"></i> {% if graphs_unrestricted %}All Learners View{% else %}Student Profile{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-filter"></i> Filters</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="attendanceFilterYear" class="form-label">Year</label>
+                                <select class="form-select" id="attendanceFilterYear" onchange="onAttendanceYearChange()">
+                                    <option value="">All Years</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="attendanceFilterGrade" class="form-label">Grade</label>
+                                <select class="form-select" id="attendanceFilterGrade">
+                                    <option value="">All Grades</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="attendanceFilterMonth" class="form-label">Month</label>
+                                <select class="form-select" id="attendanceFilterMonth">
+                                    <option value="">All Months</option>
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                            </div>
+                            {% if graphs_unrestricted %}
+                            <div class="col-md-3 mb-3">
+                                <label for="attendanceLearnerFilter" class="form-label">Learner ID (optional)</label>
+                                <input type="text" class="form-control" id="attendanceLearnerFilter" placeholder="All learners">
+                            </div>
+                            {% endif %}
+                            <div class="col-md-3 mb-3 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" onclick="applyAttendanceFilters()">
+                                    <i class="fas fa-search"></i> Apply Filters
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Attendance Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Attendance Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Total Days Absent</h6>
+                                    <h3 class="mb-0 text-danger" id="totalAbsent">0</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Attendance Rate</h6>
+                                    <h3 class="mb-0 text-success" id="attendanceRate">0%</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Current Year Absences</h6>
+                                    <h3 class="mb-0 text-warning" id="currentYearAbsent">0</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Most Common Reason</h6>
+                                    <h6 class="mb-0" id="commonReason">N/A</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Attendance Chart -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Attendance Overview</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="scroll-x">
+                            <div class="chart-min-width">
+                                <div class="chart-container">
+                                    <canvas id="attendanceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="scroll-hint">Swipe left/right to see the full chart.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Attendance Records Table -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-table"></i> Attendance Records</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive scroll-x">
+                            <table class="table table-hover" id="attendanceTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date Absent</th>
+                                        <th>Grade</th>
+                                        <th>Reason</th>
+                                        <th>Year</th>
+                                        <th>Month</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="tab-pane fade" id="attendance" role="tabpanel"></div>
+    {% endif %}
+
+    <!-- Finance & Billing Tab -->
+    {% if can_view_finance %}
+    <div class="tab-pane fade {% if active_tab == 'finance' %}show active{% endif %}" id="finance" role="tabpanel">
+        <!-- Learner Profile Section -->
+        <div class="learner-profile-card" id="learnerProfileFinance">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <div class="profile-photo-container">
+                        <img id="profilePhotoFinance" src="{{ url_for('static', filename='images/default-avatar.png') }}"
+                             alt="" class="profile-photo"
+                             onerror="this.onerror=null;">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="profile-info">
+                        <h4 id="learnerNameFinance">{{ learner_info.name if learner_info else '' }} {{ learner_info.surname if learner_info else '' }}</h4>
+                        <p><i class="fas fa-id-card"></i> Learner ID: <strong id="learnerIdFinance">{{ learner_info.learner_id if learner_info else user.username }}</strong></p>
+                        <p><i class="fas fa-graduation-cap"></i> Grade: <strong id="learnerGradeFinance">{{ learner_info.grade if learner_info else 'N/A' }}</strong></p>
+                        <span class="profile-badge"><i class="fas fa-user"></i> {% if graphs_unrestricted %}All Learners View{% else %}Student Profile{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Finance Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Finance & Billing Summary - <span id="financeYear"></span></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Annual Fee</h6>
+                                    <h3 class="mb-0 text-primary" id="annualFee">R0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Total Paid</h6>
+                                    <h3 class="mb-0 text-success" id="totalPaid">R0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Outstanding</h6>
+                                    <h3 class="mb-0 text-danger" id="outstanding">R0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="text-center p-3 bg-light rounded">
+                                    <h6 class="text-muted mb-2">Status</h6>
+                                    <h4 class="mb-0" id="financeStatus">
+                                        <span class="badge bg-secondary">Loading...</span>
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert" id="financeAlert" role="alert">
+                                    <strong id="financeStatusText"></strong>
+                                    <p class="mb-0" id="financeMessage"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment History -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-history"></i> Payment History</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive scroll-x">
+                            <table class="table table-hover" id="financeTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Debit (Owed)</th>
+                                        <th>Credit (Paid)</th>
+                                        <th>Year</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="financeTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="tab-pane fade" id="finance" role="tabpanel"></div>
+    {% endif %}
+
+    {% if active_learner_id or graphs_unrestricted %}
+    <div class="tab-pane fade" id="sick-note" role="tabpanel">
+        <div class="learner-profile-card mb-4">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h4 class="mb-1"><i class="fas fa-file-medical"></i> Upload sick note</h4>
+                    <p class="mb-0 opacity-90">Submit a doctor's letter or sick note (photo or PDF). The school office will be able to review it.</p>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-lg-7 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">New submission</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if graphs_unrestricted and not active_learner_id %}
+                        <div class="alert alert-info small mb-3">
+                            Enter a <strong>Learner ID</strong> in the Academics or Attendance filter above, then upload here.
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label">Optional message to the office</label>
+                            <textarea class="form-control" id="sickNoteMessage" rows="2" maxlength="2000" placeholder="e.g. dates absent, learner name if needed"></textarea>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <div>
+                                <label class="btn btn-outline-primary mb-0">
+                                    <i class="fas fa-camera"></i> Take photo
+                                    <input type="file" id="sickNoteCamera" class="d-none" accept="image/*" capture="environment">
+                                </label>
+                            </div>
+                            <div>
+                                <label class="btn btn-outline-secondary mb-0">
+                                    <i class="fas fa-paperclip"></i> Choose file
+                                    <input type="file" id="sickNoteFile" class="d-none" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf">
+                                </label>
+                            </div>
+                        </div>
+                        <div id="sickNoteSelectedName" class="small text-muted mb-2"></div>
+                        <button type="button" class="btn btn-primary" id="sickNoteSubmitBtn">
+                            <i class="fas fa-cloud-upload-alt"></i> Send to school
+                        </button>
+                        <div id="sickNoteUploadMsg" class="small mt-2"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Your recent uploads</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>When</th>
+                                        <th>File</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sickNoteHistoryBody">
+                                    <tr><td colspan="3" class="text-center text-muted small py-3">Open this tab to load history.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Subject Details Modal -->
+<div class="modal fade" id="subjectDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Subject Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="subjectDetailsContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const isAdmin = {{ 'true' if graphs_unrestricted else 'false' }};
+const hideDisciplinaryPdfs = {{ 'true' if hide_disciplinary_pdfs else 'false' }};
+const serverActiveLearnerId = {{ (active_learner_id or '') | tojson }};
+let academicCharts = {}; // Store chart instances
+
+// Store filter data globally
+let filterData = {};
+
+function getAdminLearnerFilter() {
+    if (!isAdmin) return '';
+    const academicValue = (document.getElementById('adminLearnerFilter')?.value || '').trim();
+    const attendanceValue = (document.getElementById('attendanceLearnerFilter')?.value || '').trim();
+    return academicValue || attendanceValue || '';
+}
+
+function getSickNoteLearnerId() {
+    if (isAdmin) return getAdminLearnerFilter();
+    return String(serverActiveLearnerId || '').trim();
+}
+
+function sickNoteCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+let sickNotePendingFile = null;
+
+function setSickNotePendingFile(file) {
+    sickNotePendingFile = file || null;
+    const label = document.getElementById('sickNoteSelectedName');
+    if (label) label.textContent = file ? `Selected: ${file.name}` : '';
+}
+
+function loadSickNoteHistory() {
+    const tbody = document.getElementById('sickNoteHistoryBody');
+    if (!tbody) return;
+    const learnerId = getSickNoteLearnerId();
+    if (!learnerId) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-3">Select a learner first.</td></tr>';
+        return;
+    }
+    const q = `learner_id=${encodeURIComponent(learnerId)}`;
+    fetch(`/api/parent/sick-note/history?${q}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            const rows = data.submissions || [];
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-3">No uploads yet for this learner.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            rows.forEach((s) => {
+                const tr = document.createElement('tr');
+                const when = s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '—';
+                tr.innerHTML = `
+                    <td class="small">${when}</td>
+                    <td class="small text-break">${s.originalFilename || 'File'}</td>
+                    <td><a class="btn btn-sm btn-outline-primary" href="${s.viewUrl}" target="_blank" rel="noopener">View</a></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger small py-3">Could not load history.</td></tr>';
+        });
+}
+
+function submitSickNote() {
+    const msgEl = document.getElementById('sickNoteUploadMsg');
+    const btn = document.getElementById('sickNoteSubmitBtn');
+    const learnerId = getSickNoteLearnerId();
+    if (!learnerId) {
+        if (msgEl) msgEl.innerHTML = '<span class="text-danger">Select or enter a learner ID first.</span>';
+        return;
+    }
+    if (!sickNotePendingFile) {
+        if (msgEl) msgEl.innerHTML = '<span class="text-danger">Choose a file or take a photo first.</span>';
+        return;
+    }
+    const fd = new FormData();
+    fd.append('csrf_token', sickNoteCsrf());
+    fd.append('learner_id', learnerId);
+    fd.append('file', sickNotePendingFile);
+    const note = (document.getElementById('sickNoteMessage')?.value || '').trim();
+    if (note) fd.append('parent_note', note);
+    if (btn) btn.disabled = true;
+    if (msgEl) msgEl.textContent = 'Uploading…';
+    fetch('/api/parent/sick-note', { method: 'POST', body: fd })
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+            if (!ok || j.error) throw new Error(j.error || 'Upload failed');
+            if (msgEl) msgEl.innerHTML = '<span class="text-success">Sent. The school office can review it.</span>';
+            setSickNotePendingFile(null);
+            const cam = document.getElementById('sickNoteCamera');
+            const fi = document.getElementById('sickNoteFile');
+            if (cam) cam.value = '';
+            if (fi) fi.value = '';
+            loadSickNoteHistory();
+        })
+        .catch((e) => {
+            if (msgEl) msgEl.innerHTML = `<span class="text-danger">${e.message || 'Upload failed'}</span>`;
+        })
+        .finally(() => {
+            if (btn) btn.disabled = false;
+        });
+}
+
+function syncAdminLearnerFilters(value) {
+    if (!isAdmin) return;
+    const clean = String(value || '').trim();
+    const academicInput = document.getElementById('adminLearnerFilter');
+    const attendanceInput = document.getElementById('attendanceLearnerFilter');
+    if (academicInput && academicInput.value !== clean) academicInput.value = clean;
+    if (attendanceInput && attendanceInput.value !== clean) attendanceInput.value = clean;
+}
+
+let academicsScreen = 'filters'; // 'filters' | 'reports'
+
+function repopulateGradeOptions(allowedGrades, preserveValue) {
+    const gradeSelect = document.getElementById('filterGrade');
+    if (!gradeSelect) return;
+    const current = preserveValue ?? gradeSelect.value;
+    gradeSelect.innerHTML = '<option value="">All Grades</option>';
+
+    (allowedGrades || []).forEach((grade) => {
+        const option = document.createElement('option');
+        option.value = grade;
+        option.textContent = grade;
+        gradeSelect.appendChild(option);
+    });
+
+    // Restore if still available; otherwise clear
+    if (current && allowedGrades && allowedGrades.includes(current)) {
+        gradeSelect.value = current;
+    } else {
+        gradeSelect.value = '';
+    }
+}
+
+function setAcademicsScreen(nextScreen) {
+    const filtersEl = document.getElementById('academicsFiltersScreen');
+    const reportsEl = document.getElementById('academicsReportsScreen');
+    if (!filtersEl || !reportsEl) return;
+
+    academicsScreen = nextScreen;
+    const showReports = nextScreen === 'reports';
+    filtersEl.style.display = showReports ? 'none' : '';
+    reportsEl.style.display = showReports ? '' : 'none';
+
+    // If switching to reports, wait a tick so layout is visible before rendering charts.
+    if (showReports) {
+        setTimeout(() => {
+            Object.values(academicCharts).forEach(chart => {
+                if (chart && typeof chart.resize === 'function') {
+                    try { chart.resize(); } catch (e) {}
+                }
+            });
+        }, 50);
+    }
+}
+
+function showAcademicsFiltersScreen() {
+    setAcademicsScreen('filters');
+}
+
+function updateAcademicsActiveFiltersLabel() {
+    const labelEl = document.getElementById('academicsActiveFiltersLabel');
+    if (!labelEl) return;
+
+    const year = document.getElementById('filterYear')?.value || '';
+    const grade = document.getElementById('filterGrade')?.value || '';
+    const term = document.getElementById('filterTerm')?.value || '';
+    const subject = document.getElementById('filterSubject')?.value || '';
+    const learnerId = getAdminLearnerFilter();
+
+    const parts = [];
+    parts.push(`Year: ${year || 'All'}`);
+    parts.push(`Grade: ${grade || 'All'}`);
+    parts.push(`Term: ${term ? `Term ${term}` : 'All'}`);
+    parts.push(`Subject: ${subject || 'All'}`);
+    if (isAdmin) parts.push(`Learner ID: ${learnerId || 'All'}`);
+    labelEl.textContent = parts.join(' • ');
+}
+
+// Load filter options
+function loadFilters() {
+    fetch(`/api/academics-filters`)
+        .then(response => response.json())
+        .then(data => {
+            filterData = data;
+            
+            // Populate year filter (with grade info stored in data attribute)
+            const yearSelect = document.getElementById('filterYear');
+            yearSelect.innerHTML = '<option value="">All Years</option>';
+            data.years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year.value;
+                option.textContent = year.label;
+                option.setAttribute('data-grade', year.grade || '');
+                yearSelect.appendChild(option);
+            });
+
+            // Keep default as "All Years" - don't auto-select latest year
+            // because the learner may not have records in that specific year+grade combo.
+            // The initial API call with no filters returns all records correctly.
+            
+            // Populate grade filter (initially all grades)
+            repopulateGradeOptions(data.grades || [], '');
+
+            // Sync grade to the default year selection (and update visibility/labels)
+            updateHistoricalPerformanceVisibility();
+            updateAcademicsActiveFiltersLabel();
+            
+            // Populate term filter (Term 1-4). Value is term number (1-4).
+            const termSelect = document.getElementById('filterTerm');
+            termSelect.innerHTML = '<option value="">All Terms</option>';
+            // Sort terms by cycleNo to ensure proper order
+            const sortedTerms = [...data.terms].sort((a, b) => {
+                const numA = parseInt(a.cycleNo || a.value || 0);
+                const numB = parseInt(b.cycleNo || b.value || 0);
+                return numA - numB;
+            });
+            sortedTerms.slice(0, 4).forEach(term => {
+                const option = document.createElement('option');
+                option.value = term.value; // term number ("1".."4")
+                // Ensure label shows as "Term X"
+                const label = term.label && term.label.includes('Term') ? term.label : 
+                             (term.cycleNo ? `Term ${term.cycleNo}` : term.label);
+                option.textContent = label;
+                termSelect.appendChild(option);
+            });
+            
+            // Populate subject filter
+            const subjectSelect = document.getElementById('filterSubject');
+            subjectSelect.innerHTML = '<option value="">All Subjects</option>';
+            data.subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.value;
+                option.textContent = subject.label;
+                subjectSelect.appendChild(option);
+            });
+
+            // Ensure visibility is correct after filters render
+            updateHistoricalPerformanceVisibility();
+            updateAcademicsActiveFiltersLabel();
+        })
+        .catch(error => {
+            console.error('Error loading filters:', error);
+        });
+}
+
+// Handle year change - auto-select corresponding grade
+function onYearChange() {
+    if (isAdmin) {
+        updateHistoricalPerformanceVisibility();
+        updateAcademicsActiveFiltersLabel();
+        return;
+    }
+    const yearSelect = document.getElementById('filterYear');
+    const gradeSelect = document.getElementById('filterGrade');
+    const selectedYear = yearSelect.value;
+    
+    if (selectedYear) {
+        // Look up the grade for this year from yearGradeMap
+        const correspondingGrade = filterData?.yearGradeMap?.[selectedYear] || '';
+        // Auto-select grade if found, but keep all grade options available
+        if (correspondingGrade && gradeSelect) {
+            // Only change grade if it doesn't match (or if grade is empty)
+            if (!gradeSelect.value || gradeSelect.value !== correspondingGrade) {
+                gradeSelect.value = correspondingGrade;
+            }
+        }
+    }
+
+    updateHistoricalPerformanceVisibility();
+    updateAcademicsActiveFiltersLabel();
+}
+
+function onGradeChange() {
+    if (isAdmin) {
+        updateHistoricalPerformanceVisibility();
+        updateAcademicsActiveFiltersLabel();
+        return;
+    }
+    const yearSelect = document.getElementById('filterYear');
+    const gradeSelect = document.getElementById('filterGrade');
+    if (!yearSelect || !gradeSelect) return;
+
+    const selectedGrade = gradeSelect.value;
+    if (selectedGrade) {
+        // Look up the best year for this grade from gradeToYears
+        const allowedYears = filterData?.gradeToYears?.[String(selectedGrade)] || [];
+        // Auto-select the latest year that matches
+        if (allowedYears.length > 0) {
+            const gradeMatchedYear = allowedYears[0]; // already sorted desc
+            if (!yearSelect.value || !allowedYears.includes(yearSelect.value)) {
+                yearSelect.value = gradeMatchedYear;
+            }
+        }
+    }
+
+    updateHistoricalPerformanceVisibility();
+    updateAcademicsActiveFiltersLabel();
+}
+
+function updateHistoricalPerformanceVisibility() {
+    const section = document.getElementById('historicalPerformanceSection');
+    if (!section) return;
+
+    const year = document.getElementById('filterYear')?.value || '';
+    const grade = document.getElementById('filterGrade')?.value || '';
+    const shouldShow = year === '' && grade === '';
+
+    section.style.display = shouldShow ? '' : 'none';
+
+    // If hiding, destroy/clear the chart so it doesn't render in background.
+    if (!shouldShow) {
+        if (academicCharts.yearComparison) {
+            safeDestroyChart(academicCharts.yearComparison, 'Year Comparison Chart');
+            academicCharts.yearComparison = null;
+        }
+        const canvas = document.getElementById('yearComparisonChart');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+}
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    // Load learner profile on page load
+    loadLearnerProfile();
+    
+    // Load initial data
+    const academicsTab = document.getElementById('academics-tab');
+    const disciplinaryTab = document.getElementById('disciplinary-tab');
+    const attendanceTab = document.getElementById('attendance-tab');
+    const financeTab = document.getElementById('finance-tab');
+    if (academicsTab && !academicsTab.disabled) loadAcademics();
+    if (disciplinaryTab && !disciplinaryTab.disabled) loadDisciplinary();
+    if (attendanceTab && !attendanceTab.disabled) loadAttendance();
+    if (financeTab && !financeTab.disabled) loadFinance();
+    
+    // Update profile when tabs change
+    const tabs = document.querySelectorAll('#dashboardTabs button[data-bs-toggle="tab"]');
+    tabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            // Load data for specific tabs when activated
+            const targetId = e.target.getAttribute('data-bs-target');
+            if (targetId === '#attendance') {
+                if (attendanceTab && !attendanceTab.disabled) loadAttendance();
+            } else if (targetId === '#disciplinary') {
+                if (disciplinaryTab && !disciplinaryTab.disabled) loadDisciplinary();
+            } else if (targetId === '#finance') {
+                if (financeTab && !financeTab.disabled) loadFinance();
+            }
+        });
+    });
+
+    const disciplinaryDocsTab = document.getElementById('disciplinary-documents-tab');
+    if (disciplinaryDocsTab) {
+        disciplinaryDocsTab.addEventListener('shown.bs.tab', function() {
+            loadDisciplinaryDocuments();
+        });
+    }
+
+    const sickNoteTab = document.getElementById('sick-note-tab');
+    if (sickNoteTab) {
+        sickNoteTab.addEventListener('shown.bs.tab', function() {
+            loadSickNoteHistory();
+        });
+    }
+    const camInput = document.getElementById('sickNoteCamera');
+    const fileInput = document.getElementById('sickNoteFile');
+    if (camInput) {
+        camInput.addEventListener('change', function() {
+            if (camInput.files && camInput.files[0]) setSickNotePendingFile(camInput.files[0]);
+        });
+    }
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files && fileInput.files[0]) setSickNotePendingFile(fileInput.files[0]);
+        });
+    }
+    const sickBtn = document.getElementById('sickNoteSubmitBtn');
+    if (sickBtn) sickBtn.addEventListener('click', submitSickNote);
+});
+
+// Load Learner Profile
+function loadLearnerProfile() {
+    fetch('/api/learner-profile')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading profile:', data.error);
+                return;
+            }
+            
+            const stripCacheBuster = (url) => String(url || '').split('?')[0];
+            const isDefaultAvatar = (url) => String(url || '').includes('/static/images/default-avatar.png');
+
+            // Update all profile sections
+            const profileSections = ['Academics', 'Disciplinary', 'Finance', 'Attendance'];
+            profileSections.forEach(section => {
+                const nameEl = document.getElementById(`learnerName${section}`);
+                const idEl = document.getElementById(`learnerId${section}`);
+                const gradeEl = document.getElementById(`learnerGrade${section}`);
+                const photoEl = document.getElementById(`profilePhoto${section}`);
+                
+                if (nameEl) nameEl.textContent = `${data.name} ${data.surname}`;
+                if (idEl) idEl.textContent = data.learner_id || data.id;
+                if (gradeEl) gradeEl.textContent = data.grade || 'N/A';
+                
+                if (photoEl && data.profile_photo) {
+                    // Do not keep "updating" the photo (prevents flicker).
+                    // Only set it once if we're still on the default avatar.
+                    const currentBase = stripCacheBuster(photoEl.src);
+                    if (!currentBase || isDefaultAvatar(currentBase)) {
+                        photoEl.src = data.profile_photo;
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error loading learner profile:', error);
+        });
+}
+
+// Load Academics Data with filters
+function loadAcademics() {
+    const grade = document.getElementById('filterGrade').value;
+    const year = document.getElementById('filterYear').value;
+    const term = document.getElementById('filterTerm').value;
+    const subject = document.getElementById('filterSubject').value;
+    const learnerId = getAdminLearnerFilter();
+    
+    let url = `/api/academics?`;
+    const params = [];
+    if (grade) params.push(`grade=${encodeURIComponent(grade)}`);
+    if (year) params.push(`year=${encodeURIComponent(year)}`);
+    if (term) params.push(`term=${encodeURIComponent(term)}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    if (isAdmin && learnerId) params.push(`learner_id=${encodeURIComponent(learnerId)}`);
+    url += params.join('&');
+    
+    console.log('Loading academics with URL:', url);
+    console.log('Filters - Grade:', grade, 'Year:', year, 'Term:', term, 'Subject:', subject);
+    
+    console.log('Fetching URL:', url);
+    fetch(url)
+        .then(response => {
+            console.log('API Response status:', response.status);
+            console.log('API Response headers:', response.headers);
+            if (!response.ok) {
+                return response.json().then(err => {
+                    console.error('API Error Response:', err);
+                    throw new Error(err.error || `HTTP ${response.status}: ${response.statusText}`);
+                }).catch(parseError => {
+                    console.error('Error parsing error response:', parseError);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                });
+            }
+            return response.json().catch(parseError => {
+                console.error('Error parsing JSON response:', parseError);
+                throw new Error('Invalid JSON response from server');
+            });
+        })
+        .then(data => {
+            console.log('API Response data:', data);
+            console.log('Data type:', typeof data);
+            console.log('Data length:', Array.isArray(data) ? data.length : 'Not an array');
+            
+            // Check if response is an error object
+            if (data && typeof data === 'object' && !Array.isArray(data) && data.error) {
+                console.error('API Error:', data.error);
+                throw new Error(data.error);
+            }
+            
+            // Ensure data is an array
+            if (!Array.isArray(data)) {
+                console.error('Data is not an array:', typeof data, data);
+                renderReportViewTable([]);
+                updateAllCharts([]);
+                return;
+            }
+            
+            if (data.length === 0) {
+                console.warn('No data returned from API for selected filters');
+                renderReportViewTable([]);
+                updateAllCharts([]);
+                return;
+            }
+            
+            console.log('Processing', data.length, 'records');
+            console.log('Sample record:', data[0]);
+            
+            // Render the report view (pivot-style) table
+            renderReportViewTable(data);
+            
+            // Update all charts with a delay to ensure DOM is ready and tab is visible
+            console.log('Updating charts with', data.length, 'records');
+            setTimeout(() => {
+                updateAllCharts(data);
+            }, 300);
+        })
+        .catch(error => {
+            console.error('Error loading academics:', error);
+            console.error('Error stack:', error.stack);
+            renderReportViewTable([]);
+            updateAllCharts([]);
+        });
+}
+
+function renderReportViewTable(data) {
+    const head = document.getElementById('reportViewTableHead');
+    const body = document.getElementById('reportViewTableBody');
+    const foot = document.getElementById('reportViewTableFoot');
+    if (!head || !body || !foot) return;
+
+    if (!Array.isArray(data) || data.length === 0) {
+        head.innerHTML = `
+            <tr>
+                <th>Subject</th>
+                <th class="text-center">Term</th>
+            </tr>
+        `;
+        body.innerHTML = `<tr><td colspan="99" class="text-center text-muted">No data</td></tr>`;
+        foot.innerHTML = '';
+        return;
+    }
+
+    const parseTermNumber = (termLabel) => {
+        const m = String(termLabel || '').match(/Term\s*(\d+)/i);
+        return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+    };
+
+    const uniqueTerms = [...new Set(data.map(r => r.Term).filter(Boolean))].sort((a, b) => {
+        const na = parseTermNumber(a);
+        const nb = parseTermNumber(b);
+        if (na !== nb) return na - nb;
+        return String(a).localeCompare(String(b));
+    });
+
+    const uniqueSubjects = [...new Set(data.map(r => r.Subject).filter(Boolean))].sort((a, b) =>
+        String(a).localeCompare(String(b))
+    );
+
+    // Build map: subject -> term -> [percentages]
+    const subjectTermValues = new Map();
+    for (const rec of data) {
+        const subject = rec.Subject || 'Unknown';
+        const term = rec.Term || 'Unknown';
+        const pct = parseFloat(rec.Percentage ?? rec.percentage ?? 0);
+        if (!subjectTermValues.has(subject)) subjectTermValues.set(subject, new Map());
+        const termMap = subjectTermValues.get(subject);
+        if (!termMap.has(term)) termMap.set(term, []);
+        if (!Number.isNaN(pct)) termMap.get(term).push(pct);
+    }
+
+    const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+
+    // Header
+    head.innerHTML = `
+        <tr>
+            <th>Subject</th>
+            ${uniqueTerms.map(t => `<th class="text-center">${t}</th>`).join('')}
+        </tr>
+    `;
+
+    // Body rows
+    const rowsHtml = uniqueSubjects.map(subject => {
+        const termMap = subjectTermValues.get(subject) || new Map();
+        const cells = uniqueTerms.map(term => {
+            const values = termMap.get(term) || [];
+            const a = avg(values);
+            return `<td class="text-center">${a === null ? '—' : `${a.toFixed(1)}%`}</td>`;
+        }).join('');
+        return `<tr><td><strong>${subject}</strong></td>${cells}</tr>`;
+    }).join('');
+    body.innerHTML = rowsHtml || `<tr><td colspan="99" class="text-center text-muted">No subjects</td></tr>`;
+
+    // Footer averages by term across subjects
+    const termAverages = uniqueTerms.map(term => {
+        const allVals = [];
+        for (const subject of uniqueSubjects) {
+            const termMap = subjectTermValues.get(subject);
+            const values = termMap?.get(term) || [];
+            for (const v of values) allVals.push(v);
+        }
+        const a = avg(allVals);
+        return a === null ? '—' : `${a.toFixed(1)}%`;
+    });
+
+    foot.innerHTML = `
+        <tr>
+            <th>Average</th>
+            ${termAverages.map(v => `<th class="text-center">${v}</th>`).join('')}
+        </tr>
+    `;
+}
+
+// Apply filters
+function applyFilters() {
+    console.log('=== APPLY FILTERS CLICKED ===');
+    console.log('Current filters:', {
+        year: document.getElementById('filterYear')?.value,
+        grade: document.getElementById('filterGrade')?.value,
+        term: document.getElementById('filterTerm')?.value,
+        subject: document.getElementById('filterSubject')?.value
+    });
+
+    // Switch to reports screen before rendering (canvas sizing depends on visibility)
+    updateAcademicsActiveFiltersLabel();
+    setAcademicsScreen('reports');
+
+    // Ensure we're on the academics tab
+    const academicsTab = document.getElementById('academics-tab');
+    if (academicsTab && !academicsTab.classList.contains('active')) {
+        // Switch to academics tab first
+        const tab = new bootstrap.Tab(academicsTab);
+        tab.show();
+        // Wait for tab to be shown, then load data
+        academicsTab.addEventListener('shown.bs.tab', function onTabShown() {
+            academicsTab.removeEventListener('shown.bs.tab', onTabShown);
+            setTimeout(() => {
+                loadAcademics();
+            }, 200);
+        }, { once: true });
+    } else {
+        // Already on academics tab, just load data
+        setTimeout(() => loadAcademics(), 50);
+    }
+}
+
+// Load Disciplinary Data
+function loadDisciplinary() {
+    const learnerId = getAdminLearnerFilter();
+    const dUrl = (isAdmin && learnerId) ? `/api/disciplinary?learner_id=${encodeURIComponent(learnerId)}` : `/api/disciplinary`;
+    const docsUrl = (isAdmin && learnerId) ? `/api/disciplinary/documents?learner_id=${encodeURIComponent(learnerId)}` : `/api/disciplinary/documents`;
+    const discColspan = hideDisciplinaryPdfs ? 7 : 8;
+
+    const renderDisciplinaryRows = (docMap) => {
+        const tbody = document.getElementById('disciplinaryTableBody');
+        tbody.innerHTML = '';
+
+        if (records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${discColspan}" class="text-center">No disciplinary records found</td></tr>`;
+            return;
+        }
+
+        records.forEach(record => {
+            const row = document.createElement('tr');
+            const date = record.Date || record.date || 'N/A';
+            const severity = record.Severity || record.severity || 'Medium';
+            const severityClass = severity.toLowerCase() === 'high' ? 'danger' :
+                                 severity.toLowerCase() === 'medium' ? 'warning' : 'info';
+
+            const recordType = record.Type || 'None';
+            const points = record.Points || 0;
+            let typeBadge = '';
+            let typeColor = '';
+            if (recordType === 'Merit') {
+                typeBadge = `<span class="badge bg-success">Merit</span>`;
+                typeColor = 'text-success';
+            } else if (recordType === 'Demerit') {
+                typeBadge = `<span class="badge bg-danger">Demerit</span>`;
+                typeColor = 'text-danger';
+            } else {
+                typeBadge = `<span class="badge bg-secondary">None</span>`;
+                typeColor = 'text-muted';
+            }
+            const recId = String(record.RecordId || "");
+            const doc = docMap[recId];
+            const docCell = hideDisciplinaryPdfs ? '' : (doc
+                ? `<a class="btn btn-sm btn-outline-primary" href="/parent/disciplinary/document/${doc.id}" target="_blank" rel="noopener">View PDF</a>
+                   <a class="btn btn-sm btn-outline-secondary ms-1" href="/parent/disciplinary/document/${doc.id}?download=1">Download</a>`
+                : `<span class="text-muted">-</span>`);
+
+            row.innerHTML = `
+                <td>${date}</td>
+                <td>${typeBadge}</td>
+                <td class="${typeColor}"><strong>${points}</strong></td>
+                <td>${record.IncidentType || record.incident_type || 'N/A'}</td>
+                <td>${record.Description || record.description || 'N/A'}</td>
+                <td><span class="badge bg-${severityClass}">${severity}</span></td>
+                <td>${record.Status || record.status || 'N/A'}</td>
+                ${hideDisciplinaryPdfs ? '' : `<td>${docCell}</td>`}
+            `;
+            tbody.appendChild(row);
+        });
+    };
+
+    let records = [];
+    fetch(dUrl)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            records = data.records || [];
+            const summary = data.summary || {};
+
+            // Update detention section
+            updateDetentionSection(summary);
+
+            if (hideDisciplinaryPdfs) {
+                renderDisciplinaryRows({});
+                return;
+            }
+
+            fetch(docsUrl)
+                .then(r => r.ok ? r.json() : ({documents: []}))
+                .then(docData => {
+                    const docMap = {};
+                    (docData.documents || []).forEach(d => {
+                        const key = String(d.disciplinaryRecordId || "");
+                        if (key) docMap[key] = d;
+                    });
+                    renderDisciplinaryRows(docMap);
+                })
+                .catch(() => {
+                    const tbody = document.getElementById('disciplinaryTableBody');
+                    tbody.innerHTML = `<tr><td colspan="${discColspan}" class="text-center text-danger">Error loading documents</td></tr>`;
+                });
+        })
+        .catch(error => {
+            console.error('Error loading disciplinary:', error);
+            document.getElementById('disciplinaryTableBody').innerHTML = `<tr><td colspan="${discColspan}" class="text-center text-danger">Error loading data</td></tr>`;
+        });
+    loadDisciplinaryDocuments();
+}
+
+function loadDisciplinaryDocuments() {
+    const learnerId = getAdminLearnerFilter();
+    const url = (isAdmin && learnerId)
+        ? `/api/parent/disciplinary/documents?learner_id=${encodeURIComponent(learnerId)}`
+        : `/api/parent/disciplinary/documents`;
+    const tbody = document.getElementById('disciplinaryDocumentsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            const docs = data.documents || [];
+            if (!docs.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No documents found for this learner.</td></tr>';
+                return;
+            }
+            const typeLabel = {
+                'disciplinary': '<span class="badge bg-warning text-dark">Disciplinary</span>',
+                'detention-notification': '<span class="badge bg-danger">Detention Notice</span>',
+                'detention-attendance': '<span class="badge bg-info text-dark">Attendance Register</span>',
+            };
+            tbody.innerHTML = '';
+            docs.forEach(doc => {
+                const created = doc.createdAt ? new Date(doc.createdAt).toLocaleString() : 'N/A';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${created}</td>
+                    <td>${typeLabel[doc.type] || '<span class="badge bg-secondary">Document</span>'}</td>
+                    <td>${doc.title || 'PDF Document'}</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="${doc.viewUrl}" target="_blank" rel="noopener">View</a>
+                        <a class="btn btn-sm btn-outline-secondary ms-1" href="${doc.downloadUrl}">Download</a>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading disciplinary documents:', error);
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading documents</td></tr>';
+        });
+}
+
+// Update Detention Section
+function updateDetentionSection(summary) {
+    const totalDemerits = summary.totalDemerits || 0;
+    const totalMerits = summary.totalMerits || 0;
+    const balance = summary.balance || 0;
+    const pointsToDetention = summary.pointsToDetention || 0;
+    const isDetention = summary.isDetention || false;
+    const threshold = summary.detentionThreshold || 12;
+    const currentYear = summary.currentYear || '';
+    
+    // Update numbers
+    document.getElementById('totalDemerits').textContent = totalDemerits;
+    document.getElementById('totalMerits').textContent = totalMerits;
+    
+    const balanceEl = document.getElementById('balance');
+    balanceEl.textContent = balance;
+    if (balance >= threshold) {
+        balanceEl.className = 'text-danger mb-0';
+    } else if (balance >= threshold - 3) {
+        balanceEl.className = 'text-warning mb-0';
+    } else {
+        balanceEl.className = 'text-info mb-0';
+    }
+    
+    // Update detention alert
+    const alertEl = document.getElementById('detentionAlert');
+    const statusEl = document.getElementById('detentionStatus');
+    const messageEl = document.getElementById('detentionMessage');
+    
+    const yearText = currentYear ? ` for ${currentYear}` : '';
+    
+    if (isDetention) {
+        alertEl.className = 'alert alert-danger';
+        statusEl.textContent = '⚠️ Learner is Required to Sit for Detention';
+        messageEl.textContent = `The learner has accumulated ${balance} points${yearText} (${totalDemerits} demerits - ${totalMerits} merits), which exceeds the threshold of ${threshold} points.`;
+    } else if (pointsToDetention > 0 && pointsToDetention <= 3) {
+        alertEl.className = 'alert alert-warning';
+        statusEl.textContent = '⚠️ Approaching Detention Threshold';
+        messageEl.textContent = `The learner has ${pointsToDetention} point${pointsToDetention > 1 ? 's' : ''} left before being required to sit for detention${yearText}. Current balance: ${balance} points.`;
+    } else if (pointsToDetention > 0) {
+        alertEl.className = 'alert alert-info';
+        statusEl.textContent = 'ℹ️ Detention Status';
+        messageEl.textContent = `The learner has ${pointsToDetention} point${pointsToDetention > 1 ? 's' : ''} left before being required to sit for detention${yearText}. Current balance: ${balance} points (${totalDemerits} demerits - ${totalMerits} merits).`;
+    } else {
+        alertEl.className = 'alert alert-success';
+        statusEl.textContent = '✓ No Detention Required';
+        messageEl.textContent = `The learner's balance${yearText} is ${balance} points (${totalDemerits} demerits - ${totalMerits} merits), which is below the threshold of ${threshold} points.`;
+    }
+}
+
+// Safe chart destruction function
+function safeDestroyChart(chartInstance, chartName) {
+    if (!chartInstance) {
+        return;
+    }
+    
+    try {
+        // Check if chart is already destroyed or in invalid state
+        if (chartInstance.ctx === undefined || chartInstance.canvas === undefined) {
+            // Chart is already destroyed or invalid, just return
+            return;
+        }
+        
+        // Check if destroy method exists
+        if (typeof chartInstance.destroy === 'function') {
+            // Stop any animations first to prevent errors
+            try {
+                // Stop animations using Chart.js API - this is synchronous
+                if (chartInstance.animationService && typeof chartInstance.animationService.stop === 'function') {
+                    chartInstance.animationService.stop();
+                }
+                // Also try to stop using the chart's stop method
+                if (typeof chartInstance.stop === 'function') {
+                    chartInstance.stop();
+                }
+            } catch (e) {
+                // Ignore animation stop errors
+            }
+            
+            // Destroy immediately after stopping animations
+            try {
+                chartInstance.destroy();
+            } catch (e) {
+                // Ignore destroy errors - chart might be in invalid state
+            }
+        }
+    } catch (error) {
+        // Silently ignore destroy errors - chart might already be destroyed
+        console.warn(`Warning destroying ${chartName}:`, error.message);
+    }
+}
+
+// Helper function to add animation: false to chart options
+function addNoAnimationOptions(options) {
+    return {
+        ...options,
+        animation: false,  // Disable animations to prevent ctx errors during updates
+        transitions: {
+            active: {
+                animation: {
+                    duration: 0
+                }
+            }
+        }
+    };
+}
+
+// Helper function to ensure canvas is ready for Chart.js
+function ensureCanvasReady(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.warn(`Canvas ${canvasId} not found`);
+        return false;
+    }
+    
+    // Always ensure canvas has dimensions - set default if zero or container has no size
+    if (canvas.width === 0 || canvas.height === 0) {
+        const container = canvas.parentElement;
+        if (container) {
+            const rect = container.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+            } else {
+                // Set default dimensions if container has no size yet
+                canvas.width = 800;
+                canvas.height = 400;
+                console.log(`Canvas ${canvasId} set to default dimensions: 800x400`);
+            }
+        } else {
+            // Set default dimensions if no container
+            canvas.width = 800;
+            canvas.height = 400;
+            console.log(`Canvas ${canvasId} set to default dimensions: 800x400 (no container)`);
+        }
+    }
+    
+    // Always return true if canvas exists - we'll let Chart.js handle rendering
+    // Charts will resize properly when tab becomes active
+    return true;
+}
+
+// Helper Functions for Data Transformation
+function groupBySubject(data) {
+    const grouped = {};
+    data.forEach(record => {
+        const subject = record.Subject || 'Unknown';
+        if (!grouped[subject]) {
+            grouped[subject] = [];
+        }
+        grouped[subject].push(record);
+    });
+    return grouped;
+}
+
+function groupByTerm(data) {
+    const grouped = {};
+    data.forEach(record => {
+        const term = record.Term || 'Unknown';
+        if (!grouped[term]) {
+            grouped[term] = [];
+        }
+        grouped[term].push(record);
+    });
+    return grouped;
+}
+
+function groupByYear(data) {
+    const grouped = {};
+    data.forEach(record => {
+        const year = record.Year || 'Unknown';
+        if (!grouped[year]) {
+            grouped[year] = [];
+        }
+        grouped[year].push(record);
+    });
+    return grouped;
+}
+
+function calculateAverages(groupedData) {
+    const averages = {};
+    Object.keys(groupedData).forEach(key => {
+        const records = groupedData[key];
+        const percentages = records.map(r => parseFloat(r.Percentage || 0)).filter(p => !isNaN(p));
+        averages[key] = percentages.length > 0 ? percentages.reduce((a, b) => a + b, 0) / percentages.length : 0;
+    });
+    return averages;
+}
+
+function transformForHeatmap(data) {
+    const subjectTermMap = {};
+    data.forEach(record => {
+        const subject = record.Subject || 'Unknown';
+        const term = record.Term || 'Unknown';
+        const key = `${subject}|${term}`;
+        if (!subjectTermMap[key]) {
+            subjectTermMap[key] = [];
+        }
+        subjectTermMap[key].push(parseFloat(record.Percentage || 0));
+    });
+    
+    const subjects = [...new Set(data.map(r => r.Subject))].sort();
+    const terms = [...new Set(data.map(r => r.Term))].sort((a, b) => {
+        const numA = parseInt(a.match(/Term\s+(\d+)/)?.[1] || '0');
+        const numB = parseInt(b.match(/Term\s+(\d+)/)?.[1] || '0');
+        return numA - numB;
+    });
+    
+    const matrix = subjects.map(subject => {
+        return terms.map(term => {
+            const key = `${subject}|${term}`;
+            const values = subjectTermMap[key] || [];
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+    });
+    
+    return { subjects, terms, matrix };
+}
+
+function transformForRadar(data) {
+    const subjectAverages = calculateAverages(groupBySubject(data));
+    const subjects = Object.keys(subjectAverages).sort();
+    const values = subjects.map(s => subjectAverages[s]);
+    return { subjects, values };
+}
+
+function getSubjectColor(subject, index, total) {
+    const colors = [
+        'rgba(75, 192, 192, 0.8)',   // Teal
+        'rgba(54, 162, 235, 0.8)',   // Blue
+        'rgba(255, 206, 86, 0.8)',   // Yellow
+        'rgba(255, 159, 64, 0.8)',   // Orange
+        'rgba(255, 99, 132, 0.8)',   // Red
+        'rgba(153, 102, 255, 0.8)',  // Purple
+        'rgba(201, 203, 207, 0.8)',  // Grey
+        'rgba(255, 205, 86, 0.8)',   // Gold
+        'rgba(75, 192, 192, 0.8)',   // Cyan
+        'rgba(54, 162, 235, 0.8)'    // Sky Blue
+    ];
+    return colors[index % colors.length];
+}
+
+// Diagnostic function to check chart setup
+function diagnoseChartIssues() {
+    console.log('=== CHART DIAGNOSTICS ===');
+    console.log('Chart.js available:', typeof Chart !== 'undefined');
+    console.log('Chart.js version:', typeof Chart !== 'undefined' ? Chart.version : 'N/A');
+    
+    // Trend Analysis is now a table (no lineChart canvas)
+    const canvasIds = ['academicChart', 'horizontalBarChart', 'multiLineChart', 'heatmapChart', 'areaChart', 'yearComparisonChart'];
+    canvasIds.forEach(id => {
+        const canvas = document.getElementById(id);
+        console.log(`Canvas ${id}:`, {
+            exists: !!canvas,
+            width: canvas ? canvas.width : 'N/A',
+            height: canvas ? canvas.height : 'N/A',
+            parent: canvas ? canvas.parentElement?.tagName : 'N/A',
+            tabPane: canvas ? canvas.closest('.tab-pane')?.id : 'N/A',
+            tabActive: canvas ? canvas.closest('.tab-pane')?.classList.contains('active') : 'N/A'
+        });
+    });
+    
+    console.log('Academic charts object:', academicCharts);
+    console.log('Number of chart instances:', Object.keys(academicCharts).length);
+    console.log('=== END DIAGNOSTICS ===');
+}
+
+// Update all charts
+function updateAllCharts(data) {
+    console.log('updateAllCharts called with data length:', data ? data.length : 0);
+    
+    // Run diagnostics
+    diagnoseChartIssues();
+    
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded! Please check if the library is included.');
+        console.error('Trying to load Chart.js from CDN...');
+        // Try to dynamically load Chart.js
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+        script.onload = () => {
+            console.log('Chart.js loaded dynamically, retrying charts...');
+            updateAllCharts(data);
+        };
+        script.onerror = () => {
+            console.error('Failed to load Chart.js from CDN');
+        };
+        document.head.appendChild(script);
+        return;
+    }
+    
+    if (!data || data.length === 0) {
+        console.log('No data, clearing all charts');
+        // Clear all charts safely
+        Object.keys(academicCharts).forEach(key => {
+            if (academicCharts[key]) {
+                safeDestroyChart(academicCharts[key], key);
+                academicCharts[key] = null;
+            }
+        });
+        academicCharts = {};
+        
+        // Show empty state
+        const charts = ['academicChart', 'horizontalBarChart', 'multiLineChart', 'heatmapChart', 
+                       'areaChart', 'yearComparisonChart'];
+        charts.forEach(chartId => {
+            const canvas = document.getElementById(chartId);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        });
+        
+        // Clear trend table
+        updateTrendTable([]);
+        return;
+    }
+    
+    console.log('Updating all charts with', data.length, 'records');
+
+    // Hide/show historical section based on current filters
+    updateHistoricalPerformanceVisibility();
+    
+    // Update each chart individually with error handling
+    // This ensures if one chart fails, others can still render
+    const chartFunctions = [
+        { name: 'Bar Chart', fn: () => updateBarChart(data) },
+        { name: 'Trend Table', fn: () => updateTrendTable(data) },
+        { name: 'Horizontal Bar Chart', fn: () => updateHorizontalBarChart(data) },
+        { name: 'Multi-Line Chart', fn: () => updateMultiLineChart(data) },
+        { name: 'Heatmap Chart', fn: () => updateHeatmapChart(data) },
+        { name: 'Area Chart', fn: () => updateAreaChart(data) },
+        {
+            name: 'Year Comparison Chart',
+            fn: () => {
+                const year = document.getElementById('filterYear')?.value || '';
+                const grade = document.getElementById('filterGrade')?.value || '';
+                if (year === '' && grade === '') {
+                    return updateYearComparisonChart(data);
+                }
+                return;
+            }
+        }
+    ];
+    
+    chartFunctions.forEach(chart => {
+        try {
+            console.log(`Updating ${chart.name}...`);
+            const result = chart.fn();
+            if (result === false) {
+                console.warn(`${chart.name} returned false (canvas not ready)`);
+            } else {
+                console.log(`${chart.name} updated successfully`);
+            }
+        } catch (error) {
+            console.error(`Error updating ${chart.name}:`, error);
+            console.error('Error message:', error.message);
+            if (error.stack) {
+                console.error('Stack trace:', error.stack);
+            }
+            // Don't let one chart error break others
+        }
+    });
+    
+    // Trigger resize for all charts after a short delay to ensure proper rendering
+    // Also check if tab is active and resize accordingly
+    setTimeout(() => {
+        const academicsTabPane = document.getElementById('academics');
+        const isTabActive = academicsTabPane && (academicsTabPane.classList.contains('active') || academicsTabPane.classList.contains('show'));
+        
+        Object.values(academicCharts).forEach(chart => {
+            if (chart && typeof chart.resize === 'function') {
+                try {
+                    chart.resize();
+                } catch (e) {
+                    // Ignore resize errors
+                }
+            }
+        });
+        
+        // If tab is active, trigger another resize after a longer delay
+        if (isTabActive) {
+            setTimeout(() => {
+                Object.values(academicCharts).forEach(chart => {
+                    if (chart && typeof chart.resize === 'function') {
+                        try {
+                            chart.resize();
+                        } catch (e) {
+                            // Ignore resize errors
+                        }
+                    }
+                });
+            }, 500);
+        }
+    }, 200);
+    
+    console.log('All charts update completed');
+}
+
+// Update Main Bar Chart - Subject Marks
+function updateBarChart(data) {
+    if (!ensureCanvasReady('academicChart')) {
+        console.warn('Canvas academicChart not ready, but attempting to render anyway');
+        // Try to get canvas anyway and set default dimensions
+        const canvas = document.getElementById('academicChart');
+        if (canvas) {
+            if (canvas.width === 0 || canvas.height === 0) {
+                canvas.width = 800;
+                canvas.height = 400;
+            }
+        } else {
+            return false;
+        }
+    }
+    
+    const canvas = document.getElementById('academicChart');
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart safely
+    if (academicCharts.bar) {
+        safeDestroyChart(academicCharts.bar, 'Bar Chart');
+        academicCharts.bar = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // Group by subject and get average/current marks
+    const subjectMarks = {};
+    data.forEach(record => {
+        const subject = record.Subject || 'Unknown';
+        if (!subjectMarks[subject]) {
+            subjectMarks[subject] = [];
+        }
+        const pct = parseFloat(record.Percentage || 0);
+        if (!isNaN(pct)) {
+            subjectMarks[subject].push(pct);
+        }
+    });
+    
+    const subjects = Object.keys(subjectMarks);
+    if (subjects.length === 0) {
+        return;
+    }
+    
+    const marks = subjects.map(subject => {
+        const values = subjectMarks[subject];
+        return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    });
+    
+    const colors = subjects.map((_, i) => {
+        const hue = (i * 360 / subjects.length) % 360;
+        return `hsla(${hue}, 70%, 50%, 0.8)`;
+    });
+    
+    academicCharts.bar = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: subjects,
+            datasets: [{
+                label: 'Average Percentage',
+                data: marks,
+                backgroundColor: colors,
+                borderColor: colors.map(c => c.replace('0.8', '1')),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            animation: false,  // Disable animations to prevent ctx errors during updates
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Percentage (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Subjects'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Subject Performance Overview'
+                }
+            }
+        }
+    });
+}
+
+function updateTrendTable(data) {
+    const tbody = document.getElementById('trendTableBody');
+    if (!tbody) return;
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No data</td></tr>';
+        return;
+    }
+    
+    // Group by term/year and calculate average - format: "Term X YYYY"
+    const termData = {};
+    data.forEach(record => {
+        const term = record.Term || 'Term';
+        const year = record.Year || '';
+        const key = `${term} ${year}`.trim();
+        if (!termData[key]) termData[key] = [];
+        const pct = parseFloat(record.Percentage || 0);
+        if (!Number.isNaN(pct)) termData[key].push(pct);
+    });
+    
+    const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+    
+    // Sort by year DESC then term ASC
+    const keys = Object.keys(termData).sort((a, b) => {
+        const yearA = a.match(/\d{4}/)?.[0] || '';
+        const yearB = b.match(/\d{4}/)?.[0] || '';
+        if (yearA !== yearB) return yearB.localeCompare(yearA);
+        const termNumA = parseInt(a.match(/Term\s+(\d+)/i)?.[1] || '0', 10);
+        const termNumB = parseInt(b.match(/Term\s+(\d+)/i)?.[1] || '0', 10);
+        return termNumA - termNumB;
+    });
+    
+    if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No trend data</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = keys.map(k => {
+        const a = avg(termData[k]);
+        const v = a === null ? '—' : `${a.toFixed(1)}%`;
+        return `<tr><td>${k}</td><td class="text-end"><strong>${v}</strong></td></tr>`;
+    }).join('');
+}
+
+// Update Horizontal Bar Chart - Subject Ranking
+function updateHorizontalBarChart(data) {
+    if (!ensureCanvasReady('horizontalBarChart')) {
+        return;
+    }
+    
+    const ctx = document.getElementById('horizontalBarChart');
+    
+    if (academicCharts.horizontalBar) {
+        safeDestroyChart(academicCharts.horizontalBar, 'Horizontal Bar Chart');
+        academicCharts.horizontalBar = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    const subjectAverages = calculateAverages(groupBySubject(data));
+    const sorted = Object.entries(subjectAverages)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15); // Limit to top 15 for readability
+    
+    const subjects = sorted.map(s => s[0]);
+    const marks = sorted.map(s => s[1]);
+    
+    academicCharts.horizontalBar = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: subjects,
+            datasets: [{
+                label: 'Average Percentage',
+                data: marks,
+                backgroundColor: subjects.map((_, i) => getSubjectColor(subjects[i], i, subjects.length)),
+                borderColor: subjects.map((_, i) => getSubjectColor(subjects[i], i, subjects.length).replace('0.8', '1')),
+                borderWidth: 1
+            }]
+        },
+        options: { animation: false,  // Disable animations
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Average Percentage (%)' }
+                },
+                y: {
+                    title: { display: true, text: 'Subjects' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+// Update Multi-Line Chart - Subject Performance Across Terms
+function updateMultiLineChart(data) {
+    if (!ensureCanvasReady('multiLineChart')) {
+        return;
+    }
+    
+    const ctx = document.getElementById('multiLineChart');
+    
+    if (academicCharts.multiLine) {
+        safeDestroyChart(academicCharts.multiLine, 'Multi-Line Chart');
+        academicCharts.multiLine = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // Group by subject and term
+    const subjectTermData = {};
+    data.forEach(record => {
+        const subject = record.Subject || 'Unknown';
+        const term = record.Term || 'Unknown';
+        if (!subjectTermData[subject]) {
+            subjectTermData[subject] = {};
+        }
+        if (!subjectTermData[subject][term]) {
+            subjectTermData[subject][term] = [];
+        }
+        subjectTermData[subject][term].push(parseFloat(record.Percentage || 0));
+    });
+    
+    // Get all unique terms sorted
+    const allTerms = [...new Set(data.map(r => r.Term))].sort((a, b) => {
+        const numA = parseInt(a.match(/Term\s+(\d+)/)?.[1] || '0');
+        const numB = parseInt(b.match(/Term\s+(\d+)/)?.[1] || '0');
+        return numA - numB;
+    });
+    
+    // Limit to top 8 subjects for readability
+    const subjects = Object.keys(subjectTermData).slice(0, 8);
+    
+    const datasets = subjects.map((subject, idx) => {
+        const termValues = allTerms.map(term => {
+            const values = subjectTermData[subject][term] || [];
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+        });
+        
+        return {
+            label: subject,
+            data: termValues,
+            borderColor: getSubjectColor(subject, idx, subjects.length),
+            backgroundColor: getSubjectColor(subject, idx, subjects.length).replace('0.8', '0.1'),
+            tension: 0.4,
+            fill: false
+        };
+    });
+    
+    academicCharts.multiLine = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: allTerms,
+            datasets: datasets
+        },
+        options: { animation: false,  // Disable animations
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Average Percentage (%)' }
+                },
+                x: {
+                    title: { display: true, text: 'Terms' }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+// Update Heatmap Chart - Performance Heatmap
+function updateHeatmapChart(data) {
+    if (!ensureCanvasReady('heatmapChart')) {
+        return;
+    }
+    
+    const ctx = document.getElementById('heatmapChart');
+    
+    if (academicCharts.heatmap) {
+        safeDestroyChart(academicCharts.heatmap, 'Heatmap Chart');
+        academicCharts.heatmap = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // For Chart.js, we'll create a bar chart representation of heatmap
+    // Group by subject and term
+    const { subjects, terms, matrix } = transformForHeatmap(data);
+    
+    if (subjects.length === 0 || terms.length === 0) {
+        return;
+    }
+    
+    // Create datasets for each term
+    const datasets = terms.map((term, termIdx) => {
+        const termColor = getSubjectColor(term, termIdx, terms.length);
+        return {
+            label: term,
+            data: subjects.map((_, subIdx) => matrix[subIdx][termIdx]),
+            // One consistent color per term (matches legend/key)
+            backgroundColor: termColor,
+            borderColor: termColor.replace('0.8', '1'),
+            borderWidth: 1
+        };
+    });
+    
+    academicCharts.heatmap = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: subjects,
+            datasets: datasets
+        },
+        options: { animation: false,  // Disable animations
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Percentage (%)' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 45 },
+                    title: { display: true, text: 'Subjects' }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            }
+        }
+    });
+}
+
+// Update Area Chart - Cumulative Performance Over Time
+function updateAreaChart(data) {
+    if (!ensureCanvasReady('areaChart')) {
+        return;
+    }
+    
+    const ctx = document.getElementById('areaChart');
+    
+    if (academicCharts.area) {
+        safeDestroyChart(academicCharts.area, 'Area Chart');
+        academicCharts.area = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // Group by term and calculate cumulative average
+    const termData = {};
+    data.forEach(record => {
+        const term = record.Term || 'Unknown';
+        if (!termData[term]) {
+            termData[term] = [];
+        }
+        termData[term].push(parseFloat(record.Percentage || 0));
+    });
+    
+    const terms = Object.keys(termData).sort((a, b) => {
+        const numA = parseInt(a.match(/Term\s+(\d+)/)?.[1] || '0');
+        const numB = parseInt(b.match(/Term\s+(\d+)/)?.[1] || '0');
+        return numA - numB;
+    });
+    
+    const averages = terms.map(term => {
+        const values = termData[term];
+        return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    });
+    
+    academicCharts.area = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: terms,
+            datasets: [{
+                label: 'Average Performance',
+                data: averages,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.3)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: { animation: false,  // Disable animations
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Average Percentage (%)' }
+                },
+                x: {
+                    title: { display: true, text: 'Terms' }
+                }
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+}
+
+// CASS-related chart functions removed
+
+// Update Year-over-Year Comparison Chart
+function updateYearComparisonChart(data) {
+    if (!ensureCanvasReady('yearComparisonChart')) {
+        return;
+    }
+    
+    const ctx = document.getElementById('yearComparisonChart');
+    
+    if (academicCharts.yearComparison) {
+        safeDestroyChart(academicCharts.yearComparison, 'Year Comparison Chart');
+        academicCharts.yearComparison = null;
+    }
+    
+    if (!data || data.length === 0) {
+        return;
+    }
+    
+    // Group by year and subject
+    const yearSubjectData = {};
+    data.forEach(record => {
+        const year = record.Year || 'Unknown';
+        const subject = record.Subject || 'Unknown';
+        if (!yearSubjectData[year]) {
+            yearSubjectData[year] = {};
+        }
+        if (!yearSubjectData[year][subject]) {
+            yearSubjectData[year][subject] = [];
+        }
+        yearSubjectData[year][subject].push(parseFloat(record.Percentage || 0));
+    });
+    
+    const years = Object.keys(yearSubjectData).sort().reverse();
+    const allSubjects = [...new Set(data.map(r => r.Subject))].sort().slice(0, 10);
+    
+    if (years.length === 0 || allSubjects.length === 0) {
+        return;
+    }
+    
+    const datasets = years.map((year, idx) => {
+        const subjectAverages = allSubjects.map(subject => {
+            const values = yearSubjectData[year][subject] || [];
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+        });
+        
+        return {
+            label: year,
+            data: subjectAverages,
+            backgroundColor: getSubjectColor(year, idx, years.length),
+            borderColor: getSubjectColor(year, idx, years.length).replace('0.8', '1'),
+            borderWidth: 1
+        };
+    });
+    
+    academicCharts.yearComparison = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: allSubjects,
+            datasets: datasets
+        },
+        options: { animation: false,  // Disable animations
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: false,
+                    ticks: { maxRotation: 45, minRotation: 45 },
+                    title: { display: true, text: 'Subjects' }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Average Percentage (%)' }
+                }
+            },
+            plugins: {
+                legend: { display: true, position: 'top' }
+            }
+        }
+    });
+}
+
+// View Subject Details
+function viewSubjectDetails(subject, year, reportId) {
+    const modal = new bootstrap.Modal(document.getElementById('subjectDetailsModal'));
+    const content = document.getElementById('subjectDetailsContent');
+    content.innerHTML = 'Loading...';
+    modal.show();
+    
+    const learnerId = getAdminLearnerFilter();
+    let detailsUrl = `/api/subject-details?subject=${encodeURIComponent(subject)}&year=${encodeURIComponent(year)}&term=${encodeURIComponent(reportId)}`;
+    if (isAdmin && learnerId) {
+        detailsUrl += `&learner_id=${encodeURIComponent(learnerId)}`;
+    }
+    fetch(detailsUrl)
+        .then(response => response.json())
+        .then(data => {
+            if (data.length === 0) {
+                content.innerHTML = '<p>No detailed records found for this subject.</p>';
+                return;
+            }
+            
+            let html = `<h6>${subject} - ${year}</h6>`;
+            html += '<table class="table table-sm mt-3"><thead><tr><th>Assessment</th><th>Assessment Type</th><th>Score</th><th>Grade</th><th>Percentage</th></tr></thead><tbody>';
+            data.forEach(record => {
+                html += `<tr>
+                    <td>${record.AssessmentDate || 'N/A'}</td>
+                    <td>${record.AssessmentType || 'N/A'}</td>
+                    <td>${record.Score || 'N/A'}</td>
+                    <td>${record.Grade || 'N/A'}</td>
+                    <td>${record.Percentage || 0}%</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            content.innerHTML = '<p class="text-danger">Error loading details.</p>';
+        });
+}
+
+// Load Attendance Data
+function loadAttendance() {
+    // Load filters first
+    fetch('/api/attendance-filters')
+        .then(response => response.json())
+        .then(filterData => {
+            if (filterData.error) {
+                console.error('Error loading attendance filters:', filterData.error);
+                return;
+            }
+            
+            // Populate year filter
+            const yearSelect = document.getElementById('attendanceFilterYear');
+            if (yearSelect) {
+                const currentValue = yearSelect.value;
+                yearSelect.innerHTML = '<option value="">All Years</option>';
+                filterData.years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    yearSelect.appendChild(option);
+                });
+                if (currentValue) yearSelect.value = currentValue;
+            }
+            
+            // Populate grade filter
+            const gradeSelect = document.getElementById('attendanceFilterGrade');
+            if (gradeSelect) {
+                const currentValue = gradeSelect.value;
+                gradeSelect.innerHTML = '<option value="">All Grades</option>';
+                filterData.grades.forEach(grade => {
+                    const option = document.createElement('option');
+                    option.value = grade;
+                    option.textContent = grade;
+                    gradeSelect.appendChild(option);
+                });
+                if (currentValue) gradeSelect.value = currentValue;
+            }
+            
+            // Now load attendance data
+            loadAttendanceData();
+        })
+        .catch(error => {
+            console.error('Error loading attendance filters:', error);
+            loadAttendanceData(); // Still try to load data
+        });
+}
+
+function loadAttendanceData() {
+    const year = document.getElementById('attendanceFilterYear')?.value || '';
+    const grade = document.getElementById('attendanceFilterGrade')?.value || '';
+    const month = document.getElementById('attendanceFilterMonth')?.value || '';
+    const learnerId = getAdminLearnerFilter();
+    syncAdminLearnerFilters(learnerId);
+    
+    let url = `/api/attendance?`;
+    const params = [];
+    if (year) params.push(`year=${encodeURIComponent(year)}`);
+    if (grade) params.push(`grade=${encodeURIComponent(grade)}`);
+    if (month) params.push(`month=${encodeURIComponent(month)}`);
+    if (isAdmin && learnerId) params.push(`learner_id=${encodeURIComponent(learnerId)}`);
+    url += params.join('&');
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error loading attendance:', data.error);
+                const tbody = document.getElementById('attendanceTableBody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>';
+                }
+                return;
+            }
+            
+            // Update summary statistics
+            const totalAbsent = data.length;
+            const totalAbsentEl = document.getElementById('totalAbsent');
+            if (totalAbsentEl) totalAbsentEl.textContent = totalAbsent;
+            
+            // Calculate current year absences
+            const currentYear = new Date().getFullYear();
+            const currentYearAbsent = data.filter(record => {
+                const recordYear = record.year || (record.date_absent ? new Date(record.date_absent).getFullYear() : null);
+                return recordYear === currentYear;
+            }).length;
+            const currentYearAbsentEl = document.getElementById('currentYearAbsent');
+            if (currentYearAbsentEl) currentYearAbsentEl.textContent = currentYearAbsent;
+            
+            // Calculate attendance rate (assuming school days - rough estimate)
+            const attendanceRate = totalAbsent > 0 ? Math.max(0, 100 - (totalAbsent * 0.5)) : 100;
+            const attendanceRateEl = document.getElementById('attendanceRate');
+            if (attendanceRateEl) attendanceRateEl.textContent = attendanceRate.toFixed(1) + '%';
+            
+            // Find most common reason
+            const reasonCounts = {};
+            data.forEach(record => {
+                const reason = record.reason || 'Not specified';
+                reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+            });
+            const commonReason = Object.keys(reasonCounts).length > 0 
+                ? Object.keys(reasonCounts).reduce((a, b) => reasonCounts[a] > reasonCounts[b] ? a : b, 'N/A')
+                : 'N/A';
+            const commonReasonEl = document.getElementById('commonReason');
+            if (commonReasonEl) commonReasonEl.textContent = commonReason;
+            
+            // Update table
+            const tbody = document.getElementById('attendanceTableBody');
+            if (tbody) {
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No attendance records found for selected filters</td></tr>';
+                } else {
+                    tbody.innerHTML = data.map(record => {
+                        const date = record.date_absent ? new Date(record.date_absent).toLocaleDateString() : 'N/A';
+                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                                           'July', 'August', 'September', 'October', 'November', 'December'];
+                        const monthName = record.month ? monthNames[record.month - 1] : 'N/A';
+                        return `
+                            <tr>
+                                <td>${date}</td>
+                                <td>${record.grade || 'N/A'}</td>
+                                <td>${record.reason || 'Not specified'}</td>
+                                <td>${record.year || 'N/A'}</td>
+                                <td>${monthName}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+            
+            // Update attendance chart
+            updateAttendanceChart(data);
+        })
+        .catch(error => {
+            console.error('Error loading attendance:', error);
+            const tbody = document.getElementById('attendanceTableBody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>';
+            }
+        });
+}
+
+function updateAttendanceChart(data) {
+    // Group by month
+    const monthlyData = {};
+    data.forEach(record => {
+        if (record.date_absent) {
+            const date = new Date(record.date_absent);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            monthlyData[monthKey] = (monthlyData[monthKey] || 0) + 1;
+        }
+    });
+    
+    const labels = Object.keys(monthlyData).sort();
+    const values = labels.map(key => monthlyData[key]);
+    
+    const ctx = document.getElementById('attendanceChart');
+    if (!ctx) return;
+    
+    // Destroy existing chart if exists
+    if (window.attendanceChartInstance) {
+        window.attendanceChartInstance.destroy();
+    }
+    
+    window.attendanceChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Days Absent',
+                data: values,
+                backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        }
+    });
+}
+
+function onAttendanceYearChange() {
+    // Can add logic here if needed
+}
+
+function applyAttendanceFilters() {
+    loadAttendanceData();
+}
+
+// Load Finance Data
+function loadFinance() {
+    const learnerId = getAdminLearnerFilter();
+    let financeUrl = '/api/finance';
+    if (isAdmin && learnerId) {
+        financeUrl += `?learner_id=${encodeURIComponent(learnerId)}`;
+    }
+    fetch(financeUrl)
+        .then(response => {
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            if (response.redirected || !contentType.includes('application/json')) {
+                throw new Error('Session expired. Please log in again.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            const annualFeeVal = Number(data.annualFee || 0);
+            const totalPaidVal = Number(data.totalPaid || 0);
+            const outstandingVal = Number(data.outstanding || 0);
+            
+            // Update year in header
+            const currentYear = data.currentYear || new Date().getFullYear();
+            document.getElementById('financeYear').textContent = currentYear;
+            
+            // Update summary cards
+            document.getElementById('annualFee').textContent = `R${annualFeeVal.toFixed(2)}`;
+            document.getElementById('totalPaid').textContent = `R${totalPaidVal.toFixed(2)}`;
+            document.getElementById('outstanding').textContent = `R${outstandingVal.toFixed(2)}`;
+            
+            // Update status badge
+            const statusEl = document.getElementById('financeStatus');
+            const isPaid = data.isPaid || false;
+            if (isPaid) {
+                statusEl.innerHTML = '<span class="badge bg-success">Paid</span>';
+            } else {
+                statusEl.innerHTML = '<span class="badge bg-danger">Outstanding</span>';
+            }
+            
+            // Update alert message
+            const alertEl = document.getElementById('financeAlert');
+            const statusTextEl = document.getElementById('financeStatusText');
+            const messageEl = document.getElementById('financeMessage');
+            
+            if (isPaid) {
+                alertEl.className = 'alert alert-success';
+                statusTextEl.textContent = `Payment Status for ${currentYear}: Paid`;
+                const overpaid = Math.abs(Number(data.balance || 0));
+                if (overpaid > 0) {
+                    messageEl.textContent = `School fees for ${currentYear} are fully paid. Overpayment: R${overpaid.toFixed(2)}`;
+                } else {
+                    messageEl.textContent = `School fees for ${currentYear} are fully paid. Thank you!`;
+                }
+            } else {
+                alertEl.className = 'alert alert-warning';
+                statusTextEl.textContent = `Payment Status for ${currentYear}: Outstanding`;
+                messageEl.textContent = `Outstanding balance for ${currentYear}: R${outstandingVal.toFixed(2)}. Annual fee: R${annualFeeVal.toFixed(2)}, Paid: R${totalPaidVal.toFixed(2)}`;
+            }
+            
+            // Update transactions table
+            const tbody = document.getElementById('financeTableBody');
+            tbody.innerHTML = '';
+            
+            const transactions = data.transactions || [];
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">No payment history found</td></tr>';
+                return;
+            }
+            
+            transactions.forEach(trans => {
+                const row = document.createElement('tr');
+                const date = trans.Date || 'N/A';
+                const debit = parseFloat(trans.Debit || 0);
+                const credit = parseFloat(trans.Credit || 0);
+                
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td>${trans.Description || 'N/A'}</td>
+                    <td class="${debit > 0 ? 'text-danger' : ''}">${debit > 0 ? `R${debit.toFixed(2)}` : '-'}</td>
+                    <td class="${credit > 0 ? 'text-success' : ''}">${credit > 0 ? `R${credit.toFixed(2)}` : '-'}</td>
+                    <td>${trans.Year || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading finance:', error);
+            if (String(error && error.message || '').toLowerCase().includes('session expired')) {
+                window.location.href = '/login';
+                return;
+            }
+            document.getElementById('financeTableBody').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>';
+            document.getElementById('financeAlert').className = 'alert alert-danger';
+            document.getElementById('financeStatusText').textContent = 'Error';
+            document.getElementById('financeMessage').textContent = 'Unable to load finance data. Please try again later.';
+        });
+}
+
+// Load data when tab is shown
+document.getElementById('academics-tab').addEventListener('shown.bs.tab', function () {
+    loadFilters();
+    // Always start on the filters screen when opening Academics
+    setAcademicsScreen('filters');
+});
+
+document.getElementById('disciplinary-tab').addEventListener('shown.bs.tab', function () {
+    loadDisciplinary();
+});
+
+document.getElementById('finance-tab').addEventListener('shown.bs.tab', function () {
+    loadFinance();
+});
+
+// Load academics on page load
+window.addEventListener('DOMContentLoaded', function() {
+    if (isAdmin) {
+        const adminInput = document.getElementById('adminLearnerFilter');
+        const attendanceInput = document.getElementById('attendanceLearnerFilter');
+        if (adminInput) {
+            adminInput.addEventListener('input', function() {
+                syncAdminLearnerFilters(adminInput.value);
+                updateAcademicsActiveFiltersLabel();
+            });
+        }
+        if (attendanceInput) {
+            attendanceInput.addEventListener('input', function() {
+                syncAdminLearnerFilters(attendanceInput.value);
+                updateAcademicsActiveFiltersLabel();
+            });
+        }
+    }
+    const academicsTab = document.getElementById('academics-tab');
+    if (academicsTab && !academicsTab.disabled) {
+        loadFilters();
+        setAcademicsScreen('filters');
+    }
+});
+</script>
+{% endblock %}

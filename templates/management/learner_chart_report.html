@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = false %}{% include "management/_report_frame.html" %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-l" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Records</div><div id="k-r" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Average %</div><div id="k-a" class="fs-5 fw-bold">-</div></div></div>
+</div>
+<div class="row"><div class="col-lg-7"><div class="chart-container bg-white rounded"><canvas id="chart-sub"></canvas></div></div><div class="col-lg-5"><div class="chart-container bg-white rounded"><canvas id="chart-band"></canvas></div></div></div>
+<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Average %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
+{% endblock %}
+{% block extra_js %}<script>
+let c1=null,c2=null;const reportKey="learner-chart-report";const f=["year","term","phase","grade","subject"];
+const p=()=>{const x=new URLSearchParams();f.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)x.set(k,v);});return x;};
+const fs=(id,v)=>{const e=document.getElementById(id),k=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(i=>{const o=document.createElement("option");o.value=i;o.textContent=i;e.appendChild(o);});e.value=k;};
+async function lf(){const r=await fetch(`/api/management-report-filters?${p()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);fs("f-subject",d.filters.subjects);}
+const PALETTE=["#0d6efd","#6610f2","#d63384","#fd7e14","#ffc107","#198754","#20c997","#0dcaf0"];function draw(id,t,l,rows,c){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(r=>r.label),datasets:[{label:l,data:(rows||[]).map(r=>Number(r.value||0)),backgroundColor:t==="doughnut"||t==="pie"?PALETTE.slice(0,(rows||[]).length):c,borderColor:t==="doughnut"||t==="pie"?PALETTE.slice(0,(rows||[]).length):c}]},options:{responsive:true,maintainAspectRatio:false}});}
+async function lr(){const x=p();x.set("report_key",reportKey);const r=await fetch(`/api/management-report?${x}`);const d=await r.json();const k=(d.reportData||{}).kpis||{};document.getElementById("k-l").textContent=k.learners??"-";document.getElementById("k-r").textContent=k.records??"-";document.getElementById("k-a").textContent=k.avgPercent!=null?`${k.avgPercent}%`:"-";
+const ch=(d.reportData||{}).charts||{};if(c1)c1.destroy();if(c2)c2.destroy();c1=draw("chart-sub","bar","Subject Averages",ch.subjectAverages||[],"rgba(13,202,240,0.8)");c2=draw("chart-band","doughnut","Achievement Bands",ch.achievementBands||[],"rgba(108,117,125,0.8)");
+const rows=((d.reportData||{}).tables||{}).subjectRows||[];document.getElementById("tbl").innerHTML=rows.length?rows.map(r=>`<tr><td>${r.label||""}</td><td>${r.value??""}</td><td>${r.passRate??""}</td></tr>`).join(""):'<tr><td colspan="3" class="text-muted">No data.</td></tr>';}
+["f-year","f-term","f-phase","f-grade","f-subject"].forEach(i=>document.getElementById(i).addEventListener("change",lf));document.getElementById("apply-filters").addEventListener("click",lr);(async()=>{await lf();await lr();})();
+</script>{% endblock %}

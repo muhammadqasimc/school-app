@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-chart-bar"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
+</div>
+
+<style>
+.staff-summary { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 8px; }
+.staff-pill { background: #fff; border: 1px solid #e7e7e7; padding: 6px 8px; font-size: 0.83rem; text-align: center; }
+.staff-filters { display: grid; grid-template-columns: repeat(8, minmax(90px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.staff-filters input { width: 100%; height: 30px; font-size: 0.8rem; }
+@media (max-width: 768px) {
+  .staff-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .staff-filters { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+</style>
+
+<div class="card">
+  <div class="card-body">
+    <h6 class="fw-semibold mb-2" id="spTitle">Educator Staff Profile</h6>
+    <div class="staff-summary">
+      <div class="staff-pill">Total Educators: <strong id="spTotal">0</strong></div>
+      <div class="staff-pill">Permanent / Temporary / Substitute: <strong id="spAppointments">0 / 0 / 0</strong></div>
+      <div class="staff-pill">Paid by State / SGB: <strong id="spRemuneration">0 / 0</strong></div>
+      <div class="staff-pill">Other / Unknown Pay: <strong id="spUnknownPay">0</strong></div>
+    </div>
+    <div class="staff-filters">
+      <input id="filter-edId" class="form-control form-control-sm" placeholder="ED ID">
+      <input id="filter-surname" class="form-control form-control-sm" placeholder="Surname">
+      <input id="filter-firstName" class="form-control form-control-sm" placeholder="First Name">
+      <input id="filter-role" class="form-control form-control-sm" placeholder="Role">
+      <input id="filter-age" class="form-control form-control-sm" placeholder="Age">
+      <input id="filter-appointment" class="form-control form-control-sm" placeholder="Appointment">
+      <input id="filter-remuneration" class="form-control form-control-sm" placeholder="Remuneration">
+      <input id="filter-status" class="form-control form-control-sm" placeholder="Status">
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>ED ID</th><th>Surname</th><th>First Name</th><th>Role</th><th>Age</th><th>Appointment</th><th>Remuneration</th><th>Status</th></tr></thead>
+        <tbody id="tbl-staff"><tr><td colspan="8" class="text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const reportKey = "{{ report.key }}";
+let staffRows = [];
+
+async function loadReport() {
+  const r = await fetch("/api/management-report?report_key=" + reportKey);
+  const data = await r.json();
+  if (data.error) { document.getElementById("spTotal").textContent = "Error"; return; }
+
+  const sp = data.staffProfile || {};
+  document.getElementById("spTitle").textContent = "Educator Staff Profile (Age as at " + (sp.referenceDate || "today") + ")";
+  const sum = sp.educators?.summary || {};
+  document.getElementById("spTotal").textContent = sum.total ?? 0;
+  document.getElementById("spAppointments").textContent = (sum.permanent ?? 0) + " / " + (sum.temporary ?? 0) + " / " + (sum.substitute ?? 0);
+  document.getElementById("spRemuneration").textContent = (sum.paidByState ?? 0) + " / " + (sum.paidBySGB ?? 0);
+  document.getElementById("spUnknownPay").textContent = sum.unknownPay ?? 0;
+
+  staffRows = sp.educators?.rows || [];
+  applyFilters();
+}
+
+function applyFilters() {
+  const cols = ["edId", "surname", "firstName", "role", "age", "appointment", "remuneration", "status"];
+  const filters = Object.fromEntries(cols.map(c => [c, (document.getElementById("filter-" + c)?.value || "").trim().toLowerCase()]));
+  const filtered = staffRows.filter(row =>
+    cols.every(c => {
+      if (!filters[c]) return true;
+      return String(row[c] ?? "").toLowerCase().includes(filters[c]);
+    })
+  );
+  const body = document.getElementById("tbl-staff");
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="8" class="text-muted">No matching records.</td></tr>';
+    return;
+  }
+  body.innerHTML = filtered.map(r =>
+    "<tr>" + cols.map(c => "<td>" + (r[c] ?? "") + "</td>").join("") + "</tr>"
+  ).join("");
+}
+
+["edId", "surname", "firstName", "role", "age", "appointment", "remuneration", "status"].forEach(c => {
+  const el = document.getElementById("filter-" + c);
+  if (el) el.addEventListener("input", applyFilters);
+});
+
+loadReport();
+</script>
+{% endblock %}

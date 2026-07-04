@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{% if model %}Edit model{% else %}New model{% endif %}{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">{% if model %}Edit {{ model.name }}{% else %}New model{% endif %}</h4>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+<div class="card-body">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="mb-3">
+    <label class="form-label">Name</label>
+    <input class="form-control" name="name" required value="{{ model.name if model else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Item type</label>
+    <select name="item_type" class="form-select">
+      {% for t in item_types %}
+      <option value="{{ t }}" {% if model and model.item_type == t %}selected{% elif not model and t=='asset' %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Category</label>
+    <select name="category_id" class="form-select">
+      <option value="">—</option>
+      {% for c in categories %}
+      <option value="{{ c.id }}" {% if model and model.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Manufacturer</label>
+    <input class="form-control" name="manufacturer" value="{{ model.manufacturer if model else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Description</label>
+    <textarea class="form-control" name="description" rows="2">{{ model.description if model else '' }}</textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Default location hint</label>
+    <input class="form-control" name="default_location" value="{{ model.default_location if model else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Low-stock threshold</label>
+    <input type="number" class="form-control" name="low_stock_threshold" min="0" value="{{ model.low_stock_threshold if model and model.low_stock_threshold is not none else '' }}" placeholder="for consumables & report">
+    <small class="text-muted">Used by the Low inventory report.</small>
+  </div>
+  <div class="mb-3 form-check">
+    <input type="checkbox" class="form-check-input" name="is_requestable" id="req" {% if model and model.is_requestable %}checked{% endif %}>
+    <label class="form-check-label" for="req">Staff can request this model / items marked requestable</label>
+  </div>
+  <button class="btn btn-primary">Save</button>
+  {% if model %}<a class="btn btn-link" href="{{ url_for('inventory_models_list') }}">Back</a>{% endif %}
+</form>
+</div>
+</div>
+
+{% if model %}
+<hr>
+<h5>Custom fields</h5>
+<p class="small text-muted">Values are stored per item; definitions apply to everything using this model.</p>
+<form method="post" action="{{ url_for('inventory_model_custom_field', mid=model.id) }}" class="row g-2 mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-md-3"><input class="form-control" name="field_key" placeholder="key_slug"></div>
+  <div class="col-md-3"><input class="form-control" name="field_label" placeholder="Label"></div>
+  <div class="col-md-2">
+    <select name="field_type" class="form-select">
+      <option value="text">text</option>
+      <option value="number">number</option>
+      <option value="bool">bool</option>
+      <option value="date">date</option>
+    </select>
+  </div>
+  <div class="col-md-2"><input type="number" class="form-control" name="sort_index" placeholder="sort" value="0"></div>
+  <div class="col-md-2">
+    <div class="form-check"><input type="checkbox" name="is_required" class="form-check-input" id="fcr"><label class="form-check-label" for="fcr">Required</label></div>
+    <button class="btn btn-secondary btn-sm w-100" type="submit">Add field</button>
+  </div>
+</form>
+<ul class="list-group mb-5">
+{% for cf in custom_fields %}
+  <li class="list-group-item">{{ cf.field_label }} <code>{{ cf.field_key }}</code> · {{ cf.field_type }} · sort {{ cf.sort_index }}</li>
+{% else %}
+  <li class="list-group-item text-muted">No custom fields.</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

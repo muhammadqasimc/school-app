@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-table"></i> {{ report.title }}</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Year</label>
+        <select id="f-year" class="form-select"><option value="">Latest Year</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Grade</label>
+        <select id="f-grade" class="form-select"><option value="">All Grades</option></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Term</label>
+        <select id="f-term" class="form-select"><option value="">All Terms (Full Year Avg)</option></select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small mb-1">Subject</label>
+        <select id="f-subject" class="form-select"><option value="">All Subjects</option></select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button id="apply-filters" class="btn btn-primary w-100">Generate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="small text-muted mb-2" id="summary-grades">Grades: 0</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead id="preview-head"></thead>
+        <tbody id="preview-body"><tr><td class="text-muted">Select filters and click Generate.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function params() {
+  const p = new URLSearchParams();
+  const year = (document.getElementById("f-year")?.value || "").trim();
+  const grade = (document.getElementById("f-grade")?.value || "").trim();
+  const term = (document.getElementById("f-term")?.value || "").trim();
+  const subject = (document.getElementById("f-subject")?.value || "").trim();
+  if (year) p.set("year", year);
+  if (grade) p.set("grade", grade);
+  if (term) p.set("term", term);
+  if (subject) p.set("subject", subject);
+  return p;
+}
+
+function refillSelect(id, values) {
+  const el = document.getElementById(id);
+  const keep = el.value;
+  while (el.options.length > 1) el.remove(1);
+  (values || []).forEach((value) => {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = String(value);
+    el.appendChild(option);
+  });
+  if ([...el.options].some((o) => o.value === keep)) {
+    el.value = keep;
+  }
+}
+
+function formatMark(value) {
+  if (value == null || value === "") return "-";
+  return `${Number(value).toFixed(2)}%`;
+}
+
+function formatDiffCell(value) {
+  if (value == null || value === "") return '<span class="text-muted">-</span>';
+  const num = Number(value);
+  const css = num > 0 ? "text-success fw-semibold" : (num < 0 ? "text-danger fw-semibold" : "text-muted");
+  const sign = num > 0 ? "+" : "";
+  return `<span class="${css}">${sign}${num.toFixed(2)}%</span>`;
+}
+
+async function loadFilters() {
+  const r = await fetch(`/api/management-average-academics-previous-year-comaparison/filters?${params().toString()}`);
+  const data = await r.json();
+  const f = data.filters || {};
+  refillSelect("f-year", f.years || []);
+  refillSelect("f-grade", f.grades || []);
+  refillSelect("f-term", f.terms || []);
+  refillSelect("f-subject", f.subjects || []);
+}
+
+function renderPreview(payload) {
+  const rows = payload.rows || [];
+  const summary = payload.summary || {};
+  const selectedTerm = String((payload.filters || {}).term || "").trim();
+  const currentColumnLabel = selectedTerm ? `Term ${selectedTerm}` : "Full Year Avg";
+  document.getElementById("summary-grades").textContent = `Grades: ${summary.grades ?? 0}`;
+
+  const headers = [
+    "Grade",
+    currentColumnLabel,
+    "PY",
+    "Difference vs PY",
+    "2PY",
+    "Difference vs 2PY",
+    "3PY",
+    "Difference vs 3PY",
+  ];
+  document.getElementById("preview-head").innerHTML = `<tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+
+  const body = document.getElementById("preview-body");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="${headers.length}" class="text-muted">No records found for selected filters.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((row) => `
+    <tr>
+      <td>${row.grade ?? ""}</td>
+      <td>${formatMark(row.term1)}</td>
+      <td>${formatMark(row.py)}</td>
+      <td>${formatDiffCell(row.diffPy)}</td>
+      <td>${formatMark(row.py2)}</td>
+      <td>${formatDiffCell(row.diffPy2)}</td>
+      <td>${formatMark(row.py3)}</td>
+      <td>${formatDiffCell(row.diffPy3)}</td>
+    </tr>
+  `).join("");
+}
+
+async function generatePreview() {
+  const r = await fetch(`/api/management-average-academics-previous-year-comaparison/preview?${params().toString()}`);
+  const data = await r.json();
+  renderPreview(data);
+}
+
+document.getElementById("f-year").addEventListener("change", loadFilters);
+document.getElementById("f-grade").addEventListener("change", async () => { await loadFilters(); await generatePreview(); });
+document.getElementById("f-term").addEventListener("change", async () => { await loadFilters(); await generatePreview(); });
+document.getElementById("f-subject").addEventListener("change", generatePreview);
+document.getElementById("apply-filters").addEventListener("click", generatePreview);
+
+(async () => {
+  await loadFilters();
+})();
+</script>
+{% endblock %}

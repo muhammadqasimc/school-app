@@ -1,0 +1,81 @@
+import importlib
+import secrets
+
+
+def _auth_client(app_mod, user):
+    app_mod.app.config["WTF_CSRF_ENABLED"] = False
+    client = app_mod.app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user.id)
+        sess["_fresh"] = True
+    return client
+
+
+def test_chat_routes_exist():
+    app_mod = importlib.import_module("app")
+    rules = {r.rule for r in app_mod.app.url_map.iter_rules()}
+    assert "/api/chat/threads" in rules
+    assert "/api/chat/candidates" in rules
+    assert "/api/chat/threads/<int:thread_id>/messages" in rules
+    assert "/api/chat/threads/<int:thread_id>/read" in rules
+    assert "/api/chat/messages/<int:message_id>/moderate" in rules
+    assert "/api/chat/attachments/<int:attachment_id>" in rules
+    assert "/parent/messages" in rules
+    assert "/management/chat" in rules
+    assert "/admin/chat" in rules
+
+
+def test_chat_models_exist():
+    app_mod = importlib.import_module("app")
+    assert hasattr(app_mod, "ChatThread")
+    assert hasattr(app_mod, "ChatParticipant")
+    assert hasattr(app_mod, "ChatMessage")
+    assert hasattr(app_mod, "ChatAttachment")
+    assert hasattr(app_mod, "ChatMessageReceipt")
+
+
+def test_chat_thread_lifecycle_smoke():
+    app_mod = importlib.import_module("app")
+    app = app_mod.app
+    with app.app_context():
+        app_mod.ensure_sqlite_schema()
+        suffix = secrets.token_hex(4)
+        u1 = app_mod.User(
+            username=f"chat_parent_{suffix}",
+            password_hash="x",
+            is_parent=True,
+            first_login=False,
+        )
+        u2 = app_mod.User(
+            username=f"chat_manager_{suffix}",
+            password_hash="x",
+            is_manager=True,
+            first_login=False,
+        )
+        app_mod.db.session.add_all([u1, u2])
+        app_mod.db.session.commit()
+        app_mod.db.session.add(app_mod.UserLearner(user_id=u1.id, learner_id="123"))
+        app_mod.db.session.commit()
+
+        client = _auth_client(app_mod, u1)
+        fd = {
+            "thread_type": "direct",
+            "participant_ids": str(u2.id),
+            "learner_id": "123",
+        }
+        resp = client.post("/api/chat/threads", data=fd)
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        payload = resp.get_json() or {}
+        thread_id = int(payload.get("thread", {}).get("id") or 0)
+        assert thread_id > 0
+
+        msg_resp = client.post(
+            f"/api/chat/threads/{thread_id}/messages",
+            data={"body": "Hello from automated test."},
+        )
+        assert msg_resp.status_code == 200, msg_resp.get_data(as_text=True)
+
+        list_resp = client.get("/api/chat/threads")
+        assert list_resp.status_code == 200
+        rows = (list_resp.get_json() or {}).get("threads") or []
+        assert any(int(r.get("id") or 0) == thread_id for r in rows)

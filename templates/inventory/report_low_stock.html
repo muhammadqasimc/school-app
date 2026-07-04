@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Low inventory{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0">Low inventory — consumables</h4>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <table class="table mb-0">
+    <thead><tr><th>Model</th><th>Qty on hand (sum bins)</th><th>Threshold</th></tr></thead>
+    <tbody>
+      {% for m, qty, thr in rows %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td><strong>{{ qty }}</strong></td>
+        <td>{{ thr }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="text-muted py-4 text-center">Nothing below threshold.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

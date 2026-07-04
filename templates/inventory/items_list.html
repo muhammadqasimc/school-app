@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Asset inventory — Items{% endblock %}
+{% block content %}
+<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+  {% include "inventory/_nav.html" %}
+  <h4 class="mb-0"><i class="fas fa-list"></i> Inventory items</h4>
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-md-3">
+    <select class="form-select" name="item_type" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for t in item_types %}
+      <option value="{{ t }}" {% if item_type_filter == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="status" onchange="this.form.submit()">
+      <option value="">All rollout states</option>
+      {% for s in ['deployed','ready_to_deploy','pending','out_for_repair','archived'] %}
+      <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s.replace('_',' ') }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-6">
+    <input class="form-control" name="q" value="{{ search }}" placeholder="Search tag, serial #, location, notes…">
+    <button type="submit" class="btn btn-outline-primary btn-sm mt-1">Apply search</button>
+  </div>
+</form>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead><tr><th>Tag</th><th>Serial</th><th>Type</th><th>Model</th><th>Status</th><th>Qty</th><th>Assigned</th><th>Location</th></tr></thead>
+      <tbody>
+      {% for it, mo, oc, assignee, lab in rows %}
+        <tr>
+          <td><a href="{{ url_for('inventory_item_detail', item_id=it.id) }}">{{ it.tag }}</a></td>
+          <td class="small text-muted">{{ it.serial_number or '—' }}</td>
+          <td>{{ mo.item_type }}</td>
+          <td>{{ mo.name }}</td>
+          <td><span class="badge bg-{{ 'success' if lab=='deployed' else 'secondary' }}">{{ lab.replace('_',' ') }}</span></td>
+          <td>{{ it.quantity_on_hand }}</td>
+          <td>{{ assignee.username if assignee else '—' }}</td>
+          <td class="small">{{ it.physical_location or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-muted text-center py-4">No items match your filters.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<a class="btn btn-primary mt-3" href="{{ url_for('inventory_item_new') }}">New item</a>
+{% endblock %}

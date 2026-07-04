@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Teacher/Staff Registration{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Teacher/Staff Sign-up</h4></div>
+  <div class="card-body">
+    <p class="text-muted">Enter your cellphone number and we will automatically find your staff profile.</p>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-2">
+        <label class="form-label">Cellphone Number</label>
+        <input class="form-control" name="phone" placeholder="0742408066 or +27742408066" required>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit">Verify Identity</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

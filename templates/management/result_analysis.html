@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<style>
+  .ra-wrap { background: #fff; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+  .ra-header-center { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .ra-phase-title { font-weight: 700; text-decoration: underline; text-transform: uppercase; margin: 1.25rem 0 .5rem; font-size: .95rem; }
+  .ra-table { font-size: .78rem; border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
+  .ra-table th, .ra-table td { border: 1px solid #000; padding: .28rem .35rem; text-align: center; vertical-align: middle; }
+  .ra-table th.sub-left, .ra-table td.sub-left { text-align: left; font-weight: 600; }
+  .ra-table thead tr:first-child th { font-weight: 700; }
+  .ra-table tbody tr.summary-row td { font-weight: 600; }
+  .ra-note { font-size: .75rem; color: #444; max-width: 900px; }
+  .ra-table-caption {
+    caption-side: top;
+    text-align: left;
+    font-size: .72rem;
+    font-weight: 600;
+    color: #222;
+    padding: .35rem .25rem .45rem;
+    line-height: 1.35;
+  }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff !important; }
+    .ra-wrap { box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+    .ra-table { font-size: 9pt; }
+  }
+</style>
+
+<div class="no-print d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">{{ report.title }}</h3>
+  <div class="d-flex gap-2 flex-wrap justify-content-end">
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="ra-print">Print / Save PDF</button>
+    <a class="btn btn-primary btn-sm" id="ra-down-pdf" href="#">Download PDF</a>
+    <a class="btn btn-success btn-sm" id="ra-down-xlsx" href="#">Export Excel</a>
+  </div>
+</div>
+
+<div class="no-print card mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Year</label>
+        <select id="f-year" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Term</label>
+        <select id="f-term" class="form-select form-select-sm"></select>
+      </div>
+      <div class="col-md-2">
+        <button type="button" id="apply" class="btn btn-primary btn-sm w-100">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="ra-print-root" class="ra-wrap">
+  <div id="ra-head">
+    <div class="ra-header-center" id="ra-school">…</div>
+    <div class="ra-header-center" id="ra-year">…</div>
+    <div class="ra-header-center" id="ra-term">…</div>
+    <div class="ra-header-center mb-2" style="font-size:1.05rem;">RESULT ANALYSIS</div>
+    <p class="ra-note mb-3" id="ra-footnote"></p>
+  </div>
+  <div id="ra-host"></div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+  const nfDec = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+  function qp(){
+    const p = new URLSearchParams();
+    const y = (document.getElementById('f-year')?.value || '').trim();
+    const t = (document.getElementById('f-term')?.value || '').trim();
+    if(y) p.set('year', y);
+    if(t) p.set('term', t);
+    return p;
+  }
+
+  function fmtCell(m){
+    if(!m || !m.count) return ['—','—','—'];
+    return [
+      nfDec.format(m.passPct ?? 0),
+      nfDec.format(m.passAt50Pct ?? 0),
+      nfDec.format(m.average ?? 0)
+    ];
+  }
+
+  function fmtSummaryTrip(v, suffix=''){
+    if(v === null || v === undefined || v === '') return '<td colspan="3">—</td>';
+    return `<td colspan="3">${nfDec.format(Number(v))}${suffix}</td>`;
+  }
+
+  function renderPhase(p){
+    const grades = p.grades || [];
+    const headTop = ['<th rowspan="2" class="sub-left">SUBJECT</th>']
+      .concat(grades.map(g => `<th colspan="3">Gr${g}</th>`)).join('');
+    const headSub = grades.flatMap(() => ['<th>Pass%</th>','<th>Pass% at 50%</th>','<th>Average</th>']).join('');
+
+    let body = (p.subjects || []).map(row => {
+      let tds = '';
+      for(const g of grades){
+        const trip = fmtCell(row.grades ? row.grades[g] : null);
+        tds += `<td>${trip[0]}</td><td>${trip[1]}</td><td>${trip[2]}</td>`;
+      }
+      return `<tr><td class="sub-left">${escapeHtml(row.subject || '')}</td>${tds}</tr>`;
+    }).join('');
+
+    const sum = p.summary || {};
+    function summaryRowForGrade(g){
+      const k = String(g);
+      return sum[k] || sum[g] || {};
+    }
+    function trip(getter, sfx){
+      return grades.map(g => fmtSummaryTrip(getter(summaryRowForGrade(g)), sfx)).join('');
+    }
+    function promotedDisplay(s){
+      const raw = s.numberPromoted ?? s.promoted;
+      if(raw !== null && raw !== undefined && raw !== '') return raw;
+      const a = s.assessed;
+      const f = s.failed;
+      if(a !== null && a !== undefined && f !== null && f !== undefined && a !== ''){
+        const n = Number(a) - Number(f);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    }
+
+    body += `<tr class="summary-row"><td class="sub-left">Total Number Assessed</td>${trip(s => s.assessed, '')}</tr>`;
+    body += `<tr class="summary-row"><td class="sub-left">Number Promoted</td>${trip(s => promotedDisplay(s), '')}</tr>`;
+    body += `<tr class="summary-row"><td class="sub-left">Number Failed</td>${trip(s => s.failed, '')}</tr>`;
+    body += `<tr class="summary-row"><td class="sub-left">Total pass%</td>${trip(s => (s.totalPassPct != null ? s.totalPassPct : null), '%')}</tr>`;
+    if(p.showProgressedRow){
+      body += `<tr class="summary-row"><td class="sub-left">Number of progressed</td>${trip(s => s.progressed, '')}</tr>`;
+    }
+
+    const capNote = p.passPctColumnNote
+      ? `<caption class="ra-table-caption">${escapeHtml(p.passPctColumnNote)}</caption>`
+      : '';
+    return `
+      <div class="ra-phase-title">${escapeHtml(p.title || '')}</div>
+      <div class="table-responsive">
+        <table class="ra-table">
+          ${capNote}
+          <thead><tr>${headTop}</tr><tr>${headSub}</tr></thead>
+          <tbody>${body || '<tr><td colspan="'+(1+grades.length*3)+'">No subject marks for this phase.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function refreshFilterDropdowns(){
+    const p = new URLSearchParams();
+    const yCur = (document.getElementById('f-year')?.value || '').trim();
+    if(yCur) p.set('year', yCur);
+    const res = await fetch('/api/management-report-filters?' + p.toString());
+    const f = res.ok ? await res.json().catch(() => ({})) : {};
+    const years = f?.filters?.years || [];
+    const terms = f?.filters?.terms || [];
+    const yEl = document.getElementById('f-year');
+    const tEl = document.getElementById('f-term');
+    const prevY = String(yEl.value || '');
+    const prevT = String(tEl.value || '');
+    yEl.innerHTML = years.map(v => `<option value="${escapeHtml(String(v))}">${escapeHtml(String(v))}</option>`).join('');
+    tEl.innerHTML = terms.map(v => `<option value="${escapeHtml(String(v))}">Term ${escapeHtml(String(v))}</option>`).join('');
+    if(years.some(v => String(v) === prevY)) yEl.value = prevY;
+    else if(years.length) yEl.value = String(years[0]);
+    if(terms.some(v => String(v) === prevT)) tEl.value = prevT;
+    else if(terms.length) tEl.value = String(terms[0]);
+  }
+
+  function wireDownloads(){
+    const q = qp().toString();
+    const pdf = document.getElementById('ra-down-pdf');
+    const xlsx = document.getElementById('ra-down-xlsx');
+    pdf.href = `/api/management-result-analysis/pdf${q ? '?'+q : ''}`;
+    xlsx.href = `/api/management-result-analysis/xlsx${q ? '?'+q : ''}`;
+  }
+
+  async function load(){
+    const res = await fetch(`/api/management-result-analysis?${qp().toString()}`);
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      document.getElementById('ra-host').innerHTML = `<p class="text-danger">${escapeHtml(err.error || 'Could not load report.')}</p>`;
+      return;
+    }
+    const d = await res.json();
+    const meta = d.meta || {};
+    document.getElementById('ra-school').textContent = meta.schoolName || 'School';
+    document.getElementById('ra-year').textContent = meta.year || '';
+    document.getElementById('ra-term').textContent = meta.term ? ('TERM ' + meta.term) : '';
+    document.getElementById('ra-footnote').textContent = meta.passThresholdNote || '';
+    document.getElementById('ra-host').innerHTML = (d.phases || []).map(renderPhase).join('') || '<p class="text-muted">No data.</p>';
+    wireDownloads();
+  }
+
+  document.getElementById('apply').addEventListener('click', load);
+  document.getElementById('ra-print').addEventListener('click', () => window.print());
+  document.getElementById('f-year').addEventListener('change', async () => {
+    await refreshFilterDropdowns();
+    wireDownloads();
+  });
+  document.getElementById('f-term').addEventListener('change', wireDownloads);
+
+  (async function init(){
+    await refreshFilterDropdowns();
+    wireDownloads();
+    await load();
+  })();
+})();
+</script>
+{% endblock %}
