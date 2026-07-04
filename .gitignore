@@ -51,6 +51,6 @@ Thumbs.db
 ngrok.exe
 ngrok
 
-# MDB files (uncomment if you don't want to track them)
-# *.mdb
-# *.accdb
+# MDB files
+*.mdb
+*.accdb
