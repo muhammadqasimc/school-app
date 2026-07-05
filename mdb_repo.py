@@ -12,7 +12,7 @@ import re
 import sqlite3
 import subprocess
 import threading
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -332,7 +332,7 @@ def _parse_where_conditions(sql: str, params: tuple) -> list[tuple[str, str, Any
 
         # Try col IN (?, ?)
         m_in = re.match(
-            r"(?is)^(?:CSTR\s*\(\s*)?\[?(\w+)\]?(?:\s*\))?\s+IN\s+\(([?,?\s]+)\)$", stripped
+            r"(?is)^(?:CSTR\s*\()?\s*\[?(\w+)\]?(?:\s*\))?\s+IN\s+\(([?,?\s]+)\)$", stripped
         )
         if m_in:
             col = m_in.group(1)
@@ -341,8 +341,32 @@ def _parse_where_conditions(sql: str, params: tuple) -> list[tuple[str, str, Any
             param_idx += ph_count
             continue
 
-        # Unrecognized -> return empty to indicate can't filter at this level
-        return []
+        # Try col BETWEEN ? AND ?
+        m_between = re.match(
+            r"(?is)^\[?(\w+)\]?\s+BETWEEN\s+\?\s+AND\s+\?$", stripped
+        )
+        if m_between:
+            col = m_between.group(1)
+            conditions.append((col, "BETWEEN", param_idx, param_idx + 1))
+            param_idx += 2
+            continue
+
+        # Try col = ? OR col2 = ? (simple OR of = conditions)
+        m_or = re.match(
+            r"(?is)^\[?(\w+)\]?\s*=\s*\?\s+OR\s+\[?(\w+)\]?\s*=\s*\?$", stripped
+        )
+        if m_or:
+            col1, col2 = m_or.group(1), m_or.group(2)
+            conditions.append((col1, "OR_EQ", param_idx, col2))
+            param_idx += 2
+            continue
+
+        # Unrecognized -> log warning and skip, don't abort all filtering
+        logger.warning(
+            "Unrecognized WHERE condition pattern, skipping: %s",
+            part[:100],
+        )
+        continue
 
     return conditions
 
@@ -439,7 +463,7 @@ def _match_value(val: Any, param: Any) -> bool:
 
 
 def _apply_conditions(row: dict, conditions: list, params: tuple) -> bool:
-    for col, op, data, _ in conditions:
+    for col, op, data, extra in conditions:
         val = _value_from_row(row, col)
 
         if op == "=":
@@ -462,12 +486,10 @@ def _apply_conditions(row: dict, conditions: list, params: tuple) -> bool:
 
         elif op == "IN":
             count = data
-            start_idx = 0
-            # Find the right place in params
-            # IN handler - we look for match against any of the params
+            start_idx = extra  # Use stored param_idx
             val_str = str(val or "")
-            for i in range(len(params)):
-                if str(params[i] or "") == val_str:
+            for i in range(start_idx, start_idx + count):
+                if i < len(params) and str(params[i] or "") == val_str:
                     return True
             return False
 
@@ -484,6 +506,30 @@ def _apply_conditions(row: dict, conditions: list, params: tuple) -> bool:
         elif op == "NOT_EMPTY":
             if val is not None and str(val).strip():
                 continue
+            return False
+
+        elif op == "BETWEEN":
+            start_idx = data
+            end_idx = extra
+            if start_idx < len(params) and end_idx < len(params):
+                lo = params[start_idx]
+                hi = params[end_idx]
+                if val is not None and lo is not None and hi is not None:
+                    try:
+                        if float(lo) <= float(val) <= float(hi):
+                            continue
+                    except (ValueError, TypeError):
+                        if str(lo) <= str(val) <= str(hi):
+                            continue
+            return False
+
+        elif op == "OR_EQ":
+            idx1 = data
+            col2 = extra
+            val2 = _value_from_row(row, col2)
+            if idx1 < len(params) and idx1 + 1 < len(params):
+                if _match_value(val, params[idx1]) or _match_value(val2, params[idx1 + 1]):
+                    continue
             return False
 
         else:
@@ -541,8 +587,6 @@ def _execute_join_query(mdb_path: str, sql: str, params: tuple, tables_data: dic
                         new_result.append(merged)
                         matched = True
                         break
-                if matched:
-                    break
             if not matched and is_left:
                 new_result.append(dict(mr))
 
@@ -709,19 +753,27 @@ class MDBRepository:
 
     def __init__(self, mdb_path: str):
         self.mdb_path = mdb_path
-        self._cache: dict[str, list[dict]] = {}
+        self._cache: OrderedDict[str, list[dict]] = OrderedDict()
         self._cache_lock = threading.RLock()
+        self._cache_max_size = 20
 
     def _load_table(self, table_name: str) -> list[dict]:
         with self._cache_lock:
             if table_name not in self._cache:
                 self._cache[table_name] = _mdb_export_json(self.mdb_path, table_name)
+            else:
+                self._cache.move_to_end(table_name)  # LRU: mark as recently used
+            self._evict_cache_if_needed()
             return self._cache[table_name]
+
+    def _evict_cache_if_needed(self):
+        while len(self._cache) > self._cache_max_size:
+            self._cache.popitem(last=False)  # Remove oldest (first) item
 
     def _rows(self, sql: str, params: dict[str, Any] | None = None) -> list[dict]:
         pg_sql = str(sql)
         pg_sql = re.sub(r'"([^"]+)"', r'[\1]', pg_sql)
-        pg_sql = re.sub(r':\w+', '?', pg_sql)
+        pg_sql = re.sub(r"('(?:[^'\\]|\\.)*')|:\w+", lambda m: m.group(1) if m.group(1) else '?', pg_sql)
         param_list = list(params.values()) if params else []
         return self.execute_query(pg_sql, tuple(param_list))
 
