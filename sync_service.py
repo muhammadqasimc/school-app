@@ -343,21 +343,28 @@ class SyncService:
             ).mappings().all()
         return [dict(r) for r in rows]
 
-    def _upsert_pg(self, cfg: TableSyncConfig, row: dict) -> None:
+    def _upsert_pg_batch(self, cfg: TableSyncConfig, rows: list[dict]) -> None:
+        """Bulk upsert using INSERT ... ON CONFLICT DO UPDATE in batches of 500."""
+        if not rows:
+            return
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
         table = self._get_pg_table(cfg.table_name)
         pk = cfg.primary_key
-        up = cfg.updated_at_col
-        incoming_ts = as_utc(row.get(up)) or datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+        batch_size = 500
         with self.engine.begin() as conn:
-            existing = conn.execute(select(table.c[up]).where(table.c[pk] == row.get(pk))).first()
-            if not existing:
-                conn.execute(insert(table).values({c: row.get(c) for c in cfg.columns}))
-                return
-            current_ts = as_utc(existing[0]) or datetime(1970, 1, 1, tzinfo=timezone.utc)
-            if incoming_ts >= current_ts:
-                conn.execute(
-                    update(table).where(table.c[pk] == row.get(pk)).values({c: row.get(c) for c in cfg.columns if c != pk})
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i : i + batch_size]
+                stmt = pg_insert(table).values(
+                    {c: row.get(c) for c in cfg.columns} for row in batch
                 )
+                update_dict = {c: stmt.excluded[c] for c in cfg.columns if c != pk}
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[pk],
+                    set_=update_dict,
+                )
+                conn.execute(stmt)
 
     def _upsert_mdb(self, cfg: TableSyncConfig, row: dict) -> None:
         def _op():
@@ -412,8 +419,9 @@ class SyncService:
         m2p_watermark = self._get_last_sync(m2p_key)
         m2p_now = utcnow()
         try:
-            for row in self._fetch_mdb_delta(cfg, m2p_watermark):
-                self._upsert_pg(cfg, row)
+            rows = self._fetch_mdb_delta(cfg, m2p_watermark)
+            if rows:
+                self._upsert_pg_batch(cfg, rows)
         except pyodbc.Error as exc:
             msg = str(exc or "").lower()
             if "too few parameters" in msg:
@@ -499,11 +507,37 @@ class SyncService:
     def _ensure_pg_table_exists(self, cfg: TableSyncConfig, columns: list[str], rows: list[dict]) -> None:
         if inspect(self.engine).has_table(cfg.table_name):
             return
-        sample_limit = 200
+        # Sample rows from different parts of the data to improve type inference
+        # (avoids fragility of sampling only the first N rows)
+        n = len(rows) if rows else 0
+        sample_limit = min(1000, n)
         col_samples: dict[str, list[Any]] = {c: [] for c in columns}
-        for row in (rows or [])[:sample_limit]:
-            for c in columns:
-                col_samples[c].append(row.get(c))
+        if n == 0:
+            # No rows at all — fall back to String for everything
+            pass
+        elif n <= sample_limit:
+            # Small dataset: use all rows
+            for row in rows:
+                for c in columns:
+                    col_samples[c].append(row.get(c))
+        else:
+            # Sample from beginning, middle, and end
+            third = n // 3
+            indices = set()
+            # First third
+            indices.update(range(0, min(third, 400)))
+            # Middle third
+            mid_start = max(third, n - 2 * third)
+            mid_end = min(2 * third, n)
+            indices.update(range(mid_start, mid_end))
+            # Last third
+            indices.update(range(max(2 * third, n - 400), n))
+            # Cap total samples
+            indices = sorted(indices)[:1000]
+            for i in indices:
+                row = rows[i]
+                for c in columns:
+                    col_samples[c].append(row.get(c))
         md = MetaData()
         table_cols = []
         for col_name in columns:
