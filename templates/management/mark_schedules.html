@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ report.title }}{% endblock %}
+{% block extra_css %}<link href="{{ url_for('static', filename='css/management-reports.css') }}" rel="stylesheet">{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h3 class="mb-0"><i class="fas fa-table"></i> {{ report.title }}</h3>
   <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back to Management Home</a>
 </div>
 
-<div class="card mb-3">
-  <div class="card-header">
+<div class="card mb-3 mgt-filter-card">
+  <div class="card-header card-header-accent-primary">
     <div class="row g-2">
       <div class="col-md-2">
         <label class="form-label small mb-1">Grade</label>
@@ -41,13 +42,13 @@
 </div>
 
 <div class="row g-3 mb-3">
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Passed</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Not Passed</div><div id="k-np" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Average %</div><div id="k-avg" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-success"><div class="kpi-label">Passed</div><div id="k-pass" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-danger"><div class="kpi-label">Not Passed</div><div id="k-np" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-info"><div class="kpi-label">Average %</div><div id="k-avg" class="kpi-value">-</div></div></div>
 </div>
 
-<div class="card">
+<div class="card report-card-accent-primary">
   <div class="card-body">
     <div class="d-flex justify-content-end mb-2">
       <button id="download-pdf" class="btn btn-outline-secondary btn-sm">Download PDF</button>
@@ -61,8 +62,8 @@
   </div>
 </div>
 
-<div class="card mt-3">
-  <div class="card-header d-flex justify-content-between align-items-center">
+<div class="card mt-3 report-card-accent-primary">
+  <div class="card-header card-header-accent-primary d-flex justify-content-between align-items-center">
     <div>
       <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Insights</h5>
       <small class="opacity-75">Visual analytics based on the current preview selection.</small>
@@ -75,57 +76,57 @@
     <div id="insights-content" class="d-none">
       <div class="row g-3 mb-3">
         <div class="col-md-3 col-sm-6">
-          <div class="border rounded p-3 h-100 bg-light">
-            <div class="small text-muted">Pass Rate</div>
-            <div id="i-pass-rate" class="fs-5 fw-bold">-</div>
+          <div class="kpi-card kpi-card-success">
+            <div class="kpi-label">Pass Rate</div>
+            <div id="i-pass-rate" class="kpi-value">-</div>
           </div>
         </div>
         <div class="col-md-3 col-sm-6">
-          <div class="border rounded p-3 h-100 bg-light">
-            <div class="small text-muted">High Performers (>=70%)</div>
-            <div id="i-high-perf" class="fs-5 fw-bold">-</div>
+          <div class="kpi-card kpi-card-primary">
+            <div class="kpi-label">High Performers (>=70%)</div>
+            <div id="i-high-perf" class="kpi-value">-</div>
           </div>
         </div>
         <div class="col-md-3 col-sm-6">
-          <div class="border rounded p-3 h-100 bg-light">
-            <div class="small text-muted">At Risk (&lt;50%)</div>
-            <div id="i-at-risk" class="fs-5 fw-bold">-</div>
+          <div class="kpi-card kpi-card-danger">
+            <div class="kpi-label">At Risk (&lt;50%)</div>
+            <div id="i-at-risk" class="kpi-value">-</div>
           </div>
         </div>
         <div class="col-md-3 col-sm-6">
-          <div class="border rounded p-3 h-100 bg-light">
-            <div class="small text-muted">Avg Absence Days</div>
-            <div id="i-absent-avg" class="fs-5 fw-bold">-</div>
+          <div class="kpi-card kpi-card-warning">
+            <div class="kpi-label">Avg Absence Days</div>
+            <div id="i-absent-avg" class="kpi-value">-</div>
           </div>
         </div>
       </div>
       <div class="row g-3">
         <div class="col-lg-4">
-          <div class="border rounded p-3 h-100">
+          <div class="mgt-chart-container mgt-chart-container-success">
             <div class="fw-semibold small text-muted mb-2">Pass vs Not Pass</div>
             <div style="height: 260px;"><canvas id="chart-pass-split"></canvas></div>
           </div>
         </div>
         <div class="col-lg-4">
-          <div class="border rounded p-3 h-100">
+          <div class="mgt-chart-container mgt-chart-container-info">
             <div class="fw-semibold small text-muted mb-2">Gender Mix</div>
             <div style="height: 260px;"><canvas id="chart-gender-mix"></canvas></div>
           </div>
         </div>
         <div class="col-lg-4">
-          <div class="border rounded p-3 h-100">
+          <div class="mgt-chart-container mgt-chart-container-purple">
             <div class="fw-semibold small text-muted mb-2">Mark Bands</div>
             <div style="height: 260px;"><canvas id="chart-mark-bands"></canvas></div>
           </div>
         </div>
         <div class="col-lg-6">
-          <div class="border rounded p-3 h-100">
+          <div class="mgt-chart-container mgt-chart-container-info">
             <div class="fw-semibold small text-muted mb-2">Average Subject Trend</div>
             <div style="height: 300px;"><canvas id="chart-subject-trend"></canvas></div>
           </div>
         </div>
         <div class="col-lg-6">
-          <div class="border rounded p-3 h-100">
+          <div class="mgt-chart-container mgt-chart-container-success">
             <div class="fw-semibold small text-muted mb-2">Subject Performance Snapshot</div>
             <div style="height: 300px;"><canvas id="chart-subject-bars"></canvas></div>
           </div>

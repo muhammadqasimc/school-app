@@ -2,6 +2,7 @@
 {% block title %}Management Reports{% endblock %}
 
 {% block extra_css %}
+<link href="{{ url_for('static', filename='css/management-reports.css') }}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -9,7 +10,7 @@
   <h3 class="mb-0"><i class="fas fa-chart-line"></i> Management Reports</h3>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm report-card-accent-primary">
   <div class="card-header">
     <h5 class="mb-0">Management Reports</h5>
   </div>
@@ -18,7 +19,7 @@
       {% for report in reports %}
       <div class="col">
         <a class="text-decoration-none" href="{{ url_for('management_report', report_key=report.key) }}">
-          <div class="management-tile">
+          <div class="mgt-tile">
             <i class="fas fa-chart-line tile-icon"></i>
             <h6 class="mb-0 text-dark">{{ report.title }}</h6>
           </div>

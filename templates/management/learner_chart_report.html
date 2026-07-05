@@ -3,12 +3,12 @@
 {% block content %}
 {% set disable_subject_filter = false %}{% include "management/_report_frame.html" %}
 <div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-l" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Records</div><div id="k-r" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Average %</div><div id="k-a" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-l" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Records</div><div id="k-r" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Average %</div><div id="k-a" class="kpi-value">-</div></div></div>
 </div>
-<div class="row"><div class="col-lg-7"><div class="chart-container bg-white rounded"><canvas id="chart-sub"></canvas></div></div><div class="col-lg-5"><div class="chart-container bg-white rounded"><canvas id="chart-band"></canvas></div></div></div>
-<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Average %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
+<div class="row"><div class="col-lg-7"><div class="mgt-chart-container"><canvas id="chart-sub"></canvas></div></div><div class="col-lg-5"><div class="mgt-chart-container"><canvas id="chart-band"></canvas></div></div></div>
+<div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Average %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
 {% endblock %}
 {% block extra_js %}<script>
 let c1=null,c2=null;const reportKey="learner-chart-report";const f=["year","term","phase","grade","subject"];

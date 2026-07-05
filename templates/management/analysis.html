@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ report.title }}{% endblock %}
+{% block extra_css %}<link href="{{ url_for('static', filename='css/management-reports.css') }}" rel="stylesheet">{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h3 class="mb-0">{{ report.title }}</h3>
   <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a>
 </div>
-<div class="card mb-3"><div class="card-body">
+<div class="card mb-3 mgt-filter-card"><div class="card-body card-header-accent-primary">
   <div class="row g-2">
     <div class="col-md-2"><select id="f-year" class="form-select form-select-sm"></select></div>
     <div class="col-md-2"><select id="f-term" class="form-select form-select-sm"></select></div>
@@ -28,7 +29,7 @@ async function load(){
   const d = await (await fetch(`/api/management-analysis?${qp().toString()}`)).json();
   document.getElementById("meta").textContent=`Year ${d.meta?.year||"-"} Term ${d.meta?.term||"-"}`;
   const host=document.getElementById("host");
-  host.innerHTML=(d.blocks||[]).map(b=>`<div class="card mb-3"><div class="card-header fw-semibold">${b.subject||""} <span class="text-muted small">${b.gradeLabel||""}</span></div><div class="table-responsive"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Term</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>Total</th><th>Avg%</th><th>Absent</th><th>Meet</th><th>Not Meet</th><th>% Meet</th></tr></thead><tbody>${(b.rows||[]).map(bandsRow).join("")}</tbody></table></div></div>`).join("") || '<div class="text-muted">No data.</div>';
+  host.innerHTML=(d.blocks||[]).map(b=>`<div class="card mb-3 report-card-accent-primary"><div class="card-header card-header-accent-primary fw-semibold">${b.subject||""} <span class="text-muted small">${b.gradeLabel||""}</span></div><div class="table-responsive"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Term</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th><th>Total</th><th>Avg%</th><th>Absent</th><th>Meet</th><th>Not Meet</th><th>% Meet</th></tr></thead><tbody>${(b.rows||[]).map(bandsRow).join("")}</tbody></table></div></div>`).join("") || '<div class="text-muted">No data.</div>';
 }
 document.getElementById("apply").addEventListener("click", load); load();
 </script>

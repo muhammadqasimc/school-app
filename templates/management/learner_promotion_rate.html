@@ -4,12 +4,12 @@
 {% set disable_subject_filter = true %}{% include "management/_report_frame.html" %}
 <p class="small text-muted mb-2">Subject filter is disabled; promotion metrics are calculated at learner level.</p>
 <div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Eligible Learners</div><div id="k-e" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Promoted Learners</div><div id="k-p" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Promotion Rate</div><div id="k-r" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-purple"><div class="kpi-label">Eligible Learners</div><div id="k-e" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-purple"><div class="kpi-label">Promoted Learners</div><div id="k-p" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-purple"><div class="kpi-label">Promotion Rate</div><div id="k-r" class="kpi-value">-</div></div></div>
 </div>
-<div class="row"><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-trend"></canvas></div></div><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-grade"></canvas></div></div></div>
-<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Grade</th><th>Learners</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
+<div class="row"><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-trend"></canvas></div></div><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-grade"></canvas></div></div></div>
+<div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Grade</th><th>Learners</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
 {% endblock %}
 {% block extra_js %}<script>
 let c1=null,c2=null;const reportKey="learner-promotion-rate";const f=["year","term","phase","grade"];

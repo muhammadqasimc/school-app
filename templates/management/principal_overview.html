@@ -3,15 +3,15 @@
 {% block content %}
 {% set disable_subject_filter = false %}
 {% include "management/_report_frame.html" %}
-<div class="alert alert-info py-2">Principal highlight: <span id="principal-highlight">Loading...</span></div>
+<div class="alert alert-info alert-accent-info py-2">Principal highlight: <span id="principal-highlight">Loading...</span></div>
 <div class="row g-3 mb-3">
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Records</div><div id="k-records" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Attendance Rate</div><div id="k-attendance" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Pass Rate</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Records</div><div id="k-records" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Attendance Rate</div><div id="k-attendance" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Pass Rate</div><div id="k-pass" class="kpi-value">-</div></div></div>
 </div>
-<div class="row"><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-phase"></canvas></div></div><div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-enrol"></canvas></div></div></div>
-<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Avg %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl-principal"></tbody></table></div></div>
+<div class="row"><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-phase"></canvas></div></div><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-enrol"></canvas></div></div></div>
+<div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Avg %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl-principal"></tbody></table></div></div>
 {% endblock %}
 {% block extra_js %}<script>
 const reportKey="principal-overview";let a=null,b=null;const ids=["year","term","phase","grade","subject"];

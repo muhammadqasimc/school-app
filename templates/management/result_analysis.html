@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ report.title }}{% endblock %}
+{% block extra_css %}<link href="{{ url_for('static', filename='css/management-reports.css') }}" rel="stylesheet">{% endblock %}
 {% block content %}
 <style>
   .ra-wrap { padding: 1.25rem; }
@@ -23,15 +24,15 @@
 <div class="no-print d-flex justify-content-between align-items-center mb-3">
   <h3 class="mb-0">{{ report.title }}</h3>
   <div class="d-flex gap-2 flex-wrap justify-content-end">
-    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_dashboard') }}">Back</a>
+    <a class="btn btn-outline-secondary btn-sm me-1" href="{{ url_for('management_dashboard') }}">Back</a>
     <button type="button" class="btn btn-outline-secondary btn-sm" id="ra-print">Print / Save PDF</button>
     <a class="btn btn-primary btn-sm" id="ra-down-pdf" href="#">Download PDF</a>
     <a class="btn btn-success btn-sm" id="ra-down-xlsx" href="#">Export Excel</a>
   </div>
 </div>
 
-<div class="no-print card mb-3">
-  <div class="card-body py-2">
+<div class="no-print card mb-3 mgt-filter-card">
+  <div class="card-body py-2 card-header-accent-primary">
     <div class="row g-2 align-items-end">
       <div class="col-md-2">
         <label class="form-label small mb-0">Year</label>

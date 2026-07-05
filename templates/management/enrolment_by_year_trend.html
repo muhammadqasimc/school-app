@@ -4,12 +4,12 @@
 {% set disable_subject_filter = true %}{% include "management/_report_frame.html" %}
 <p class="small text-muted mb-2">Subject filter is disabled; enrolment trend is calculated from whole learner cohorts.</p>
 <div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Years Tracked</div><div id="k-y" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Latest Enrolment</div><div id="k-e" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-l" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-indigo"><div class="kpi-label">Years Tracked</div><div id="k-y" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-indigo"><div class="kpi-label">Latest Enrolment</div><div id="k-e" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-l" class="kpi-value">-</div></div></div>
 </div>
-<div class="row"><div class="col-lg-8"><div class="chart-container bg-white rounded"><canvas id="chart-enrol"></canvas></div></div><div class="col-lg-4"><div class="chart-container bg-white rounded"><canvas id="chart-phase"></canvas></div></div></div>
-<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Year</th><th>Learners</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
+<div class="row"><div class="col-lg-8"><div class="mgt-chart-container"><canvas id="chart-enrol"></canvas></div></div><div class="col-lg-4"><div class="mgt-chart-container"><canvas id="chart-phase"></canvas></div></div></div>
+<div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Year</th><th>Learners</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
 {% endblock %}
 {% block extra_js %}<script>
 let c1=null,c2=null;const reportKey="enrolment-by-year-trend";const f=["year","term","phase","grade"];

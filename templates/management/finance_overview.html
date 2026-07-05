@@ -6,16 +6,16 @@
 
 <!-- KPI Summary Cards -->
 <div class="row g-3 mb-3">
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Active Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Expected Fees</div><div id="k-expected" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Credits (Paid)</div><div id="k-credits" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Outstanding</div><div id="k-outstanding" class="fs-5 fw-bold text-danger">-</div></div></div>
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">High-Risk Families</div><div id="k-highrisk" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-2 col-6"><div class="border rounded p-3 bg-white"><div class="small text-muted">Fee Recovery</div><div id="k-recovery" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Active Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-success"><div class="kpi-label">Expected Fees</div><div id="k-expected" class="kpi-value">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-success"><div class="kpi-label">Credits (Paid)</div><div id="k-credits" class="kpi-value">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-danger"><div class="kpi-label">Outstanding</div><div id="k-outstanding" class="kpi-value">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-danger"><div class="kpi-label">High-Risk Families</div><div id="k-highrisk" class="kpi-value">-</div></div></div>
+  <div class="col-md-2 col-6"><div class="kpi-card kpi-card-info"><div class="kpi-label">Fee Recovery</div><div id="k-recovery" class="kpi-value">-</div></div></div>
 </div>
 
 <!-- Fee Schedule + Chart -->
-<div class="card mb-3">
+<div class="card report-card-accent-primary mb-3">
   <div class="card-body">
     <div class="row">
       <div class="col-lg-4">
@@ -29,14 +29,14 @@
       </div>
       <div class="col-lg-8">
         <h6 class="fw-semibold mb-2">Collection by Grade</h6>
-        <div class="chart-container bg-white rounded" style="height:300px"><canvas id="chart-fee-grade"></canvas></div>
+        <div class="mgt-chart-container" style="height:300px"><canvas id="chart-fee-grade"></canvas></div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Grade Completion -->
-<div class="card mb-3">
+<div class="card report-card-accent-primary mb-3">
   <div class="card-body">
     <h6 class="fw-semibold mb-2">Grade Completion (% Fully Paid, % Fee Recovery)</h6>
     <div class="table-responsive">
@@ -49,7 +49,7 @@
 </div>
 
 <!-- High-Risk Non-Payers -->
-<div class="card mb-3">
+<div class="card report-card-accent-danger mb-3">
   <div class="card-body">
     <h6 class="fw-semibold mb-2">High-Risk Non-Payers (Parent / Guardian, Learner, Grade)</h6>
     <div class="table-responsive">
@@ -64,7 +64,7 @@
 <!-- Exemptions & Discounts -->
 <div class="row g-3 mb-3">
   <div class="col-lg-6">
-    <div class="card h-100">
+    <div class="card report-card-accent-info h-100">
       <div class="card-body">
         <h6 class="fw-semibold mb-2">Exemption Lines</h6>
         <div class="table-responsive" style="max-height:300px">
@@ -77,7 +77,7 @@
     </div>
   </div>
   <div class="col-lg-6">
-    <div class="card h-100">
+    <div class="card report-card-accent-info h-100">
       <div class="card-body">
         <h6 class="fw-semibold mb-2">Discounts & Journal Lines</h6>
         <div class="table-responsive" style="max-height:300px">

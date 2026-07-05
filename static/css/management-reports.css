@@ -1,0 +1,254 @@
+/* ============================================================
+   Management Reports - Color Coded Cards & Report Components
+   Color system: Blue (academic), Green (finance), Amber (attendance),
+   Red (risk/critical), Teal (general), Purple (promotion/staff)
+   ============================================================ */
+
+/* ===== KPI Cards ===== */
+.kpi-card {
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+}
+.kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+.kpi-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.2;
+}
+.kpi-sub {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.125rem;
+}
+
+/* KPI Card Color Variants - left strip + value color */
+.kpi-card-primary::before { background: #3b82f6; }
+.kpi-card-primary .kpi-value { color: #2563eb; }
+.kpi-card-success::before { background: #10b981; }
+.kpi-card-success .kpi-value { color: #059669; }
+.kpi-card-warning::before { background: #f59e0b; }
+.kpi-card-warning .kpi-value { color: #d97706; }
+.kpi-card-danger::before { background: #ef4444; }
+.kpi-card-danger .kpi-value { color: #dc2626; }
+.kpi-card-info::before { background: #06b6d4; }
+.kpi-card-info .kpi-value { color: #0891b2; }
+.kpi-card-purple::before { background: #8b5cf6; }
+.kpi-card-purple .kpi-value { color: #7c3aed; }
+.kpi-card-pink::before { background: #ec4899; }
+.kpi-card-pink .kpi-value { color: #db2777; }
+.kpi-card-indigo::before { background: #6366f1; }
+.kpi-card-indigo .kpi-value { color: #4f46e5; }
+
+/* ===== Report Card ===== */
+.report-card {
+  background: #fff;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.report-card-header {
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: #111827;
+  background: #f9fafb;
+}
+.report-card-body {
+  padding: 1.25rem;
+}
+/* Top border accent for report card */
+.report-card-accent {
+  border-top: 3px solid transparent;
+}
+.report-card-accent-primary { border-top-color: #3b82f6; }
+.report-card-accent-success { border-top-color: #10b981; }
+.report-card-accent-warning { border-top-color: #f59e0b; }
+.report-card-accent-danger { border-top-color: #ef4444; }
+.report-card-accent-info { border-top-color: #06b6d4; }
+.report-card-accent-purple { border-top-color: #8b5cf6; }
+
+/* ===== Chart Container ===== */
+.mgt-chart-container {
+  background: #fff;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-top: 3px solid #3b82f6;
+}
+.mgt-chart-container-success { border-top-color: #10b981; }
+.mgt-chart-container-warning { border-top-color: #f59e0b; }
+.mgt-chart-container-danger { border-top-color: #ef4444; }
+.mgt-chart-container-info { border-top-color: #06b6d4; }
+.mgt-chart-container-purple { border-top-color: #8b5cf6; }
+
+/* ===== Colored Header Accents for Bootstrap Cards ===== */
+.card-header-accent-primary { background: #eff6ff !important; border-bottom: 2px solid #3b82f6 !important; color: #1e40af !important; }
+.card-header-accent-success { background: #f0fdf4 !important; border-bottom: 2px solid #10b981 !important; color: #065f46 !important; }
+.card-header-accent-warning { background: #fffbeb !important; border-bottom: 2px solid #f59e0b !important; color: #92400e !important; }
+.card-header-accent-danger { background: #fef2f2 !important; border-bottom: 2px solid #ef4444 !important; color: #991b1b !important; }
+.card-header-accent-info { background: #ecfeff !important; border-bottom: 2px solid #06b6d4 !important; color: #155e75 !important; }
+.card-header-accent-purple { background: #f5f3ff !important; border-bottom: 2px solid #8b5cf6 !important; color: #5b21b6 !important; }
+
+/* ===== Report Page Title ===== */
+.mgt-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  position: relative;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.mgt-page-title::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 80px;
+  height: 3px;
+  background: #3b82f6;
+  border-radius: 2px;
+}
+
+/* ===== Enhanced Management Dashboard Tiles ===== */
+.mgt-tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+.mgt-tile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #3b82f6;
+}
+.mgt-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  text-decoration: none;
+}
+.mgt-tile i {
+  font-size: 1.75rem;
+  color: #3b82f6;
+  margin-bottom: 0.5rem;
+}
+.mgt-tile h6 {
+  font-size: 0.8rem;
+  color: #111827;
+  margin: 0;
+  line-height: 1.3;
+  word-break: break-word;
+  font-weight: 600;
+}
+.mgt-tile-subtitle {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+/* ===== Data Table Enhancements ===== */
+.mgt-table th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+  color: #4b5563;
+}
+.mgt-table td {
+  font-size: 0.875rem;
+  color: #374151;
+}
+.mgt-table tbody tr:hover {
+  background: #f0f9ff;
+}
+
+/* ===== Section Separator ===== */
+.mgt-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 1rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mgt-section-title i {
+  color: #3b82f6;
+}
+
+/* ===== Filter Bar Accent ===== */
+.mgt-filter-card {
+  border-left: 4px solid #3b82f6;
+  border-radius: 0.5rem;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 576px) {
+  .kpi-card {
+    padding: 0.75rem 1rem;
+  }
+  .kpi-value {
+    font-size: 1.25rem;
+  }
+  .mgt-tile {
+    aspect-ratio: auto;
+    padding: 0.75rem;
+    min-height: 80px;
+  }
+}

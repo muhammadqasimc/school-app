@@ -4,16 +4,16 @@
 {% set disable_subject_filter = false %}
 {% include "management/_report_frame.html" %}
 <div class="row g-3 mb-3">
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Average %</div><div id="k-avg" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Pass Rate</div><div id="k-pass" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-3"><div class="border rounded p-3 bg-white"><div class="small text-muted">Attendance Rate</div><div id="k-attendance" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Average %</div><div id="k-avg" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Pass Rate</div><div id="k-pass" class="kpi-value">-</div></div></div>
+  <div class="col-md-3"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Attendance Rate</div><div id="k-attendance" class="kpi-value">-</div></div></div>
 </div>
-<div class="card">
+<div class="card report-card-accent-primary">
   <div class="card-body">
     <div class="row">
-      <div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-trend"></canvas></div></div>
-      <div class="col-lg-6"><div class="chart-container bg-white rounded"><canvas id="chart-grade"></canvas></div></div>
+      <div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-trend"></canvas></div></div>
+      <div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-grade"></canvas></div></div>
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-striped mb-0">

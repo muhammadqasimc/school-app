@@ -5,12 +5,12 @@
 {% include "management/_report_frame.html" %}
 <p class="small text-muted mb-2">Subject filter does not apply to attendance visuals and is intentionally disabled.</p>
 <div class="row g-3 mb-3">
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Absence Events</div><div id="k-events" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Attendance Rate</div><div id="k-rate" class="fs-5 fw-bold">-</div></div></div>
-  <div class="col-md-4"><div class="border rounded p-3 bg-white"><div class="small text-muted">Tracked Learners</div><div id="k-learners" class="fs-5 fw-bold">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Absence Events</div><div id="k-events" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Attendance Rate</div><div id="k-rate" class="kpi-value">-</div></div></div>
+  <div class="col-md-4"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Tracked Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
 </div>
-<div class="row"><div class="col-lg-7"><div class="chart-container bg-white rounded"><canvas id="chart-month"></canvas></div></div><div class="col-lg-5"><div class="chart-container bg-white rounded"><canvas id="chart-grade"></canvas></div></div></div>
-<div class="card"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Month</th><th>Absence Events</th></tr></thead><tbody id="tbl-att"></tbody></table></div></div>
+<div class="row"><div class="col-lg-7"><div class="mgt-chart-container"><canvas id="chart-month"></canvas></div></div><div class="col-lg-5"><div class="mgt-chart-container"><canvas id="chart-grade"></canvas></div></div></div>
+<div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Month</th><th>Absence Events</th></tr></thead><tbody id="tbl-att"></tbody></table></div></div>
 {% endblock %}
 {% block extra_js %}<script>
 let c1=null,c2=null;const reportKey="attendance";const keys=["year","term","phase","grade"];
