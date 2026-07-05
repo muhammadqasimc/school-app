@@ -199,12 +199,12 @@
                                 <thead class="table-light" id="reportViewTableHead">
                                     <tr>
                                         <th>Subject</th>
-                                        <th class="text-center">Loading...</th>
+                                        <th class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></th>
                                     </tr>
                                 </thead>
                                 <tbody id="reportViewTableBody">
                                     <tr>
-                                        <td colspan="99" class="text-center">Loading...</td>
+                                        <td colspan="99" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                     </tr>
                                 </tbody>
                                 <tfoot class="table-light" id="reportViewTableFoot"></tfoot>
@@ -257,7 +257,7 @@
                                 </thead>
                                 <tbody id="trendTableBody">
                                     <tr>
-                                        <td colspan="2" class="text-center">Loading...</td>
+                                        <td colspan="2" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -280,7 +280,7 @@
                                 <h6>Subject Ranking (Horizontal)</h6>
                                 <div class="scroll-x">
                                     <div class="chart-min-width">
-                                        <div class="chart-container" style="height: 400px;">
+                                        <div class="chart-container chart-fixed-height">
                                             <canvas id="horizontalBarChart"></canvas>
                                         </div>
                                     </div>
@@ -306,7 +306,7 @@
                                 <h6>Subject Performance Across Terms</h6>
                                 <div class="scroll-x">
                                     <div class="chart-min-width">
-                                        <div class="chart-container" style="height: 400px;">
+                                        <div class="chart-container chart-fixed-height">
                                             <canvas id="multiLineChart"></canvas>
                                         </div>
                                     </div>
@@ -317,7 +317,7 @@
                                 <h6>Performance Heatmap</h6>
                                 <div class="scroll-x">
                                     <div class="chart-min-width">
-                                        <div class="chart-container" style="height: 400px;">
+                                        <div class="chart-container chart-fixed-height">
                                             <canvas id="heatmapChart"></canvas>
                                         </div>
                                     </div>
@@ -330,7 +330,7 @@
                                 <h6>Performance Progression (Area Chart)</h6>
                                 <div class="scroll-x">
                                     <div class="chart-min-width">
-                                        <div class="chart-container" style="height: 300px;">
+                                        <div class="chart-container chart-fixed-height">
                                             <canvas id="areaChart"></canvas>
                                         </div>
                                     </div>
@@ -353,7 +353,7 @@
                     <div class="card-body">
                         <div class="scroll-x">
                             <div class="chart-min-width">
-                                <div class="chart-container" style="height: 400px;">
+                                <div class="chart-container chart-fixed-height">
                                     <canvas id="yearComparisonChart"></canvas>
                                 </div>
                             </div>
@@ -478,7 +478,7 @@
                                         </thead>
                                         <tbody id="disciplinaryTableBody">
                                             <tr>
-                                                <td colspan="{% if hide_disciplinary_pdfs %}7{% else %}8{% endif %}" class="text-center">Loading...</td>
+                                                <td colspan="{% if hide_disciplinary_pdfs %}7{% else %}8{% endif %}" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -510,7 +510,7 @@
                                         </thead>
                                         <tbody id="disciplinaryDocumentsBody">
                                             <tr>
-                                                <td colspan="4" class="text-center">Loading...</td>
+                                                <td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -688,7 +688,7 @@
                                 </thead>
                                 <tbody id="attendanceTableBody">
                                     <tr>
-                                        <td colspan="5" class="text-center">Loading...</td>
+                                        <td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -757,7 +757,7 @@
                                 <div class="text-center p-3 bg-light rounded">
                                     <h6 class="text-muted mb-2">Status</h6>
                                     <h4 class="mb-0" id="financeStatus">
-                                        <span class="badge bg-secondary">Loading...</span>
+                                        <span class="badge bg-secondary"><div class="spinner-border spinner-border-sm text-light" role="status"><span class="visually-hidden">Loading...</span></div></span>
                                     </h4>
                                 </div>
                             </div>
@@ -796,7 +796,7 @@
                                 </thead>
                                 <tbody id="financeTableBody">
                                     <tr>
-                                        <td colspan="5" class="text-center">Loading...</td>
+                                        <td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -895,7 +895,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="subjectDetailsContent">
-                Loading...
+                <div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
             </div>
         </div>
     </div>
@@ -1645,7 +1645,7 @@ function loadDisciplinaryDocuments() {
         : `/api/parent/disciplinary/documents`;
     const tbody = document.getElementById('disciplinaryDocumentsBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
     fetch(url)
         .then(response => response.json())
         .then(data => {
@@ -2598,7 +2598,7 @@ function updateYearComparisonChart(data) {
 function viewSubjectDetails(subject, year, reportId) {
     const modal = new bootstrap.Modal(document.getElementById('subjectDetailsModal'));
     const content = document.getElementById('subjectDetailsContent');
-    content.innerHTML = 'Loading...';
+    content.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
     modal.show();
     
     const learnerId = getAdminLearnerFilter();

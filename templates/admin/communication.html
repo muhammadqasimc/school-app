@@ -26,11 +26,11 @@
                             <div class="card-header bg-primary text-white py-2"><h6 class="mb-0">1. Filter</h6></div>
                             <div class="card-body">
                                 <div class="mb-2">
-                                    <label class="form-label">Year</label>
+                                    <label class="form-label" for="filterYear">Year</label>
                                     <input type="number" id="filterYear" class="form-control" min="2000" max="2100" value="{{ current_year or 2026 }}">
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">Grade</label>
+                                    <label class="form-label" for="filterGrade">Grade</label>
                                     <select id="filterGrade" class="form-select">
                                         <option value="">-- Any grade --</option>
                                         {% for g in (initial_grades or []) %}
@@ -39,19 +39,19 @@
                                     </select>
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">Learner ID</label>
+                                    <label class="form-label" for="filterLearnerId">Learner ID</label>
                                     <input type="text" id="filterLearnerId" class="form-control">
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">Surname</label>
+                                    <label class="form-label" for="filterSurname">Surname</label>
                                     <input type="text" id="filterSurname" class="form-control">
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">Start Date (Discipline)</label>
+                                    <label class="form-label" for="filterStartDate">Start Date (Discipline)</label>
                                     <input type="date" id="filterStartDate" class="form-control">
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">End Date (Discipline)</label>
+                                    <label class="form-label" for="filterEndDate">End Date (Discipline)</label>
                                     <input type="date" id="filterEndDate" class="form-control">
                                 </div>
                                 <button type="button" id="btnFindRows" class="btn btn-primary">
@@ -63,7 +63,7 @@
                     <div class="col-lg-8">
                         <div class="card border-secondary mb-3">
                             <div class="card-header bg-secondary text-white py-2"><h6 class="mb-0">2. Select Targets</h6></div>
-                            <div class="card-body" style="max-height: 240px; overflow-y: auto;">
+                            <div class="card-body table-scroll">
                                 <div id="targetList" class="small text-muted">Run a search first.</div>
                             </div>
                             <div class="card-footer py-2">
@@ -78,7 +78,7 @@
                     <div class="card-header bg-success text-white py-2"><h6 class="mb-0">3. Preview & Send (Immediate)</h6></div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label">Channel</label>
+                            <label class="form-label" for="messageText">Channel</label>
                             <div>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input channel-cb" type="checkbox" id="channelSms" value="sms">
@@ -91,11 +91,11 @@
                             </div>
                         </div>
                         <div class="mb-2" id="customMessageWrap">
-                            <label class="form-label">Custom Message <span id="charCount" class="text-muted">0 / {{ sms_max_chars }}</span></label>
+                            <label class="form-label" for="messageText">Custom Message <span id="charCount" class="text-muted">0 / {{ sms_max_chars }}</span></label>
                             <textarea id="messageText" class="form-control" rows="3" maxlength="{{ sms_max_chars }}"></textarea>
                         </div>
                         <div class="mb-2" id="financeTemplateWrap" style="display:none;">
-                            <label class="form-label">Finance Message Template</label>
+                            <label class="form-label" for="financeTemplateText">Finance Message Template</label>
                             <textarea id="financeTemplateText" class="form-control" rows="4">Dear {parent_name}, this is a reminder that {learner_name} (Grade {grade}) has an outstanding school fee balance of {outstanding_amount} for {year}. Please contact the school office if you have already paid or need assistance.</textarea>
                             <div class="small text-muted mt-1">
                                 Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{outstanding_amount}</code> <code>{school_name}</code>
@@ -232,7 +232,7 @@
             if (grade) url += '&grade=' + encodeURIComponent(grade);
             if (surname) url += '&surname=' + encodeURIComponent(surname);
         }
-        document.getElementById('targetList').innerHTML = '<span class="text-muted">Loading...</span>';
+        document.getElementById('targetList').innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         fetchJson(url).then(data => {
             const rows = data.learners || data.incidents || [];
             currentRows = rows;

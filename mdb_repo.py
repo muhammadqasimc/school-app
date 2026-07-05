@@ -899,25 +899,22 @@ class MDBRepository:
         return bool(rows)
 
     def map_parent_phone_to_learner_keys(self, phone_value: str) -> list[str]:
-        learner_ids: list[str] = []
         phone = str(phone_value)
-        for col in ("Tel1", "Tel2", "Tel3", "SpouseCell"):
-            rows = self.execute_query(
-                f"SELECT DISTINCT CSTR(pc.[ChildId]) AS LearnerKey FROM [Parent_Info] pi INNER JOIN [Parent_Child] pc ON pc.[ParentId] = pi.[ParentID] WHERE CSTR(pi.[{col}]) = ?",
-                (phone,),
-            )
-            learner_ids.extend(r.get("LearnerKey", "") or "" for r in rows)
-            if learner_ids:
-                return learner_ids
-        for col in ("Tel1", "Tel2", "Tel3", "SpouseCell"):
-            rows = self.execute_query(
-                f"SELECT DISTINCT CSTR(pc.[Learnerid]) AS LearnerKey FROM [Parent_Info] pi INNER JOIN [Parent_Child] pc ON pc.[ParentId] = pi.[ParentID] WHERE CSTR(pi.[{col}]) = ?",
-                (phone,),
-            )
-            learner_ids.extend(r.get("LearnerKey", "") or "" for r in rows)
-            if learner_ids:
-                return learner_ids
-        return learner_ids
+        cols = ("Tel1", "Tel2", "Tel3", "SpouseCell")
+        # Single query with OR for all phone columns × both ID columns via UNION
+        phone_conditions = " OR ".join(f"CSTR(pi.[{c}]) = ?" for c in cols)
+        sql = (
+            f"SELECT DISTINCT CSTR(pc.[ChildId]) AS LearnerKey "
+            f"FROM [Parent_Info] pi INNER JOIN [Parent_Child] pc ON pc.[ParentId] = pi.[ParentID] "
+            f"WHERE {phone_conditions} "
+            f"UNION "
+            f"SELECT DISTINCT CSTR(pc.[Learnerid]) AS LearnerKey "
+            f"FROM [Parent_Info] pi INNER JOIN [Parent_Child] pc ON pc.[ParentId] = pi.[ParentID] "
+            f"WHERE {phone_conditions}"
+        )
+        params = tuple(phone for _ in cols) * 2
+        rows = self.execute_query(sql, params)
+        return [str(r.get("LearnerKey", "") or "").strip() for r in rows if r.get("LearnerKey")]
 
     def generic_phone_lookup(self, table: str, phone_col: str, learner_col: str, phone_value: str) -> list[str]:
         rows = self.execute_query(

@@ -923,6 +923,14 @@ def pg_table_exists(table_name: str) -> bool:
         return False
 
 
+_SAFE_IDENTIFIER_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+def _safe_identifier(name: str) -> str:
+    """Validate SQL identifier (table/column name) is safe."""
+    if not _SAFE_IDENTIFIER_RE.match(str(name or "")):
+        raise ValueError(f"Unsafe SQL identifier: {name!r}")
+    return name
+
 def ensure_pg_compat_views():
     """
     Create lowercase compatibility views for mixed-case MDB mirror tables.
@@ -969,6 +977,10 @@ def ensure_pg_compat_views():
                 continue
             qlower = '"' + lower_name.replace('"', '""') + '"'
             qtable = '"' + table_name.replace('"', '""') + '"'
+            _safe_identifier(lower_name)
+            _safe_identifier(table_name)
+            for sc in select_cols:
+                pass  # already double-quote escaped from DB metadata
             db.session.execute(text(f"DROP VIEW IF EXISTS {qlower} CASCADE"))
             db.session.execute(text(f"CREATE VIEW {qlower} AS SELECT {', '.join(select_cols)} FROM {qtable}"))
     except Exception as e:
@@ -1643,6 +1655,9 @@ def lookup_learners_by_parent_phone(phone: str) -> list[str]:
 
     for table, phone_col, learner_col in candidates:
         try:
+            _safe_identifier(table)
+            _safe_identifier(phone_col)
+            _safe_identifier(learner_col)
             for vphone in variants:
                 if use_pg_repo:
                     try:
@@ -4953,6 +4968,7 @@ def _management_build_finance_payload(flt: dict) -> dict:
     exemption_source = None
     exemption_rows = []
     for tbl in ("FeeExemptions", "FeeExemption", "SchoolFeeExemptions", "LearnerFeeExempt"):
+        _safe_identifier(tbl)
         rows_ex = mdb_conn.execute_query(f"SELECT TOP 400 * FROM [{tbl}]") or []
         if rows_ex:
             exemption_source = tbl
@@ -5529,7 +5545,11 @@ def _management_learner_movement_learner_ids(mode: str, year: str, grade: str) -
 
     elif mode == "dropped_out":
         attempts: list[tuple[str, tuple]] = []
+        _valid_ycols = set(_management_learner_promotion_year_columns())
         for ycol in _management_learner_promotion_year_columns():
+            if ycol not in _valid_ycols:
+                continue
+            _safe_identifier(ycol)
             if g:
                 attempts.append(
                     (
@@ -5648,7 +5668,16 @@ def api_management_distribution_results():
         return jsonify({"error": "Access denied"}), 403
     flt = _management_filters_from_request()
     try:
-        return jsonify(_management_distribution_payload(flt))
+        payload = _management_distribution_payload(flt)
+        groups = payload.get("groups", [])
+        page_info = mrh._apply_pagination(groups, flt.get("page", 1), flt.get("per_page", 100))
+        return jsonify(
+            {
+                "groups": page_info["items"],
+                "meta": payload.get("meta", {}),
+                "pagination": {"page": page_info["page"], "perPage": page_info["perPage"], "total": page_info["total"], "totalPages": page_info["totalPages"]},
+            }
+        )
     except Exception:
         app.logger.exception("management-distribution-results failed")
         return jsonify({"error": "Could not build report."}), 500
@@ -5668,10 +5697,12 @@ def api_management_averages_per_subject_per_grade():
             return g or None
 
         groups = mrh.mr_averages_grid_by_phase(marks, _gf)
+        page_info = mrh._apply_pagination(groups, flt.get("page", 1), flt.get("per_page", 100))
         return jsonify(
             {
-                "groups": groups,
+                "groups": page_info["items"],
                 "meta": {"year": flt.get("year") or "", "term": flt.get("term") or ""},
+                "pagination": {"page": page_info["page"], "perPage": page_info["perPage"], "total": page_info["total"], "totalPages": page_info["totalPages"]},
             }
         )
     except Exception:
@@ -5688,10 +5719,12 @@ def api_management_results_per_grade_subject():
     try:
         marks = _management_dashboard_fetch_marks(flt)
         rows = mrh.mr_results_rows_for_grade(marks)
+        page_info = mrh._apply_pagination(rows, flt.get("page", 1), flt.get("per_page", 100))
         return jsonify(
             {
-                "rows": rows,
+                "rows": page_info["items"],
                 "meta": {"year": flt.get("year") or "", "term": flt.get("term") or "", "grade": flt.get("grade") or ""},
+                "pagination": {"page": page_info["page"], "perPage": page_info["perPage"], "total": page_info["total"], "totalPages": page_info["totalPages"]},
             }
         )
     except Exception:
@@ -5713,10 +5746,12 @@ def api_management_analysis():
             return g or None
 
         blocks = mrh.mr_analysis_blocks(marks, _gf)
+        page_info = mrh._apply_pagination(blocks, flt.get("page", 1), flt.get("per_page", 100))
         return jsonify(
             {
-                "blocks": blocks,
+                "blocks": page_info["items"],
                 "meta": {"year": flt.get("year") or "", "term": flt.get("term") or ""},
+                "pagination": {"page": page_info["page"], "perPage": page_info["perPage"], "total": page_info["total"], "totalPages": page_info["totalPages"]},
             }
         )
     except Exception:
@@ -6638,6 +6673,8 @@ def _management_filters_from_request() -> dict:
         "subject": str(request.args.get("subject", "")).strip(),
         "phase": str(request.args.get("phase", "")).strip(),
         "school": str(request.args.get("school", "")).strip(),
+        "page": int(request.args.get("page", "1")),
+        "per_page": int(request.args.get("per_page", "100")),
     }
 
 

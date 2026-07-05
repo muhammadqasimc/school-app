@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Teacher Parent Messaging{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h4 class="mb-0">Message Parents</h4></div>
+  <div class="card-body">
+    <form id="msg-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2 mb-2">
+        <div class="col-md-2">
+          <label class="form-label small mb-1" for="msg-grade">Grade</label>
+          <input class="form-control" id="msg-grade" name="grade" placeholder="Grade">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1" for="msg-class">Class</label>
+          <input class="form-control" id="msg-class" name="class_id" placeholder="Class">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1" for="msg-channel">Channel</label>
+          <select class="form-select" id="msg-channel" name="channel"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select>
+        </div>
+      </div>
+      <label class="form-label" for="msg-message">Message</label>
+      <textarea class="form-control" id="msg-message" name="message" rows="4" required minlength="5"></textarea>
+      <button class="btn btn-primary mt-2" type="submit">Send</button>
+    </form>
+    <div id="msg-result" class="small mt-2"></div>
+  </div>
+</div>
+<script>
+document.getElementById("msg-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const r = await fetch("{{ url_for('api_teacher_messages_send') }}", {method:"POST", body:fd});
+  const data = await r.json();
+  if (!r.ok) {
+    document.getElementById("msg-result").textContent = data.error || "Failed";
+    return;
+  }
+  document.getElementById("msg-result").textContent = `Sent ${data.sent || 0}/${data.totalRecipients || 0}. Failed: ${(data.failed || []).length}`;
+});
+</script>
+{% endblock %}

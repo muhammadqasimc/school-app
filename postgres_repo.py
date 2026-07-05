@@ -207,37 +207,30 @@ class PostgresRepository:
         return bool(rows)
 
     def map_parent_phone_to_learner_keys(self, phone_value: str) -> list[str]:
-        learner_ids: list[str] = []
-        for col in ("Tel1", "Tel2", "Tel3", "SpouseCell"):
-            col_sql = _safe_ident(col)
-            rows = self._rows(
-                f"""
-                SELECT DISTINCT CAST(pc."ChildId" AS TEXT) AS "LearnerKey"
+            phone = str(phone_value)
+            cols = ("Tel1", "Tel2", "Tel3", "SpouseCell")
+            id_cols = ("ChildId", "Learnerid")
+            where_clauses: list[str] = []
+            params: dict[str, str] = {}
+            for i, col in enumerate(cols):
+                col_sql = _safe_ident(col)
+                for j, icol in enumerate(id_cols):
+                    pkey = f"p{i}_{j}"
+                    where_clauses.append(f"CAST(pi.{col_sql} AS TEXT) = :{pkey}")
+                    params[pkey] = phone
+            sql = f"""
+                SELECT DISTINCT CAST(pc."{_safe_ident(id_cols[0])}" AS TEXT) AS "LearnerKey"
                 FROM "Parent_Info" pi
                 INNER JOIN "Parent_Child" pc ON pc."ParentId" = pi."ParentID"
-                WHERE CAST(pi.{col_sql} AS TEXT) = :phone
-                """,
-                {"phone": str(phone_value)},
-            )
-            learner_ids.extend([str(r.get("LearnerKey") or "").strip() for r in rows if str(r.get("LearnerKey") or "").strip()])
-            if learner_ids:
-                return learner_ids
-
-        for col in ("Tel1", "Tel2", "Tel3", "SpouseCell"):
-            col_sql = _safe_ident(col)
-            rows = self._rows(
-                f"""
-                SELECT DISTINCT CAST(pc."Learnerid" AS TEXT) AS "LearnerKey"
+                WHERE {' OR '.join(where_clauses)}
+                UNION
+                SELECT DISTINCT CAST(pc."{_safe_ident(id_cols[1])}" AS TEXT) AS "LearnerKey"
                 FROM "Parent_Info" pi
                 INNER JOIN "Parent_Child" pc ON pc."ParentId" = pi."ParentID"
-                WHERE CAST(pi.{col_sql} AS TEXT) = :phone
-                """,
-                {"phone": str(phone_value)},
-            )
-            learner_ids.extend([str(r.get("LearnerKey") or "").strip() for r in rows if str(r.get("LearnerKey") or "").strip()])
-            if learner_ids:
-                return learner_ids
-        return learner_ids
+                WHERE {' OR '.join(where_clauses)}
+            """
+            rows = self._rows(sql, params)
+            return [str(r.get("LearnerKey") or "").strip() for r in rows if str(r.get("LearnerKey") or "").strip()]
 
     def generic_phone_lookup(self, table: str, phone_col: str, learner_col: str, phone_value: str) -> list[str]:
         table_sql = _safe_ident(table)

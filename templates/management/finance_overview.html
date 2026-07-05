@@ -20,16 +20,16 @@
     <div class="row">
       <div class="col-lg-4">
         <h6 class="fw-semibold mb-2">Fee Schedule</h6>
-        <div class="table-responsive" style="max-height:300px">
+        <div class="table-responsive table-scroll">
           <table class="table table-sm table-striped mb-0">
             <thead><tr><th>Grade</th><th>Year</th><th>Fees</th></tr></thead>
-            <tbody id="tbl-fee-schedule"><tr><td colspan="3" class="text-muted">Loading...</td></tr></tbody>
+            <tbody id="tbl-fee-schedule"><tr><td colspan="3" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
           </table>
         </div>
       </div>
       <div class="col-lg-8">
         <h6 class="fw-semibold mb-2">Collection by Grade</h6>
-        <div class="mgt-chart-container" style="height:300px"><canvas id="chart-fee-grade"></canvas></div>
+        <div class="mgt-chart-container chart-fixed-height"><canvas id="chart-fee-grade"></canvas></div>
       </div>
     </div>
   </div>
@@ -42,7 +42,7 @@
     <div class="table-responsive">
       <table class="table table-sm table-striped mb-0">
         <thead><tr><th>Grade</th><th>Learners</th><th>Fully Paid</th><th>% Learners Fully Paid</th><th>Expected Total</th><th>Credits</th><th>% Fee Recovery</th></tr></thead>
-        <tbody id="tbl-grade-completion"><tr><td colspan="7" class="text-muted">Loading...</td></tr></tbody>
+        <tbody id="tbl-grade-completion"><tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -55,7 +55,7 @@
     <div class="table-responsive">
       <table class="table table-sm table-striped mb-0">
         <thead><tr><th>Parent / Guardian</th><th>Learner</th><th>Learner ID</th><th>Grade</th><th>Annual Fee</th><th>Paid</th><th>Outstanding</th><th>% Paid</th></tr></thead>
-        <tbody id="tbl-high-risk"><tr><td colspan="8" class="text-muted">Loading...</td></tr></tbody>
+        <tbody id="tbl-high-risk"><tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -67,10 +67,10 @@
     <div class="card report-card-accent-info h-100">
       <div class="card-body">
         <h6 class="fw-semibold mb-2">Exemption Lines</h6>
-        <div class="table-responsive" style="max-height:300px">
+        <div class="table-responsive table-scroll">
           <table class="table table-sm table-striped mb-0">
             <thead><tr><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th></tr></thead>
-            <tbody id="tbl-exemptions"><tr><td colspan="5" class="text-muted">Loading...</td></tr></tbody>
+            <tbody id="tbl-exemptions"><tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -80,10 +80,10 @@
     <div class="card report-card-accent-info h-100">
       <div class="card-body">
         <h6 class="fw-semibold mb-2">Discounts & Journal Lines</h6>
-        <div class="table-responsive" style="max-height:300px">
+        <div class="table-responsive table-scroll">
           <table class="table table-sm table-striped mb-0">
             <thead><tr><th>Source</th><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th></tr></thead>
-            <tbody id="tbl-discounts"><tr><td colspan="6" class="text-muted">Loading...</td></tr></tbody>
+            <tbody id="tbl-discounts"><tr><td colspan="6" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
           </table>
         </div>
       </div>

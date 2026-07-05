@@ -18,16 +18,16 @@
     <div class="table-responsive">
       <table class="table table-sm table-striped mb-0">
         <thead><tr><th>Subject</th><th>Average %</th><th>Pass Rate %</th></tr></thead>
-        <tbody id="tbl-subjects"><tr><td colspan="3" class="text-muted">Loading...</td></tr></tbody>
+        <tbody id="tbl-subjects"><tr><td colspan="3" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 {% endblock %}
-{% block extra_js %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script>
 <script>
 const reportKey = "general-overview"; let c1=null; let c2=null;
-function params(){const p=new URLSearchParams();["year","term","phase","grade","subject"].forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)p.set(k,v);});return p;}
+function params(){return mgtParams(["year","term","phase","grade","subject"]);}
 function fillSelect(id,values){const el=document.getElementById(id);const keep=el.value;while(el.options.length>1)el.remove(1);(values||[]).forEach(v=>{const o=document.createElement("option");o.value=String(v);o.textContent=String(v);el.appendChild(o);});el.value=keep;}
 async function loadFilters(){const r=await fetch(`/api/management-report-filters?${params().toString()}`);const d=await r.json();if(!d.filters)return;fillSelect("f-year",d.filters.years);fillSelect("f-term",d.filters.terms);fillSelect("f-phase",d.filters.phases);fillSelect("f-grade",d.filters.grades);fillSelect("f-subject",d.filters.subjects);}
 function renderChart(id,type,label,rows,color){const ctx=document.getElementById(id).getContext("2d");return new Chart(ctx,{type,data:{labels:(rows||[]).map(r=>r.label),datasets:[{label,data:(rows||[]).map(r=>Number(r.value||0)),backgroundColor:color,borderColor:color,borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false}});}

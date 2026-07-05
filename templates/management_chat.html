@@ -11,7 +11,7 @@
           <input id="chat-search" class="form-control form-control-sm" placeholder="Search users">
           <button class="btn btn-sm btn-outline-primary" id="chat-refresh">Refresh</button>
         </div>
-        <div class="list-group mb-3" id="thread-list" style="max-height: 50vh; overflow:auto;"></div>
+        <div class="list-group mb-3 table-scroll" id="thread-list"></div>
         <div class="border rounded p-2">
           <div class="small fw-semibold mb-2">Start New Thread</div>
           <select id="thread-type" class="form-select form-select-sm mb-2">
@@ -26,7 +26,7 @@
         </div>
       </div>
       <div class="col-lg-8">
-        <div class="border rounded p-2 mb-2" id="message-box" style="height: 45vh; overflow:auto; background:#f8f9fa;"></div>
+        <div class="border rounded p-2 mb-2 chat-message-box" id="message-box"></div>
         <form id="composer" class="row g-2">
           <div class="col-12">
             <textarea id="message-body" class="form-control" rows="3" placeholder="Type your message"></textarea>

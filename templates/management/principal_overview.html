@@ -3,7 +3,7 @@
 {% block content %}
 {% set disable_subject_filter = false %}
 {% include "management/_report_frame.html" %}
-<div class="alert alert-info alert-accent-info py-2">Principal highlight: <span id="principal-highlight">Loading...</span></div>
+<div class="alert alert-info alert-accent-info py-2">Principal highlight: <span id="principal-highlight"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></span></div>
 <div class="row g-3 mb-3">
   <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
   <div class="col-md-3"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Records</div><div id="k-records" class="kpi-value">-</div></div></div>
@@ -13,9 +13,9 @@
 <div class="row"><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-phase"></canvas></div></div><div class="col-lg-6"><div class="mgt-chart-container"><canvas id="chart-enrol"></canvas></div></div></div>
 <div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Avg %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl-principal"></tbody></table></div></div>
 {% endblock %}
-{% block extra_js %}<script>
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script><script>
 const reportKey="principal-overview";let a=null,b=null;const ids=["year","term","phase","grade","subject"];
-const q=()=>{const p=new URLSearchParams();ids.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)p.set(k,v);});return p;};
+const q=()=>mgtParams(ids);
 const fs=(id,v)=>{const e=document.getElementById(id),k=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;e.appendChild(o);});e.value=k;};
 async function lf(){const r=await fetch(`/api/management-report-filters?${q()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);fs("f-subject",d.filters.subjects);}
 function rc(id,t,l,rows,c){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(x=>x.label),datasets:[{label:l,data:(rows||[]).map(x=>Number(x.value||0)),backgroundColor:c,borderColor:c}]},options:{responsive:true,maintainAspectRatio:false}});}

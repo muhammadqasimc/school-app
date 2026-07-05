@@ -12,9 +12,9 @@
 <div class="row"><div class="col-lg-7"><div class="mgt-chart-container"><canvas id="chart-month"></canvas></div></div><div class="col-lg-5"><div class="mgt-chart-container"><canvas id="chart-grade"></canvas></div></div></div>
 <div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Month</th><th>Absence Events</th></tr></thead><tbody id="tbl-att"></tbody></table></div></div>
 {% endblock %}
-{% block extra_js %}<script>
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script><script>
 let c1=null,c2=null;const reportKey="attendance";const keys=["year","term","phase","grade"];
-const q=()=>{const p=new URLSearchParams();keys.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)p.set(k,v);});return p;};
+const q=()=>mgtParams(keys);
 const fs=(id,v)=>{const e=document.getElementById(id),keep=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;e.appendChild(o);});e.value=keep;};
 async function lf(){const r=await fetch(`/api/management-report-filters?${q()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);}
 function chart(id,t,label,rows,color){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(r=>r.label),datasets:[{label,data:(rows||[]).map(r=>Number(r.value||0)),backgroundColor:color,borderColor:color}]},options:{responsive:true,maintainAspectRatio:false}});}

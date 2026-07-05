@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ item.tag }} — Inventory{% endblock %}
 {% block content %}
-<div class="card card-body mb-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+<div class="card card-body mb-3" class="hero-gradient">
   {% include "inventory/_nav.html" %}
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
     <div>
@@ -133,7 +133,7 @@
   <div class="col-lg-6">
     <div class="card shadow-sm border-0">
       <div class="card-header">History &amp; audit</div>
-      <div class="card-body p-0 table-responsive" style="max-height:320px;overflow:auto;">
+      <div class="card-body p-0 table-responsive table-scroll">
         <table class="table table-sm mb-0">
           {% for h in history %}
           <tr>
@@ -150,7 +150,7 @@
   <div class="col-lg-6">
     <div class="card shadow-sm border-0">
       <div class="card-header">Checkouts</div>
-      <div class="card-body p-0 table-responsive" style="max-height:320px;overflow:auto;">
+      <div class="card-body p-0 table-responsive table-scroll">
         <table class="table table-sm mb-0">
           <thead><tr><th>Out</th><th>In</th><th>Assignee</th><th>Qty</th></tr></thead>
           {% for c in checkouts %}
@@ -174,12 +174,12 @@
   <div class="card-header">Maintenance</div>
   <div class="card-body">
     <form method="post" action="{{ url_for('inventory_maintenance_add', item_id=item.id) }}" class="row g-2">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="col-md-4"><input class="form-control" name="summary" placeholder="Summary" required></div>
-      <div class="col-md-4"><input class="form-control" name="detail" placeholder="Detail"></div>
-      <div class="col-md-2"><input class="form-control" name="cost_cents" placeholder="Cost (¢)"></div>
-      <div class="col-md-2"><button class="btn btn-secondary w-100" type="submit">Log</button></div>
-    </form>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-4"><label class="form-label small text-muted mb-1" for="maintenance-summary">Summary</label><input class="form-control" id="maintenance-summary" name="summary" placeholder="Summary" required></div>
+          <div class="col-md-4"><label class="form-label small text-muted mb-1" for="maintenance-detail">Detail</label><input class="form-control" id="maintenance-detail" name="detail" placeholder="Detail"></div>
+          <div class="col-md-2"><label class="form-label small text-muted mb-1" for="maintenance-cost">Cost (¢)</label><input class="form-control" id="maintenance-cost" name="cost_cents" placeholder="Cost (¢)"></div>
+          <div class="col-md-2"><button class="btn btn-secondary w-100" type="submit">Log</button></div>
+        </form>
     <ul class="list-group mt-3">
       {% for m in maintenance %}
       <li class="list-group-item">{{ m.summary }} · {{ m.serviced_at.strftime('%Y-%m-%d') if m.serviced_at }}{% if m.cost_cents %} · {{ m.cost_cents }}¢{% endif %}</li>

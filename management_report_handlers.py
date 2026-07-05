@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
+from functools import lru_cache
 from typing import Any, Callable
 
 _PASS_DEFAULT = 40.0
@@ -16,13 +17,39 @@ def _normalize_subject_label(raw: str) -> str:
     return re.sub(r"\s*\(Gr\s+\d+\)\s*$", "", str(raw or "").strip(), flags=re.IGNORECASE)
 
 
+@lru_cache(maxsize=4096)
+def _cached_pct(mark: float, total: float) -> float:
+    """Cached percentage computation."""
+    if total <= 0:
+        return 0.0
+    return float(Decimal(str(100.0 * mark / total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _apply_pagination(items: list, page: int = 1, per_page: int = 100) -> dict:
+    """Slice a list for pagination, returning {items, total, page, per_page, totalPages}."""
+    page = max(1, int(page))
+    per_page = max(1, min(500, int(per_page)))
+    total = len(items)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    end = start + per_page
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "perPage": per_page,
+        "totalPages": total_pages,
+    }
+
+
 def mr_row_pct(row: dict) -> float | None:
     try:
         m = float(row.get("Mark") or 0)
         t = float(row.get("TotalMark") or 0)
         if t <= 0:
             return None
-        return float(Decimal(str(100.0 * m / t)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        return _cached_pct(m, t)
     except (TypeError, ValueError):
         return None
 

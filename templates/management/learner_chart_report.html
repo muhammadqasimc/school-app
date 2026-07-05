@@ -10,9 +10,9 @@
 <div class="row"><div class="col-lg-7"><div class="mgt-chart-container"><canvas id="chart-sub"></canvas></div></div><div class="col-lg-5"><div class="mgt-chart-container"><canvas id="chart-band"></canvas></div></div></div>
 <div class="card report-card-accent-primary"><div class="card-body table-responsive"><table class="table table-sm"><thead><tr><th>Subject</th><th>Average %</th><th>Pass Rate %</th></tr></thead><tbody id="tbl"></tbody></table></div></div>
 {% endblock %}
-{% block extra_js %}<script>
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script><script>
 let c1=null,c2=null;const reportKey="learner-chart-report";const f=["year","term","phase","grade","subject"];
-const p=()=>{const x=new URLSearchParams();f.forEach(k=>{const v=document.getElementById(`f-${k}`).value.trim();if(v)x.set(k,v);});return x;};
+const p=()=>mgtParams(f);
 const fs=(id,v)=>{const e=document.getElementById(id),k=e.value;while(e.options.length>1)e.remove(1);(v||[]).forEach(i=>{const o=document.createElement("option");o.value=i;o.textContent=i;e.appendChild(o);});e.value=k;};
 async function lf(){const r=await fetch(`/api/management-report-filters?${p()}`);const d=await r.json();if(!d.filters)return;fs("f-year",d.filters.years);fs("f-term",d.filters.terms);fs("f-phase",d.filters.phases);fs("f-grade",d.filters.grades);fs("f-subject",d.filters.subjects);}
 const PALETTE=["#0d6efd","#6610f2","#d63384","#fd7e14","#ffc107","#198754","#20c997","#0dcaf0"];function draw(id,t,l,rows,c){return new Chart(document.getElementById(id).getContext("2d"),{type:t,data:{labels:(rows||[]).map(r=>r.label),datasets:[{label:l,data:(rows||[]).map(r=>Number(r.value||0)),backgroundColor:t==="doughnut"||t==="pie"?PALETTE.slice(0,(rows||[]).length):c,borderColor:t==="doughnut"||t==="pie"?PALETTE.slice(0,(rows||[]).length):c}]},options:{responsive:true,maintainAspectRatio:false}});}
