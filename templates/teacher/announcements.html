@@ -1,40 +1,195 @@
 {% extends "base.html" %}
-{% block title %}Teacher Announcements{% endblock %}
+{% block title %}Announcements{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="card-header"><h4 class="mb-0">Announcements</h4></div>
-  <div class="card-body">
-    <form id="ann-form" class="mb-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="row g-2">
-        <div class="col-md-3"><input class="form-control" name="title" placeholder="Title" required></div>
-        <div class="col-md-2"><input class="form-control" name="grade" placeholder="Grade"></div>
-        <div class="col-md-2"><input class="form-control" name="class_id" placeholder="Class"></div>
-        <div class="col-md-5"><input class="form-control" name="body" placeholder="Announcement body" required></div>
-      </div>
-      <button class="btn btn-primary mt-2" type="submit">Publish</button>
-    </form>
-    <div id="ann-msg" class="small mb-2"></div>
-    <div class="table-responsive">
-      <table class="table table-sm table-striped"><thead><tr><th>Title</th><th>Body</th><th>Grade</th><th>Class</th><th>Created</th></tr></thead><tbody id="ann-body"></tbody></table>
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-megaphone"></i> Announcements</h2>
+            <p class="text-muted">Create and manage announcements for your classes or the whole school.</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#announcementModal" onclick="newAnnouncement()">
+                <i class="bi bi-plus-lg"></i> New Announcement
+            </button>
+        </div>
     </div>
-  </div>
+
+    <!-- Announcement List -->
+    <div id="announcementList" class="row">
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="announcementModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="announcementForm" method="POST">
+                <input type="hidden" name="id" id="annId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">New Announcement</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="title" name="title" required maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label for="body" class="form-label">Message</label>
+                        <textarea class="form-control" id="body" name="body" rows="4" required></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="grade" class="form-label">Target Grade</label>
+                            <select class="form-select" id="grade" name="grade">
+                                <option value="">All Grades</option>
+                                {% for g in range(1, 13) %}
+                                <option value="{{ g }}">Grade {{ g }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="class_id" class="form-label">Target Class</label>
+                            <input type="text" class="form-control" id="class_id" name="class_id" placeholder="e.g. A, B, or leave blank for all">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="scope" class="form-label">Scope</label>
+                            <select class="form-select" id="scope" name="scope">
+                                <option value="teacher">Teacher Only (my classes)</option>
+                                <option value="school">School-Wide</option>
+                            </select>
+                            <div class="form-text">School-wide announcements are visible to all users.</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="low">Low</option>
+                                <option value="normal" selected>Normal</option>
+                                <option value="high">High</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="expires_at" class="form-label">Expires At</label>
+                            <input type="datetime-local" class="form-control" id="expires_at" name="expires_at">
+                            <div class="form-text">Leave blank for no expiry.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Announcement</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-async function loadAnnouncements() {
-  const r = await fetch("{{ url_for('api_teacher_announcements') }}");
-  if (!r.ok) return;
-  const data = await r.json();
-  document.getElementById("ann-body").innerHTML = (data.rows || []).map(x => `<tr><td>${x.title || ""}</td><td>${x.body || ""}</td><td>${x.targetGrade || ""}</td><td>${x.targetClass || ""}</td><td>${x.createdAt || ""}</td></tr>`).join("");
+function newAnnouncement() {
+    document.getElementById('modalTitle').innerText = 'New Announcement';
+    document.getElementById('announcementForm').reset();
+    document.getElementById('annId').value = '';
 }
-document.getElementById("ann-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const r = await fetch("{{ url_for('api_teacher_announcements_save') }}", {method:"POST", body:fd});
-  const data = await r.json();
-  document.getElementById("ann-msg").textContent = data.error || (data.success ? "Announcement published." : "Failed");
-  if (r.ok) { e.target.reset(); loadAnnouncements(); }
+
+function editAnnouncement(id) {
+    fetch('/api/teacher/announcements')
+        .then(r => r.json())
+        .then(data => {
+            const ann = (data.rows || []).find(a => a.id === id);
+            if (!ann) return;
+            document.getElementById('modalTitle').innerText = 'Edit Announcement';
+            document.getElementById('annId').value = ann.id;
+            document.getElementById('title').value = ann.title;
+            document.getElementById('body').value = ann.body;
+            document.getElementById('grade').value = ann.targetGrade || '';
+            document.getElementById('class_id').value = ann.targetClass || '';
+            document.getElementById('scope').value = ann.scope || 'teacher';
+            document.getElementById('priority').value = ann.priority || 'normal';
+            if (ann.expiresAt) {
+                document.getElementById('expires_at').value = ann.expiresAt.substring(0, 16);
+            } else {
+                document.getElementById('expires_at').value = '';
+            }
+            new bootstrap.Modal(document.getElementById('announcementModal')).show();
+        });
+}
+
+function deleteAnnouncement(id) {
+    if (!confirm('Delete this announcement?')) return;
+    fetch('/api/teacher/announcements/' + id + '/delete', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) loadAnnouncements();
+        });
+}
+
+function loadAnnouncements() {
+    fetch('/api/teacher/announcements')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('announcementList');
+            const rows = data.rows || [];
+            if (rows.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">No announcements yet. Click "New Announcement" to create one.</p></div>';
+                return;
+            }
+            let html = '';
+            rows.forEach(a => {
+                const priorityBadge = { 'urgent': 'bg-danger', 'high': 'bg-warning text-dark', 'normal': 'bg-info text-dark', 'low': 'bg-secondary' };
+                const badgeClass = priorityBadge[a.priority] || 'bg-info text-dark';
+                const expired = a.expiresAt && new Date(a.expiresAt) < new Date();
+                html += '<div class="col-md-6 mb-3' + (expired ? ' opacity-50' : '') + '">';
+                html += '<div class="card h-100">';
+                html += '<div class="card-header d-flex justify-content-between align-items-center">';
+                html += '<span class="badge ' + badgeClass + '">' + a.priority.charAt(0).toUpperCase() + a.priority.slice(1) + '</span>';
+                html += '<span class="badge ' + (a.scope === 'school' ? 'bg-primary' : 'bg-secondary') + '">' + a.scope + '</span>';
+                html += '</div>';
+                html += '<div class="card-body">';
+                html += '<h5 class="card-title">' + a.title + '</h5>';
+                html += '<p class="card-text">' + a.body + '</p>';
+                if (a.targetGrade) html += '<span class="badge bg-light text-dark me-1">Grade ' + a.targetGrade + '</span>';
+                if (a.targetClass) html += '<span class="badge bg-light text-dark">Class ' + a.targetClass + '</span>';
+                if (a.expiresAt) html += '<br><small class="text-muted">Expires: ' + new Date(a.expiresAt).toLocaleString() + '</small>';
+                html += '<br><small class="text-muted">Created: ' + new Date(a.createdAt).toLocaleString() + '</small>';
+                html += '</div>';
+                html += '<div class="card-footer d-flex justify-content-end gap-2">';
+                html += '<button class="btn btn-sm btn-outline-primary" onclick="editAnnouncement(' + a.id + ')">Edit</button>';
+                html += '<button class="btn btn-sm btn-outline-danger" onclick="deleteAnnouncement(' + a.id + ')">Delete</button>';
+                html += '</div>';
+                html += '</div></div>';
+            });
+            container.innerHTML = html;
+        });
+}
+
+document.getElementById('announcementForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = this;
+    fetch('/api/teacher/announcements/save', {
+        method: 'POST',
+        body: new FormData(form)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('announcementModal')).hide();
+            loadAnnouncements();
+        } else {
+            alert(data.error || 'Failed to save');
+        }
+    });
 });
+
 loadAnnouncements();
 </script>
 {% endblock %}

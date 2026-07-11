@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}School Announcements{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-megaphone"></i> School Announcements</h2>
+            <p class="text-muted">Important notices and updates from the school.</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <select class="form-select" id="priorityFilter" onchange="loadAnnouncements()">
+                <option value="">All Priorities</option>
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Announcement List -->
+    <div id="announcementList" class="row">
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadAnnouncements() {
+    const priorityFilter = document.getElementById('priorityFilter').value;
+    fetch('/api/announcements')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('announcementList');
+            let rows = data.rows || [];
+
+            if (priorityFilter) {
+                rows = rows.filter(a => a.priority === priorityFilter);
+            }
+
+            if (rows.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center py-5"><i class="bi bi-inbox fs-1 text-muted"></i><p class="text-muted mt-2">No announcements at this time.</p></div>';
+                return;
+            }
+
+            let html = '';
+            rows.forEach(a => {
+                const priorityColors = {
+                    'urgent': { badge: 'bg-danger', icon: 'bi-exclamation-triangle-fill', border: 'border-danger' },
+                    'high': { badge: 'bg-warning text-dark', icon: 'bi-exclamation-circle-fill', border: 'border-warning' },
+                    'normal': { badge: 'bg-info text-dark', icon: 'bi-info-circle-fill', border: 'border-info' },
+                    'low': { badge: 'bg-secondary', icon: 'bi-chevron-down', border: 'border-secondary' }
+                };
+                const style = priorityColors[a.priority] || priorityColors.normal;
+
+                html += '<div class="col-12 mb-3">';
+                html += '<div class="card border-start border-4 ' + style.border + '">';
+                html += '<div class="card-body">';
+                html += '<div class="d-flex justify-content-between align-items-start">';
+                html += '<div>';
+                html += '<span class="badge ' + style.badge + ' mb-2"><i class="bi ' + style.icon + '"></i> ' +
+                    a.priority.charAt(0).toUpperCase() + a.priority.slice(1) + '</span>';
+                html += '<h5 class="card-title">' + a.title + '</h5>';
+                html += '</div>';
+                if (a.createdAt) {
+                    html += '<small class="text-muted">' + new Date(a.createdAt).toLocaleDateString() + '</small>';
+                }
+                html += '</div>';
+                html += '<p class="card-text">' + a.body + '</p>';
+                if (a.authorName) {
+                    html += '<small class="text-muted">Posted by: ' + a.authorName + '</small>';
+                }
+                if (a.expiresAt) {
+                    const isExpired = new Date(a.expiresAt) < new Date();
+                    html += '<br><small class="' + (isExpired ? 'text-danger' : 'text-muted') + '">' +
+                        (isExpired ? 'Expired' : 'Expires') + ': ' + new Date(a.expiresAt).toLocaleString() + '</small>';
+                }
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+            container.innerHTML = html;
+        });
+}
+
+loadAnnouncements();
+</script>
+{% endblock %}
