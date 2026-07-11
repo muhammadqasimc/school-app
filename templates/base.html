@@ -56,11 +56,21 @@
         <a class="kismet-nav-item {% if request.endpoint == 'teacher_dashboard' %}active{% endif %}" href="{{ url_for('teacher_dashboard') }}">
             <i class="fas fa-chalkboard-teacher"></i> Teacher
         </a>
+        <a class="kismet-nav-item {% if request.endpoint == 'teacher_announcements_page' %}active{% endif %}" href="{{ url_for('teacher_announcements_page') }}">
+            <i class="fas fa-megaphone"></i> Announcements
+        </a>
         {% if endpoint_available('teacher_chat_page') %}
         <a class="kismet-nav-item {% if request.endpoint == 'teacher_chat_page' %}active{% endif %}" href="{{ url_for('teacher_chat_page') }}">
             <i class="fas fa-comments"></i> Chat
         </a>
         {% endif %}
+        {% endif %}
+
+        <!-- School-wide announcements for all users -->
+        {% if current_user.is_authenticated %}
+        <a class="kismet-nav-item {% if request.endpoint == 'announcements_page' %}active{% endif %}" href="{{ url_for('announcements_page') }}">
+            <i class="fas fa-bullhorn"></i> School Notices
+        </a>
         {% endif %}
 
         <!-- Inventory -->

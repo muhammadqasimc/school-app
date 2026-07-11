@@ -1815,15 +1815,106 @@ def register_admin_routes(flask_app: Flask) -> None:
     def delete_slideshow_image(image_id: int):
         require_admin()
         img = r.SlideshowImage.query.get_or_404(image_id)
-        try:
-            path = os.path.join(r.app.config["UPLOAD_FOLDER"], img.filename)
-            if os.path.isfile(path):
-                os.remove(path)
-        except Exception:
-            pass
         r.db.session.delete(img)
         r.db.session.commit()
+        flash("Deleted.", "success")
         return redirect(url_for("admin_slideshow"))
+
+    # -----------------------------------------------------------------------
+    # Admin: Announcement Management
+    # -----------------------------------------------------------------------
+    @flask_app.route("/admin/announcements")
+    @login_required
+    def admin_announcements():
+        require_admin()
+        page = max(int(request.args.get("page", 1)), 1)
+        per_page = 50
+        q = r.TeacherAnnouncement.query.order_by(
+            r.TeacherAnnouncement.created_at.desc()
+        )
+        total = q.count()
+        rows = q.offset((page - 1) * per_page).limit(per_page).all()
+        items = []
+        for a in rows:
+            author = r.User.query.get(a.user_id)
+            author_name = author.username if author else "Unknown"
+            if a.expires_at and a.expires_at < datetime.utcnow():
+                expired = True
+            else:
+                expired = False
+            items.append({
+                "id": a.id,
+                "title": a.title,
+                "body": a.body,
+                "scope": a.scope,
+                "priority": a.priority,
+                "author": author_name,
+                "is_active": a.is_active,
+                "expired": expired,
+                "expires_at": a.expires_at.isoformat() if a.expires_at else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            })
+        total_pages = (total + per_page - 1) // per_page if total else 1
+        return render_template(
+            "admin/announcements.html",
+            announcements=items,
+            page=page,
+            total_pages=total_pages,
+        )
+
+    @flask_app.route("/admin/announcements/<int:ann_id>/toggle", methods=["POST"])
+    @login_required
+    def admin_announcements_toggle(ann_id: int):
+        require_admin()
+        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        a.is_active = not a.is_active
+        r.db.session.commit()
+        return redirect(url_for("admin_announcements"))
+
+    @flask_app.route("/admin/announcements/<int:ann_id>/delete", methods=["POST"])
+    @login_required
+    def admin_announcements_delete(ann_id: int):
+        require_admin()
+        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        r.db.session.delete(a)
+        r.db.session.commit()
+        flash("Announcement deleted.", "success")
+        return redirect(url_for("admin_announcements"))
+
+    @flask_app.route("/admin/announcements/create", methods=["POST"])
+    @login_required
+    def admin_announcements_create():
+        require_admin()
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        if not title or not body:
+            flash("Title and body are required.", "error")
+            return redirect(url_for("admin_announcements"))
+        priority = request.form.get("priority", "normal").strip()
+        if priority not in ("low", "normal", "high", "urgent"):
+            priority = "normal"
+        scope = request.form.get("scope", "school").strip()
+        if scope not in ("teacher", "school"):
+            scope = "school"
+        expiry_str = request.form.get("expires_at", "").strip()
+        expires_at = None
+        if expiry_str:
+            try:
+                expires_at = datetime.fromisoformat(expiry_str)
+            except (ValueError, TypeError):
+                pass
+        a = r.TeacherAnnouncement(
+            user_id=current_user.id,
+            title=title,
+            body=body,
+            scope=scope,
+            priority=priority,
+            expires_at=expires_at,
+        )
+        r.db.session.add(a)
+        r.db.session.commit()
+        flash("Announcement created.", "success")
+        return redirect(url_for("admin_announcements"))
 
     # --- WhatsApp admin page -------------------------------------------------------
 

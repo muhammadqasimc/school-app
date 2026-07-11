@@ -560,14 +560,19 @@ class TeacherTermLock(db.Model):
 
 
 class TeacherAnnouncement(db.Model):
+    __tablename__ = 'teacher_announcement'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     title = db.Column(db.String(200), nullable=False)
     body = db.Column(db.Text, nullable=False)
     target_grade = db.Column(db.String(32), nullable=True)
     target_class = db.Column(db.String(64), nullable=True)
+    scope = db.Column(db.String(16), nullable=False, default='teacher', index=True)  # teacher|school
+    priority = db.Column(db.String(16), nullable=False, default='normal')  # low|normal|high|urgent
+    expires_at = db.Column(db.DateTime, nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class TeacherWriteEvent(db.Model):
@@ -851,6 +856,7 @@ def ensure_app_schema():
     try:
         db.create_all()
         ensure_school_asset_item_columns()
+        ensure_announcement_columns()
         ensure_pg_compat_views()
         _sync_postgres_id_sequences()
         db.session.commit()
@@ -898,6 +904,55 @@ def ensure_school_asset_item_columns():
         return True
     except Exception as e:
         app.logger.warning("ensure_school_asset_item_columns: %s", e)
+        return False
+
+
+def ensure_announcement_columns():
+    """Add scope/priority/expires_at/updated_at columns to teacher_announcement if missing."""
+    try:
+        tn = "teacher_announcement"
+        # Use SQLAlchemy inspector to check existing columns
+        from sqlalchemy import inspect as sa_inspect
+        insp = sa_inspect(db.engine)
+        existing = {c["name"] for c in insp.get_columns(tn)} if insp.has_table(tn) else set()
+        if not existing:
+            return True  # table doesn't exist yet — create_all will handle it
+
+        uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
+        is_pg = uri.startswith("postgresql")
+
+        additions = {
+            "scope": "VARCHAR(16) NOT NULL DEFAULT 'teacher'",
+            "priority": "VARCHAR(16) NOT NULL DEFAULT 'normal'",
+            "expires_at": "DATETIME",
+            "updated_at": "DATETIME",
+        }
+
+        for col_name, col_type in additions.items():
+            if col_name in existing:
+                continue
+            safe_col = _safe_identifier(col_name)
+            if is_pg:
+                # PostgreSQL: use IF NOT NULL / DEFAULT pattern
+                db.session.execute(text(f"ALTER TABLE {tn} ADD COLUMN {safe_col} {col_type}"))
+            else:
+                # SQLite ignores most column constraints in ALTER, so we keep it simple
+                db.session.execute(text(f"ALTER TABLE {tn} ADD COLUMN {safe_col} {col_type}"))
+            app.logger.info(f"Added teacher_announcement.{col_name}")
+
+        # Create indexes for new indexed columns
+        if "scope" not in existing and is_pg:
+            db.session.execute(
+                text(f"CREATE INDEX IF NOT EXISTS ix_teacher_announcement_scope ON {tn} (scope)")
+            )
+        if "expires_at" not in existing and is_pg:
+            db.session.execute(
+                text(f"CREATE INDEX IF NOT EXISTS ix_teacher_announcement_expires_at ON {tn} (expires_at)")
+            )
+
+        return True
+    except Exception as e:
+        app.logger.warning("ensure_announcement_columns: %s", e)
         return False
 
 
@@ -3456,6 +3511,24 @@ def teacher_dashboard():
     return render_template("teacher/dashboard.html", teacher_scope={})
 
 
+@app.route("/announcements")
+@login_required
+def announcements_page():
+    """School-wide announcements page for all users."""
+    return render_template("announcements.html")
+
+
+@app.route("/teacher/announcements")
+@login_required
+def teacher_announcements_page():
+    """Teacher announcement management page."""
+    if not is_teacher_user(current_user):
+        flash("Teacher portal is only for educator accounts.", "error")
+        return redirect(url_for("dashboard"))
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/announcements.html")
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -4467,6 +4540,197 @@ def api_disciplinary_documents():
     if not _parent_portal_feature_allowed("mgmt_can_view_disciplinary"):
         abort(403)
     return jsonify({"documents": []})
+
+
+# ---------------------------------------------------------------------------
+# Teacher + School-wide Announcements
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/announcements")
+@login_required
+def api_teacher_announcements():
+    """Return teacher announcements for the current teacher user."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    q = TeacherAnnouncement.query.filter_by(
+        user_id=current_user.id, scope="teacher"
+    ).order_by(TeacherAnnouncement.created_at.desc())
+    rows = []
+    for a in q.all():
+        rows.append({
+            "id": a.id,
+            "title": a.title,
+            "body": a.body,
+            "targetGrade": a.target_grade or "",
+            "targetClass": a.target_class or "",
+            "scope": a.scope,
+            "priority": a.priority,
+            "expiresAt": a.expires_at.isoformat() if a.expires_at else None,
+            "isActive": a.is_active,
+            "createdAt": a.created_at.isoformat() if a.created_at else None,
+        })
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/announcements/save", methods=["POST"])
+@login_required
+def api_teacher_announcements_save():
+    """Create or update a teacher announcement."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    title = request.form.get("title", "").strip()
+    body = request.form.get("body", "").strip()
+    if not title or not body:
+        return jsonify({"error": "Title and body are required."}), 400
+
+    target_grade = request.form.get("grade", "").strip() or None
+    target_class = request.form.get("class_id", "").strip() or None
+    scope = request.form.get("scope", "teacher").strip()
+    priority = request.form.get("priority", "normal").strip()
+    expiry_str = request.form.get("expires_at", "").strip()
+
+    if scope not in ("teacher", "school"):
+        scope = "teacher"
+    if priority not in ("low", "normal", "high", "urgent"):
+        priority = "normal"
+
+    expires_at = None
+    if expiry_str:
+        try:
+            expires_at = datetime.fromisoformat(expiry_str)
+        except (ValueError, TypeError):
+            pass
+
+    ann_id = request.form.get("id", "").strip()
+    if ann_id:
+        ann = TeacherAnnouncement.query.get(int(ann_id))
+        if not ann or ann.user_id != current_user.id:
+            return jsonify({"error": "Announcement not found."}), 404
+    else:
+        ann = TeacherAnnouncement(user_id=current_user.id)
+
+    ann.title = title
+    ann.body = body
+    ann.target_grade = target_grade
+    ann.target_class = target_class
+    ann.scope = scope
+    ann.priority = priority
+    ann.expires_at = expires_at
+    db.session.add(ann)
+    db.session.commit()
+    return jsonify({"success": True, "id": ann.id})
+
+
+@app.route("/api/teacher/announcements/<int:ann_id>/delete", methods=["POST"])
+@login_required
+def api_teacher_announcements_delete(ann_id):
+    """Delete a teacher announcement."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    if ann.user_id != current_user.id:
+        abort(403)
+    db.session.delete(ann)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+@app.route("/api/announcements")
+@login_required
+def api_announcements():
+    """Return active school-wide announcements for all users."""
+    now = datetime.utcnow()
+    q = TeacherAnnouncement.query.filter(
+        TeacherAnnouncement.scope == "school",
+        TeacherAnnouncement.is_active == True,
+    ).filter(
+        db.or_(
+            TeacherAnnouncement.expires_at.is_(None),
+            TeacherAnnouncement.expires_at > now,
+        )
+    ).order_by(
+        # urgent first, then by recency
+        db.case(
+            (TeacherAnnouncement.priority == "urgent", 0),
+            (TeacherAnnouncement.priority == "high", 1),
+            (TeacherAnnouncement.priority == "normal", 2),
+            (TeacherAnnouncement.priority == "low", 3),
+            else_=4,
+        ),
+        TeacherAnnouncement.created_at.desc(),
+    )
+    rows = []
+    for a in q.all():
+        author = User.query.get(a.user_id)
+        rows.append({
+            "id": a.id,
+            "title": a.title,
+            "body": a.body,
+            "priority": a.priority,
+            "authorName": author.username if author else "Unknown",
+            "expiresAt": a.expires_at.isoformat() if a.expires_at else None,
+            "createdAt": a.created_at.isoformat() if a.created_at else None,
+        })
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/announcements/create", methods=["POST"])
+@login_required
+def api_announcements_create():
+    """Create a school-wide announcement (admin or manager only)."""
+    if not (is_admin_user(current_user) or is_manager_user(current_user)):
+        abort(403)
+    title = request.form.get("title", "").strip()
+    body = request.form.get("body", "").strip()
+    if not title or not body:
+        return jsonify({"error": "Title and body are required."}), 400
+
+    priority = request.form.get("priority", "normal").strip()
+    if priority not in ("low", "normal", "high", "urgent"):
+        priority = "normal"
+
+    expiry_str = request.form.get("expires_at", "").strip()
+    expires_at = None
+    if expiry_str:
+        try:
+            expires_at = datetime.fromisoformat(expiry_str)
+        except (ValueError, TypeError):
+            pass
+
+    ann = TeacherAnnouncement(
+        user_id=current_user.id,
+        title=title,
+        body=body,
+        scope="school",
+        priority=priority,
+        expires_at=expires_at,
+    )
+    db.session.add(ann)
+    db.session.commit()
+    return jsonify({"success": True, "id": ann.id})
+
+
+@app.route("/api/announcements/<int:ann_id>/toggle", methods=["POST"])
+@login_required
+def api_announcements_toggle(ann_id):
+    """Toggle active state of an announcement (admin or teacher-owner)."""
+    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    if not (is_admin_user(current_user) or is_manager_user(current_user) or ann.user_id == current_user.id):
+        abort(403)
+    ann.is_active = not ann.is_active
+    db.session.commit()
+    return jsonify({"success": True, "isActive": ann.is_active})
+
+
+@app.route("/api/announcements/<int:ann_id>/delete", methods=["POST"])
+@login_required
+def api_announcements_delete(ann_id):
+    """Delete an announcement (admin, manager, or owner)."""
+    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    if not (is_admin_user(current_user) or is_manager_user(current_user) or ann.user_id == current_user.id):
+        abort(403)
+    db.session.delete(ann)
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 def _management_dashboard_fetch_marks(flt: dict) -> list[dict]:
