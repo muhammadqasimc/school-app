@@ -1,27 +1,23 @@
 # SchoolApp todo list
 #
 # Mark a task as completed by prefixing the line with [x].
-# The Hermes cron job will remove completed lines automatically.
+# The Hermes cron job will remove completed lines automatically every 30 minutes.
 #
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-[x] Add parent/guardian notification workflows for attendance, discipline, and finance events
-[x] Add overdue finance reminders with channel selection and resend tracking
-[x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
+[ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
+[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
+[ ] Add saved filter presets for management report pages
+[ ] Add parent/guardian notification workflows for attendance, discipline, and finance events
+[ ] Add overdue finance reminders with channel selection and resend tracking
+[ ] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
 [ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
 [ ] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
-[x] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
+[ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
-[ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-[ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
-[ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
-[ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
-[ ] Add regression coverage for attendance notification templates and delivery tracking
-[ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
-[ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
