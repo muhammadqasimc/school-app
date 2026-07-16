@@ -4031,121 +4031,6 @@ def api_teacher_messages_send():
     })
 
 
-# --- Message Templates API ---
-
-
-@app.route("/api/message-templates", methods=["GET"])
-@login_required
-def api_message_templates_list():
-    """List active message templates, optionally filtered by category."""
-    category = request.args.get("category", "").strip()
-    query = MessageTemplate.query.filter_by(is_active=True)
-    if category:
-        query = query.filter_by(category=category)
-    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
-    return jsonify({
-        "templates": [{
-            "id": t.id,
-            "name": t.name,
-            "category": t.category,
-            "body": t.body,
-            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
-        } for t in templates]
-    })
-
-
-@app.route("/api/message-templates", methods=["POST"])
-@login_required
-def api_message_templates_create():
-    """Create a new message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    data = request.get_json(force=True)
-    name = (data.get("name") or "").strip()
-    category = (data.get("category") or "general").strip()
-    body = (data.get("body") or "").strip()
-    placeholders = data.get("placeholders") or []
-    if not name or not body:
-        return jsonify({"error": "Name and body are required."}), 400
-    valid_categories = {"attendance", "behavior", "academic", "general"}
-    if category not in valid_categories:
-        return jsonify({"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"}), 400
-    tpl = MessageTemplate(
-        name=name,
-        category=category,
-        body=body,
-        placeholders_json=json.dumps(placeholders) if placeholders else None,
-        created_by_user_id=current_user.id,
-    )
-    db.session.add(tpl)
-    db.session.commit()
-    return jsonify({"ok": True, "template": {"id": tpl.id, "name": tpl.name, "category": tpl.category}}), 201
-
-
-@app.route("/api/message-templates/<int:template_id>", methods=["PUT"])
-@login_required
-def api_message_templates_update(template_id):
-    """Update a message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    tpl = db.session.get(MessageTemplate, template_id)
-    if not tpl:
-        return jsonify({"error": "Template not found."}), 404
-    data = request.get_json(force=True)
-    if "name" in data:
-        tpl.name = (data["name"] or "").strip()
-    if "category" in data:
-        cat = (data["category"] or "").strip()
-        valid_categories = {"attendance", "behavior", "academic", "general"}
-        if cat not in valid_categories:
-            return jsonify({"error": f"Invalid category."}), 400
-        tpl.category = cat
-    if "body" in data:
-        tpl.body = (data["body"] or "").strip()
-    if "placeholders" in data:
-        tpl.placeholders_json = json.dumps(data["placeholders"]) if data["placeholders"] else None
-    if "is_active" in data:
-        tpl.is_active = bool(data["is_active"])
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/message-templates/<int:template_id>", methods=["DELETE"])
-@login_required
-def api_message_templates_delete(template_id):
-    """Soft-delete (deactivate) a message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    tpl = db.session.get(MessageTemplate, template_id)
-    if not tpl:
-        return jsonify({"error": "Template not found."}), 404
-    tpl.is_active = False
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/teacher/message-templates", methods=["GET"])
-@login_required
-def api_teacher_message_templates():
-    """Teacher-facing list of message templates with placeholders info."""
-    if not is_teacher_user(current_user):
-        abort(403)
-    category = request.args.get("category", "").strip()
-    query = MessageTemplate.query.filter_by(is_active=True)
-    if category:
-        query = query.filter_by(category=category)
-    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
-    return jsonify({
-        "templates": [{
-            "id": t.id,
-            "name": t.name,
-            "category": t.category,
-            "body": t.body,
-            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
-        } for t in templates]
-    })
-
-
 # ---------------------------------------------------------------------------
 # Teacher Portal — Save API stubs (referenced by templates)
 # ---------------------------------------------------------------------------
@@ -4187,26 +4072,6 @@ def api_teacher_attendance_save():
     )
     db.session.add(audit)
 
-    # Log to admin audit log
-    try:
-        admin_audit = AdminAuditLog(
-            user_id=current_user.id,
-            action="attendance_record",
-            module="attendance",
-            target_type="learner",
-            target_id=learner_id,
-            summary=f"Teacher {current_user.username} recorded attendance for learner {learner_id} on {date_absent}",
-            details_json=json.dumps({
-                "learner_id": learner_id, "date_absent": date_absent,
-                "academic_year": academic_year, "term": term,
-                "reason_id": reason_id, "reason_other": reason_other,
-            }),
-            ip_address=request.remote_addr,
-        )
-        db.session.add(admin_audit)
-    except Exception:
-        pass
-
     if idempotency_key:
         db.session.add(TeacherWriteEvent(
             user_id=current_user.id, module="attendance_save",
@@ -4215,290 +4080,106 @@ def api_teacher_attendance_save():
         ))
 
     db.session.commit()
-    return jsonify({"thread": {"id": thread.id}})
+    return jsonify({"message": "Attendance recorded.", "learner_id": learner_id})
 
 
-@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["GET"])
+@app.route("/api/teacher/discipline/save", methods=["POST"])
 @login_required
-def api_chat_thread_messages(thread_id):
-    """Get messages for a thread, creating delivery receipts for non-sender messages."""
-    thread = db.session.get(ChatThread, thread_id)
-    if not thread:
-        return jsonify({"error": "Thread not found."}), 404
-
-    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
-    if not participant:
+def api_teacher_discipline_save():
+    """Save a discipline record."""
+    if not is_teacher_user(current_user):
         abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_str = request.form.get("date", "").strip()
+    entry_type = request.form.get("type", "Demerit").strip()
+    points = request.form.get("points", "1").strip()
+    comment = request.form.get("comment", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
 
-    limit = request.args.get("limit", 80, type=int)
-    messages = ChatMessage.query.filter_by(thread_id=thread_id).order_by(ChatMessage.created_at.desc()).limit(limit).all()
-    messages.reverse()
+    if not learner_id:
+        return jsonify({"error": "Learner ID is required."}), 400
 
-    rows = []
-    for msg in messages:
-        # Create delivery receipt for messages not sent by current user
-        if msg.sender_user_id != current_user.id:
-            existing = ChatMessageReceipt.query.filter_by(message_id=msg.id, user_id=current_user.id).first()
-            if not existing:
-                receipt = ChatMessageReceipt(
-                    message_id=msg.id,
-                    user_id=current_user.id,
-                    delivered_at=datetime.utcnow(),
-                )
-                db.session.add(receipt)
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
 
-        sender = db.session.get(User, msg.sender_user_id)
-        sender_name = sender.username if sender else "Unknown"
-
-        attachments = ChatAttachment.query.filter_by(message_id=msg.id).all()
-        att_list = [{
-            "id": a.id,
-            "name": a.original_name,
-            "downloadUrl": url_for("api_chat_attachment_download", attachment_id=a.id),
-        } for a in attachments]
-
-        # Receipt info for all users
-        receipts = ChatMessageReceipt.query.filter_by(message_id=msg.id).all()
-        receipt_info = []
-        for r in receipts:
-            receipt_info.append({
-                "userId": r.user_id,
-                "deliveredAt": r.delivered_at.isoformat() if r.delivered_at else None,
-                "readAt": r.read_at.isoformat() if r.read_at else None,
-            })
-
-        # Current user's receipt status
-        my_receipt = next((r for r in receipts if r.user_id == current_user.id), None)
-        delivered_at = my_receipt.delivered_at.isoformat() if my_receipt and my_receipt.delivered_at else None
-        read_at = my_receipt.read_at.isoformat() if my_receipt and my_receipt.read_at else None
-
-        rows.append({
-            "id": msg.id,
-            "senderId": msg.sender_user_id,
-            "senderName": sender_name,
-            "body": msg.body or "",
-            "messageType": msg.message_type,
-            "moderationStatus": msg.moderation_status,
-            "createdAt": msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else "",
-            "editedAt": msg.edited_at.isoformat() if msg.edited_at else None,
-            "attachments": att_list,
-            "receipts": receipt_info,
-            "deliveredAt": delivered_at,
-            "readAt": read_at,
-        })
-
-    db.session.commit()
-    return jsonify({"rows": rows})
-
-
-@app.route("/api/chat/threads/<int:thread_id>/read", methods=["POST"])
-@login_required
-def api_chat_thread_read(thread_id):
-    """Mark all messages in a thread as read for the current user."""
-    thread = db.session.get(ChatThread, thread_id)
-    if not thread:
-        return jsonify({"error": "Thread not found."}), 404
-
-    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
-    if not participant:
-        abort(403)
-
-    # Update receipts for all messages by current user in this thread
-    messages = ChatMessage.query.filter_by(thread_id=thread_id).all()
-    msg_ids = [m.id for m in messages]
-    now = datetime.utcnow()
-    if msg_ids:
-        receipts = ChatMessageReceipt.query.filter(
-            ChatMessageReceipt.message_id.in_(msg_ids),
-            ChatMessageReceipt.user_id == current_user.id,
-            ChatMessageReceipt.read_at.is_(None),
-        ).all()
-        for r in receipts:
-            r.read_at = now
-
-        # Ensure delivery receipts exist for messages from others
-        for m in messages:
-            if m.sender_user_id != current_user.id:
-                existing = ChatMessageReceipt.query.filter_by(message_id=m.id, user_id=current_user.id).first()
-                if not existing:
-                    db.session.add(ChatMessageReceipt(
-                        message_id=m.id,
-                        user_id=current_user.id,
-                        delivered_at=now,
-                        read_at=now,
-                    ))
-
-    # Update last_read_message_id
-    latest_msg = ChatMessage.query.filter_by(thread_id=thread_id).order_by(ChatMessage.created_at.desc()).first()
-    if latest_msg:
-        participant.last_read_message_id = latest_msg.id
-
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["POST"])
-@login_required
-def api_chat_thread_messages_send(thread_id):
-    """Send a message in a thread."""
-    thread = db.session.get(ChatThread, thread_id)
-    if not thread:
-        return jsonify({"error": "Thread not found."}), 404
-
-    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
-    if not participant:
-        abort(403)
-
-    body = request.form.get("body", "").strip()
-    if not body:
-        return jsonify({"error": "Message body is required."}), 400
-
-    msg = ChatMessage(
-        thread_id=thread_id,
-        sender_user_id=current_user.id,
-        body=body,
-        message_type="text",
-    )
-    db.session.add(msg)
-    db.session.flush()
-
-    # Handle file attachments
-    files = request.files.getlist("attachments")
-    for f in files:
-        if f and f.filename:
-            safe_name = secure_filename(f.filename) or f.filename
-            ext = os.path.splitext(safe_name)[1] if "." in safe_name else ""
-            stored_name = f"{secrets.token_hex(16)}{ext}"
-            upload_dir = os.path.join(app.root_path, "uploads", "chat")
-            os.makedirs(upload_dir, exist_ok=True)
-            f.save(os.path.join(upload_dir, stored_name))
-            attachment = ChatAttachment(
-                message_id=msg.id,
-                original_name=f.filename,
-                stored_name=stored_name,
-                mime_type=f.content_type,
-                size_bytes=os.path.getsize(os.path.join(upload_dir, stored_name)),
-                storage_relpath=os.path.join("uploads", "chat", stored_name),
-            )
-            db.session.add(attachment)
-
-    thread.updated_at = datetime.utcnow()
-    db.session.commit()
-
-    # Emit socket event for real-time updates
+    points_int = 0
     try:
-        socketio.emit("chat_new_message", {"threadId": thread_id, "messageId": msg.id})
-    except Exception:
+        points_int = max(0, min(10, int(points)))
+    except (ValueError, TypeError):
         pass
 
-    return jsonify({"message_id": msg.id, "thread_id": thread_id})
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_discipline", module="discipline",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date": date_str, "type": entry_type,
+            "points": points_int, "comment": comment,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
 
-
-@app.route("/api/chat/messages/<int:message_id>/moderate", methods=["POST"])
-@login_required
-def api_chat_message_moderate(message_id):
-    """Moderate a message (hide/delete/restore)."""
-    if not (is_teacher_user(current_user) or is_manager_user(current_user) or is_admin_user(current_user)):
-        abort(403)
-
-    msg = db.session.get(ChatMessage, message_id)
-    if not msg:
-        return jsonify({"error": "Message not found."}), 404
-
-    action = request.form.get("action", "").strip()
-    if action == "hide":
-        msg.moderation_status = "hidden"
-    elif action == "delete":
-        msg.deleted_at = datetime.utcnow()
-    elif action == "restore":
-        msg.moderation_status = "visible"
-        msg.deleted_at = None
-    else:
-        return jsonify({"error": f"Unknown action: {action}"}), 400
-
-    # Log to admin audit log
-    try:
-        admin_audit = AdminAuditLog(
-            user_id=current_user.id,
-            action="grade_update",
-            module="grades",
-            target_type="learner",
-            target_id=learner_id,
-            summary=f"Teacher {current_user.username} saved assessment mark {mark}/{total_mark} for learner {learner_id} in {subject_id}",
-            details_json=json.dumps({
-                "learner_id": learner_id, "subject_id": subject_id,
-                "mark": mark, "total_mark": total_mark,
-                "academic_year": academic_year, "term": term,
-            }),
-            ip_address=request.remote_addr,
-        )
-        db.session.add(admin_audit)
-    except Exception:
-        pass
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
 
     db.session.commit()
-    return jsonify({"ok": True, "message_id": msg.id, "action": action})
+    return jsonify({"message": "Discipline recorded.", "learner_id": learner_id})
 
 
-@app.route("/api/chat/attachments/<int:attachment_id>", methods=["GET"])
+@app.route("/api/teacher/assessments/save", methods=["POST"])
 @login_required
-def api_chat_attachment_download(attachment_id):
-    """Download a chat attachment. User must be a participant in the thread."""
-    attachment = db.session.get(ChatAttachment, attachment_id)
-    if not attachment:
-        abort(404)
-
-    msg = db.session.get(ChatMessage, attachment.message_id)
-    if not msg:
-        abort(404)
-
-    participant = ChatParticipant.query.filter_by(thread_id=msg.thread_id, user_id=current_user.id).first()
-    if not participant:
+def api_teacher_assessments_save():
+    """Save an assessment mark record."""
+    if not is_teacher_user(current_user):
         abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    subject_id = request.form.get("subject_id", "").strip()
+    mark = request.form.get("mark", "").strip()
+    total_mark = request.form.get("total_mark", "100").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
 
-    filepath = os.path.join(app.root_path, attachment.storage_relpath)
-    if not os.path.exists(filepath):
-        abort(404)
+    if not learner_id or not subject_id or not mark:
+        return jsonify({"error": "Learner ID, subject, and mark are required."}), 400
 
-    return send_file(
-        filepath,
-        mimetype=attachment.mime_type or "application/octet-stream",
-        as_attachment=True,
-        download_name=attachment.original_name,
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_assessment", module="assessments",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "subject_id": subject_id,
+            "mark": mark, "total_mark": total_mark,
+            "academic_year": academic_year, "term": term,
+        }),
     )
+    db.session.add(audit)
 
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
 
-# --- Chat Page Routes ---
-
-
-@app.route("/parent/messages")
-@login_required
-def parent_messages_page():
-    """Parent chat/messages page."""
-    if not is_guardian_parent_account(current_user) and not is_admin_user(current_user):
-        abort(403)
-    session["portal_mode"] = "parent"
-    return render_template("parent/messages.html")
-
-
-@app.route("/management/chat")
-@login_required
-def management_chat_page():
-    """Management chat & moderation page."""
-    if not _management_user_can_access_reports(current_user):
-        abort(403)
-    session["portal_mode"] = "management"
-    return render_template("management_chat.html")
-
-
-@app.route("/admin/chat")
-@login_required
-def admin_chat_page():
-    """Admin chat page."""
-    if not is_admin_user(current_user):
-        abort(403)
-    session["portal_mode"] = "admin"
-    return render_template("admin/chat.html")
+    db.session.commit()
+    return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
 
 
 # ---------------------------------------------------------------------------
