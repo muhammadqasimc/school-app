@@ -1,31 +1,21 @@
 # SchoolApp todo list
 #
 # Mark a task as completed by prefixing the line with [x].
-# The Hermes cron job will remove completed lines automatically.
+# The Hermes cron job will remove completed lines automatically every 30 minutes.
 #
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-[x] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
-[x] Add a unified teacher dashboard API so portal tiles load instead of 404s
-[x] Add saved filter presets for management report pages
-[x] Add parent/guardian notification workflows for attendance, discipline, and finance events
-[x] Add overdue finance reminders with channel selection and resend tracking
-[x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
-[x] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
-[x] Add templated parent/teacher messaging with delivery tracking and read history
-[x] Add chat API routes with delivery/read receipt display
-[x] Add MessageTemplate model, CRUD API, and teacher template selector
+[ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
+[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
+[ ] Add saved filter presets for management report pages
+[ ] Add parent/guardian notification workflows for attendance, discipline, and finance events
+[ ] Add overdue finance reminders with channel selection and resend tracking
+[ ] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
 [ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
-[ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-
-# --- REGRESSIONS (introduced by commit 2a068e4 / e38bd71) ---
-[ ] Fix EarlyIntervention regression — models deleted in 2a068e4, 13 tests broken, API routes still reference deleted classes
-[ ] Fix finance reminder routes regression — routes deleted in e38bd71, 4 tests broken (routes /admin/communication/finance/reminders missing)
-[ ] Fix PG compat translation tests — 3 tests fail due to deleted MDBConnection._translate_access_to_postgres method
