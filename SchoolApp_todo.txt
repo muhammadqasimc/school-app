@@ -1,29 +1,23 @@
 # SchoolApp todo list
 #
 # Mark a task as completed by prefixing the line with [x].
-# The Hermes cron job will remove completed lines automatically.
+# The Hermes cron job will remove completed lines automatically every 30 minutes.
 #
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-<<<<<<< Updated upstream
 [ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
-
-## Fixes
-[ ] Investigate flaky test_admin_communication_discipline_incidents_and_send — fails only in full-suite run (passes in isolation); likely test ordering/isolation issue with shared DB state or importlib caching
-[ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 41 calls in production (inventory_routes.py:21, app.py:16, admin_routes.py:4) + 6 in tests (test_early_intervention.py:2, test_attendance_exceptions.py:3, test_report_filter_presets.py:1) — count STABLE at 47 (no new calls in latest feature)
-
-## Future / Enhancements
+[ ] Add saved filter presets for management report pages
+[ ] Add parent/guardian notification workflows for attendance, discipline, and finance events
+[ ] Add overdue finance reminders with channel selection and resend tracking
+[ ] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+[ ] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
-[x] Add attendance exception codes with notes and attachment support for late/excused/medical absences
-[x] Add saved filter presets for management report pages — completed in 38dee98 (15 tests all pass)
-[x] Add report scheduling/subscriptions for saved management filters and automated delivery — completed in fcc1650 (15 tests all pass)
+[ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
+[ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
+[ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-=======
-[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
-    [ ] Parent portal view of assignments with download links
-    [ ] Parent read acknowledgment tracking for assignments
->>>>>>> Stashed changes
