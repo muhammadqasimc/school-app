@@ -3983,121 +3983,6 @@ def api_teacher_messages_send():
     })
 
 
-# --- Message Templates API ---
-
-
-@app.route("/api/message-templates", methods=["GET"])
-@login_required
-def api_message_templates_list():
-    """List active message templates, optionally filtered by category."""
-    category = request.args.get("category", "").strip()
-    query = MessageTemplate.query.filter_by(is_active=True)
-    if category:
-        query = query.filter_by(category=category)
-    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
-    return jsonify({
-        "templates": [{
-            "id": t.id,
-            "name": t.name,
-            "category": t.category,
-            "body": t.body,
-            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
-        } for t in templates]
-    })
-
-
-@app.route("/api/message-templates", methods=["POST"])
-@login_required
-def api_message_templates_create():
-    """Create a new message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    data = request.get_json(force=True)
-    name = (data.get("name") or "").strip()
-    category = (data.get("category") or "general").strip()
-    body = (data.get("body") or "").strip()
-    placeholders = data.get("placeholders") or []
-    if not name or not body:
-        return jsonify({"error": "Name and body are required."}), 400
-    valid_categories = {"attendance", "behavior", "academic", "general"}
-    if category not in valid_categories:
-        return jsonify({"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"}), 400
-    tpl = MessageTemplate(
-        name=name,
-        category=category,
-        body=body,
-        placeholders_json=json.dumps(placeholders) if placeholders else None,
-        created_by_user_id=current_user.id,
-    )
-    db.session.add(tpl)
-    db.session.commit()
-    return jsonify({"ok": True, "template": {"id": tpl.id, "name": tpl.name, "category": tpl.category}}), 201
-
-
-@app.route("/api/message-templates/<int:template_id>", methods=["PUT"])
-@login_required
-def api_message_templates_update(template_id):
-    """Update a message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    tpl = db.session.get(MessageTemplate, template_id)
-    if not tpl:
-        return jsonify({"error": "Template not found."}), 404
-    data = request.get_json(force=True)
-    if "name" in data:
-        tpl.name = (data["name"] or "").strip()
-    if "category" in data:
-        cat = (data["category"] or "").strip()
-        valid_categories = {"attendance", "behavior", "academic", "general"}
-        if cat not in valid_categories:
-            return jsonify({"error": f"Invalid category."}), 400
-        tpl.category = cat
-    if "body" in data:
-        tpl.body = (data["body"] or "").strip()
-    if "placeholders" in data:
-        tpl.placeholders_json = json.dumps(data["placeholders"]) if data["placeholders"] else None
-    if "is_active" in data:
-        tpl.is_active = bool(data["is_active"])
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/message-templates/<int:template_id>", methods=["DELETE"])
-@login_required
-def api_message_templates_delete(template_id):
-    """Soft-delete (deactivate) a message template (admin only)."""
-    if not is_admin_user(current_user):
-        abort(403)
-    tpl = db.session.get(MessageTemplate, template_id)
-    if not tpl:
-        return jsonify({"error": "Template not found."}), 404
-    tpl.is_active = False
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/teacher/message-templates", methods=["GET"])
-@login_required
-def api_teacher_message_templates():
-    """Teacher-facing list of message templates with placeholders info."""
-    if not is_teacher_user(current_user):
-        abort(403)
-    category = request.args.get("category", "").strip()
-    query = MessageTemplate.query.filter_by(is_active=True)
-    if category:
-        query = query.filter_by(category=category)
-    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
-    return jsonify({
-        "templates": [{
-            "id": t.id,
-            "name": t.name,
-            "category": t.category,
-            "body": t.body,
-            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
-        } for t in templates]
-    })
-
-
 # ---------------------------------------------------------------------------
 # Teacher Portal — Save API stubs (referenced by templates)
 # ---------------------------------------------------------------------------
@@ -4138,26 +4023,6 @@ def api_teacher_attendance_save():
         }),
     )
     db.session.add(audit)
-
-    # Log to admin audit log
-    try:
-        admin_audit = AdminAuditLog(
-            user_id=current_user.id,
-            action="attendance_record",
-            module="attendance",
-            target_type="learner",
-            target_id=learner_id,
-            summary=f"Teacher {current_user.username} recorded attendance for learner {learner_id} on {date_absent}",
-            details_json=json.dumps({
-                "learner_id": learner_id, "date_absent": date_absent,
-                "academic_year": academic_year, "term": term,
-                "reason_id": reason_id, "reason_other": reason_other,
-            }),
-            ip_address=request.remote_addr,
-        )
-        db.session.add(admin_audit)
-    except Exception:
-        pass
 
     if idempotency_key:
         db.session.add(TeacherWriteEvent(
@@ -4264,26 +4129,6 @@ def api_teacher_assessments_save():
             idempotency_key=idempotency_key,
             response_json=json.dumps({"learner_id": learner_id}),
         ))
-
-    # Log to admin audit log
-    try:
-        admin_audit = AdminAuditLog(
-            user_id=current_user.id,
-            action="grade_update",
-            module="grades",
-            target_type="learner",
-            target_id=learner_id,
-            summary=f"Teacher {current_user.username} saved assessment mark {mark}/{total_mark} for learner {learner_id} in {subject_id}",
-            details_json=json.dumps({
-                "learner_id": learner_id, "subject_id": subject_id,
-                "mark": mark, "total_mark": total_mark,
-                "academic_year": academic_year, "term": term,
-            }),
-            ip_address=request.remote_addr,
-        )
-        db.session.add(admin_audit)
-    except Exception:
-        pass
 
     db.session.commit()
     return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
