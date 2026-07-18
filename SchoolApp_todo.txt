@@ -19,3 +19,9 @@
 [ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+[ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
+[ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
+[ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
+[ ] Add regression coverage for attendance notification templates and delivery tracking
+[ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
+[ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
