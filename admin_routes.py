@@ -28,6 +28,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import func
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -1407,6 +1408,251 @@ def register_admin_routes(flask_app: Flask) -> None:
                                 sent += 1
                     except Exception as exc:
                         failed.append({"learner_id": lid, "error": str(exc)})
+        return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
+
+    @flask_app.route("/admin/communication/finance/reminders")
+    @login_required
+    def admin_communication_finance_reminders():
+        """List past finance reminder batches grouped by batch_id."""
+        require_admin()
+        page = max(1, int(request.args.get("page", "1")))
+        per_page = 20
+
+        # Get unique batch_ids for finance category with aggregate stats
+        batches_q = r.db.session.query(
+            r.CommunicationDeliveryLog.batch_id,
+            func.count(r.CommunicationDeliveryLog.id).label("total"),
+            func.max(r.CommunicationDeliveryLog.sent_at).label("last_sent"),
+        ).filter(
+            r.CommunicationDeliveryLog.category == "finance"
+        ).group_by(
+            r.CommunicationDeliveryLog.batch_id
+        ).order_by(
+            func.max(r.CommunicationDeliveryLog.sent_at).desc()
+        )
+
+        # Manual pagination
+        total = batches_q.count()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        offset = (page - 1) * per_page
+        rows = batches_q.offset(offset).limit(per_page).all()
+
+        batches = []
+        for row in rows:
+            # Count sent vs failed for this batch
+            sent_count = r.CommunicationDeliveryLog.query.filter_by(
+                batch_id=row.batch_id, category="finance", status="sent"
+            ).count()
+            # Get channels used in this batch
+            ch_rows = r.db.session.query(r.CommunicationDeliveryLog.channel).filter(
+                r.CommunicationDeliveryLog.batch_id == row.batch_id,
+                r.CommunicationDeliveryLog.category == "finance",
+            ).distinct().all()
+            channels = [c[0] for c in ch_rows]
+            batches.append({
+                "batch_id": row.batch_id,
+                "total": row.total,
+                "sent": sent_count,
+                "failed": row.total - sent_count,
+                "last_sent": row.last_sent.isoformat() if row.last_sent else None,
+                "channels": channels,
+            })
+
+        return jsonify({
+            "batches": batches,
+            "page": page,
+            "total_pages": total_pages,
+            "total_batches": total,
+        })
+
+    @flask_app.route("/admin/communication/finance/reminder/<batch_id>")
+    @login_required
+    def admin_communication_finance_reminder_detail(batch_id: str):
+        """Get delivery details for a specific finance batch."""
+        require_admin()
+        deliveries = r.CommunicationDeliveryLog.query.filter_by(
+            batch_id=str(batch_id), category="finance"
+        ).order_by(r.CommunicationDeliveryLog.sent_at.desc()).all()
+
+        return jsonify({
+            "deliveries": [
+                {
+                    "id": d.id,
+                    "recipient_name": d.recipient_name,
+                    "recipient_phone": d.recipient_phone,
+                    "channel": d.channel,
+                    "status": d.status,
+                    "sent_at": d.sent_at.isoformat() if d.sent_at else None,
+                    "reference_id": d.reference_id,
+                    "error_message": d.error_message,
+                }
+                for d in deliveries
+            ],
+            "batch_id": batch_id,
+            "total": len(deliveries),
+        })
+
+    # --- Attendance notification workflow -------------------------------------------
+
+    @flask_app.route("/admin/communication/attendance/learners")
+    @login_required
+    def admin_communication_attendance_learners():
+        """Return learners with attendance (absence) records for notification."""
+        require_admin()
+        year_s = str(request.args.get("year", "") or datetime.utcnow().year).strip()
+        grade = str(request.args.get("grade", "")).strip()
+        surname = str(request.args.get("surname", "")).strip()
+        learner_id = str(request.args.get("learner_id", "")).strip()
+        start_date = str(request.args.get("start_date", "")).strip()
+        end_date = str(request.args.get("end_date", "")).strip()
+        try:
+            limit = min(int(request.args.get("limit", "500")), 2000)
+        except ValueError:
+            limit = 500
+        try:
+            y_int = int(year_s)
+        except ValueError:
+            y_int = datetime.utcnow().year
+
+        # Build query: absence count per learner from Absentees, joined with Learner_Info for name
+        joins = ["FROM [Absentees] a INNER JOIN [Learner_Info] li ON CSTR(a.[Learnerid]) = CSTR(li.[ID])"]
+        wh = ["li.[Status] = 'C'"]
+        params: list = []
+
+        if year_s:
+            wh.append("CSTR(a.[Datayear]) = ?")
+            params.append(year_s)
+        if grade:
+            wh.append("CSTR(li.[Grade]) = ?")
+            params.append(grade)
+        if surname:
+            wh.append("li.[SName] LIKE ?")
+            params.append(f"%{surname}%")
+        if learner_id:
+            wh.append("(CSTR(li.[ID]) = ? OR CSTR(li.[LearnerID]) = ?)")
+            params.extend([learner_id, learner_id])
+        if start_date:
+            wh.append("a.[DateAbsent] >= ?")
+            params.append(start_date)
+        if end_date:
+            wh.append("a.[DateAbsent] <= ?")
+            params.append(end_date + " 23:59:59")
+
+        where_sql = " AND ".join(wh) if wh else "1=1"
+        sql = (
+            f"SELECT TOP {limit} li.[ID], li.[FName], li.[SName], li.[Grade], "
+            f"COUNT(a.[Learnerid]) AS AbsenceCount "
+            f"{' '.join(joins)} WHERE {where_sql} "
+            f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+            f"ORDER BY li.[SName], li.[FName]"
+        )
+        try:
+            rows = r.mdb_conn.execute_query(sql, tuple(params)) or []
+        except Exception:
+            # Fallback: try without TOP
+            alt_sql = (
+                f"SELECT li.[ID], li.[FName], li.[SName], li.[Grade], "
+                f"COUNT(a.[Learnerid]) AS AbsenceCount "
+                f"{' '.join(joins)} WHERE {where_sql} "
+                f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+                f"ORDER BY li.[SName], li.[FName]"
+            )
+            try:
+                rows = r.mdb_conn.execute_query(alt_sql, tuple(params)) or []
+                rows = rows[:limit]
+            except Exception:
+                rows = []
+
+        out = []
+        for row in rows:
+            lid = str(row.get("ID") or "").strip()
+            if not lid:
+                continue
+            nm = (str(row.get("SName") or "").strip() + ", " + str(row.get("FName") or "").strip()).strip(", ")
+            absence_count = int(row.get("AbsenceCount") or 0)
+            out.append({
+                "id": lid,
+                "learner_name": nm,
+                "learner_id": lid,
+                "grade": str(row.get("Grade") or ""),
+                "year": y_int,
+                "absence_count": absence_count,
+                "preview_message": f"{nm} (Gr {row.get('Grade')}) — {absence_count} absence(s)",
+            })
+        return jsonify({"learners": out})
+
+    @flask_app.route("/admin/communication/attendance/send", methods=["POST"])
+    @login_required
+    def admin_communication_attendance_send():
+        """Send attendance notifications to parents/guardians."""
+        require_admin()
+        body = request.get_json(force=True, silent=True) or {}
+        channels = [str(c).lower() for c in (body.get("channels") or [])]
+        learners = body.get("learners") or []
+        tpl = str(body.get("attendance_template") or "").strip()
+        school = (os.environ.get("SCHOOL_DISPLAY_NAME") or "School").strip()
+        if not learners:
+            return jsonify({"ok": False, "error": "No learners."}), 400
+        batch_id = _comm_batch_id()
+        sent = 0
+        failed: list[dict] = []
+        for L in learners:
+            lid = str(L.get("learner_id") or L.get("id") or "").strip()
+            if not lid:
+                continue
+            nm = str(L.get("learner_name") or "")
+            gr = str(L.get("grade") or "")
+            yr = str(L.get("year") or datetime.utcnow().year)
+            ac = str(L.get("absence_count") or "0")
+            msg = (
+                tpl.replace("{parent_name}", "Parent/Guardian")
+                .replace("{learner_name}", nm)
+                .replace("{grade}", gr)
+                .replace("{year}", yr)
+                .replace("{absence_count}", ac)
+                .replace("{school_name}", school)
+            )
+            seen_phones: set[str] = set()
+            for ph, pname in r._get_parent_phones_from_mdb([lid]):
+                ph_key = str(ph or "").strip()
+                if not ph_key or ph_key in seen_phones:
+                    continue
+                seen_phones.add(ph_key)
+                msg_f = msg.replace("{parent_name}", pname or "Parent/Guardian")
+                for ch in channels:
+                    try:
+                        if ch == "sms":
+                            r.send_sms_message(ph, msg_f)
+                            _log_delivery(
+                                batch_id=batch_id,
+                                category="attendance",
+                                channel="sms",
+                                phone=ph,
+                                message=msg_f,
+                                status="sent",
+                                recipient_name=pname,
+                                reference_type="learner",
+                                reference_id=lid,
+                            )
+                            sent += 1
+                        elif ch == "whatsapp":
+                            if r.send_whatsapp_message(ph, msg_f):
+                                _log_delivery(
+                                    batch_id=batch_id,
+                                    category="attendance",
+                                    channel="whatsapp",
+                                    phone=ph,
+                                    message=msg_f,
+                                    status="sent",
+                                    recipient_name=pname,
+                                    reference_type="learner",
+                                    reference_id=lid,
+                                )
+                                sent += 1
+                            else:
+                                failed.append({"learner_id": lid, "phone": ph, "channel": "whatsapp"})
+                    except Exception as exc:
+                        failed.append({"learner_id": lid, "phone": ph, "channel": ch, "error": str(exc)})
         return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
 
     @flask_app.route("/admin/communication/delivery-report/<batch_id>")
