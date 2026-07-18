@@ -18,8 +18,9 @@
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-[ ] Add /api/teacher/dashboard and /api/teacher/messages/send endpoints to match the teacher portal smoke contract
-[ ] Add a teacher home screen with quick actions for attendance, class roster, messaging, and exports
-[ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
-[ ] Add a function notice board where admins can set new notices
-[ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+[ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
+[ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
+[ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
+[ ] Add regression coverage for attendance notification templates and delivery tracking
+[ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
+[ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
