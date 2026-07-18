@@ -13,11 +13,12 @@
                 <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
                     <i class="fas fa-arrow-left"></i> Back to Admin
                 </a>
-                <p class="text-muted">Category-based communication for Custom, Discipline, and Finance with immediate delivery and per-run report tracking.</p>
+                <p class="text-muted">Category-based communication for Custom, Discipline, Finance, and Attendance with immediate delivery and per-run report tracking.</p>
                 <ul class="nav nav-tabs mb-3" id="commTabs" role="tablist">
                     <li class="nav-item"><button class="nav-link active" data-category="custom" type="button">Custom</button></li>
                     <li class="nav-item"><button class="nav-link" data-category="discipline" type="button">Discipline</button></li>
                     <li class="nav-item"><button class="nav-link" data-category="finance" type="button">Finance</button></li>
+                    <li class="nav-item"><button class="nav-link" data-category="attendance" type="button">Attendance</button></li>
                 </ul>
 
                 <div class="row">
@@ -101,7 +102,14 @@
                                 Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{outstanding_amount}</code> <code>{school_name}</code>
                             </div>
                         </div>
-                        <div class="small text-muted mb-2" id="previewHint">Discipline and Finance messages are generated from selected records.</div>
+                        <div class="mb-2" id="attendanceTemplateWrap" style="display:none;">
+                            <label class="form-label" for="attendanceTemplateText">Attendance Message Template</label>
+                            <textarea id="attendanceTemplateText" class="form-control" rows="4">Dear {parent_name}, this is an attendance notification for {learner_name} (Grade {grade}). They have {absence_count} recorded absence(s) for {year}. Please ensure regular school attendance.</textarea>
+                            <div class="small text-muted mt-1">
+                                Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{absence_count}</code> <code>{school_name}</code>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-2" id="previewHint">Discipline, Finance, and Attendance messages are generated from selected records.</div>
                         <button type="button" id="btnSend" class="btn btn-success">
                             <i class="fas fa-paper-plane"></i> Send Now
                         </button>
@@ -188,6 +196,7 @@
             category = this.getAttribute('data-category');
             document.getElementById('customMessageWrap').style.display = category === 'custom' ? 'block' : 'none';
             document.getElementById('financeTemplateWrap').style.display = category === 'finance' ? 'block' : 'none';
+            document.getElementById('attendanceTemplateWrap').style.display = category === 'attendance' ? 'block' : 'none';
             document.getElementById('targetList').innerHTML = '<span class="text-muted">Run a search first.</span>';
             currentRows = [];
         });
@@ -222,7 +231,7 @@
             if (surname) url += '&surname=' + encodeURIComponent(surname);
             if (startDate) url += '&start_date=' + encodeURIComponent(startDate);
             if (endDate) url += '&end_date=' + encodeURIComponent(endDate);
-        } else {
+        } else if (category === 'finance') {
             if (!grade) {
                 document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a grade to load outstanding finance records.</span>';
                 return;
@@ -231,6 +240,18 @@
             if (year) url += '&year=' + encodeURIComponent(year);
             if (grade) url += '&grade=' + encodeURIComponent(grade);
             if (surname) url += '&surname=' + encodeURIComponent(surname);
+        } else if (category === 'attendance') {
+            if (!grade && !learnerId && !surname && !startDate && !endDate) {
+                document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a grade, learner, surname, or date range to search attendance records.</span>';
+                return;
+            }
+            url = '{{ url_for("admin_communication_attendance_learners") }}?';
+            if (year) url += '&year=' + encodeURIComponent(year);
+            if (learnerId) url += '&learner_id=' + encodeURIComponent(learnerId);
+            if (grade) url += '&grade=' + encodeURIComponent(grade);
+            if (surname) url += '&surname=' + encodeURIComponent(surname);
+            if (startDate) url += '&start_date=' + encodeURIComponent(startDate);
+            if (endDate) url += '&end_date=' + encodeURIComponent(endDate);
         }
         document.getElementById('targetList').innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         fetchJson(url).then(data => {
@@ -246,8 +267,10 @@
                     (category === 'custom'
                         ? ((r.surname || '') + ', ' + (r.name || '') + ' (Grade ' + (r.grade || '') + ')')
                         : (category === 'discipline'
-                            ? (((r.incident_date || '').toString().slice(0, 10) + ' - ' + (r.preview_message || (r.learner_name || ''))).trim().replace(/^-\s*/, ''))
-                            : (r.preview_message || (r.learner_name || ''))))
+                            ? (((r.incident_date || '').toString().slice(0, 10) + ' - ' + (r.preview_message || (r.learner_name || ''))).trim().replace(/^-\\s*/, ''))
+                            : (category === 'attendance'
+                                ? (r.learner_name || '') + ' (Grade ' + (r.grade || '') + ') - ' + (r.absence_count || 0) + ' absence(s)'
+                                : (r.preview_message || (r.learner_name || '')))))
                     + '</label></div>'
                 ).join('');
             }
@@ -293,6 +316,7 @@
         const selectedRows = selectedIndexes.map(i => currentRows[i]).filter(Boolean);
         const message = document.getElementById('messageText').value.trim();
         const financeTemplate = document.getElementById('financeTemplateText').value.trim();
+        const attendanceTemplate = document.getElementById('attendanceTemplateText').value.trim();
         const channels = Array.from(document.querySelectorAll('.channel-cb:checked')).map(cb => cb.value);
         if (selectedRows.length === 0) {
             document.getElementById('sendResult').innerHTML = '<span class="text-warning">Select at least one item.</span>';
@@ -318,7 +342,7 @@
                 const d = ((r.incident_date || '').toString().slice(0, 10));
                 previewLines.push((d ? d + ' - ' : '') + (r.preview_message || ''));
             });
-        } else {
+        } else if (category === 'finance') {
             const tpl = financeTemplate || '';
             selectedRows.slice(0, 8).forEach(r => {
                 let line = tpl
@@ -327,6 +351,18 @@
                     .replaceAll('{grade}', r.grade || '')
                     .replaceAll('{year}', String(r.year || ''))
                     .replaceAll('{outstanding_amount}', String(r.outstanding || ''))
+                    .replaceAll('{school_name}', 'School');
+                previewLines.push(line);
+            });
+        } else if (category === 'attendance') {
+            const tpl = attendanceTemplate || '';
+            selectedRows.slice(0, 8).forEach(r => {
+                let line = tpl
+                    .replaceAll('{parent_name}', 'Parent/Guardian')
+                    .replaceAll('{learner_name}', r.learner_name || '')
+                    .replaceAll('{grade}', r.grade || '')
+                    .replaceAll('{year}', String(r.year || ''))
+                    .replaceAll('{absence_count}', String(r.absence_count || '0'))
                     .replaceAll('{school_name}', 'School');
                 previewLines.push(line);
             });
@@ -376,10 +412,14 @@
         } else if (category === 'discipline') {
             url = '{{ url_for("admin_communication_discipline_send") }}';
             payload.incidents = selectedRows;
-        } else {
+        } else if (category === 'finance') {
             url = '{{ url_for("admin_communication_finance_send") }}';
             payload.learners = selectedRows;
             payload.finance_template = financeTemplate;
+        } else if (category === 'attendance') {
+            url = '{{ url_for("admin_communication_attendance_send") }}';
+            payload.learners = selectedRows;
+            payload.attendance_template = document.getElementById('attendanceTemplateText').value.trim();
         }
         postJson(url, payload).then(afterSend).catch(onSendError);
 
