@@ -844,6 +844,55 @@ class SchoolAssetRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class EarlyIntervention(db.Model):
+    __tablename__ = 'early_intervention'
+    id = db.Column(db.Integer, primary_key=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    learner_name = db.Column(db.String(200), nullable=True)
+    grade = db.Column(db.String(20), nullable=True)
+    class_name = db.Column(db.String(50), nullable=True)
+    risk_type = db.Column(db.String(32), nullable=False)  # attendance|grade|discipline|general
+    intervention_type = db.Column(db.String(64), nullable=False)  # parent_meeting|academic_support|counseling|tutoring|mentoring|other
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='open', index=True)  # open|in_progress|resolved|closed
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome_notes = db.Column(db.Text, nullable=True)
+
+
+class InterventionNotification(db.Model):
+    __tablename__ = 'intervention_notification'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    recipient_name = db.Column(db.String(160), nullable=True)
+    recipient_phone = db.Column(db.String(32), nullable=False)
+    channel = db.Column(db.String(16), nullable=False, default='sms')  # sms|whatsapp
+    message_snapshot = db.Column(db.Text, nullable=False)
+    communication_log_id = db.Column(db.Integer, db.ForeignKey('communication_delivery_log.id'), nullable=True)
+    sent_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(24), nullable=False, default='sent')
+
+
+class InterventionReferral(db.Model):
+    __tablename__ = 'intervention_referral'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    referred_to = db.Column(db.String(64), nullable=False)  # counselor|academic_head|principal|support_staff|other
+    referred_to_name = db.Column(db.String(200), nullable=True)
+    reason = db.Column(db.Text, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='pending', index=True)  # pending|accepted|completed|declined
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome = db.Column(db.Text, nullable=True)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -5042,6 +5091,83 @@ def _management_at_risk_payload(flt: dict) -> dict:
     }
 
 
+def _management_early_intervention_payload(flt: dict) -> dict:
+    """Build the early intervention dashboard payload.
+
+    Queries SQLite models (EarlyIntervention, InterventionReferral) and
+    returns KPIs plus a list of interventions with referral counts.
+    """
+    status_filter = str(flt.get("status") or "").strip()
+    risk_filter = str(flt.get("risk_type") or "").strip()
+    grade_filter = str(flt.get("grade") or "").strip()
+
+    query = EarlyIntervention.query
+    if status_filter:
+        query = query.filter(EarlyIntervention.status == status_filter)
+    if risk_filter:
+        query = query.filter(EarlyIntervention.risk_type == risk_filter)
+    if grade_filter:
+        query = query.filter(EarlyIntervention.grade == grade_filter)
+
+    interventions = query.order_by(EarlyIntervention.created_at.desc()).all()
+
+    # KPIs
+    open_interventions = EarlyIntervention.query.filter(
+        EarlyIntervention.status.in_(["open", "in_progress"])
+    ).count()
+    pending_referrals = InterventionReferral.query.filter(
+        InterventionReferral.status == "pending"
+    ).count()
+    total_notifications = InterventionNotification.query.count()
+    resolved_today = EarlyIntervention.query.filter(
+        EarlyIntervention.status == "resolved",
+        db.func.date(EarlyIntervention.resolved_at) == db.func.date("now"),
+    ).count()
+
+    # Build intervention list with referral counts and assigned staff names
+    interventions_list = []
+    for inv in interventions:
+        referral_count = InterventionReferral.query.filter(
+            InterventionReferral.intervention_id == inv.id
+        ).count()
+        assigned_name = None
+        if inv.assigned_to_user_id:
+            u = User.query.get(inv.assigned_to_user_id)
+            if u:
+                assigned_name = u.username
+
+        interventions_list.append({
+            "id": inv.id,
+            "learnerId": inv.learner_id,
+            "learnerName": inv.learner_name,
+            "grade": inv.grade,
+            "class": inv.class_name,
+            "riskType": inv.risk_type,
+            "interventionType": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assignedTo": assigned_name,
+            "assignedToUserId": inv.assigned_to_user_id,
+            "createdAt": inv.created_at.isoformat() if inv.created_at else None,
+            "updatedAt": inv.updated_at.isoformat() if inv.updated_at else None,
+            "resolvedAt": inv.resolved_at.isoformat() if inv.resolved_at else None,
+            "outcomeNotes": inv.outcome_notes,
+            "referralCount": referral_count,
+        })
+
+    return {
+        "reportData": {
+            "kpis": {
+                "openInterventions": open_interventions,
+                "pendingReferrals": pending_referrals,
+                "totalNotifications": total_notifications,
+                "resolvedToday": resolved_today,
+            },
+            "interventions": interventions_list,
+        }
+    }
+
+
 def _management_build_generic_report_payload(report_key: str) -> dict:
     flt = _management_filters_from_request()
 
@@ -5052,6 +5178,10 @@ def _management_build_generic_report_payload(report_key: str) -> dict:
     # At-risk dashboard builds its own focused queries — skip generic marks
     if report_key == "at-risk-dashboard":
         return _management_at_risk_payload(flt)
+
+    # Early intervention dashboard uses SQLite models — no MDB needed
+    if report_key == "early-intervention":
+        return _management_early_intervention_payload(flt)
 
     marks = _management_dashboard_fetch_marks(flt)
     year = str(flt.get("year") or "").strip()
@@ -6383,6 +6513,287 @@ def api_management_report_filters():
     return jsonify({"filters": _management_report_filters_payload(_management_filters_from_request())})
 
 
+# ── Early Intervention API ────────────────────────────────────────────────
+
+
+@app.route("/api/early-intervention/list")
+@login_required
+def api_early_intervention_list():
+    """Return interventions with optional filters (status, risk_type, grade)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    st = str(request.args.get("status", "")).strip()
+    rt = str(request.args.get("risk_type", "")).strip()
+    gr = str(request.args.get("grade", "")).strip()
+    query = EarlyIntervention.query
+    if st:
+        query = query.filter(EarlyIntervention.status == st)
+    if rt:
+        query = query.filter(EarlyIntervention.risk_type == rt)
+    if gr:
+        query = query.filter(EarlyIntervention.grade == gr)
+    interventions = query.order_by(EarlyIntervention.created_at.desc()).all()
+    return jsonify({
+        "status": "success",
+        "interventions": [
+            {
+                "id": i.id,
+                "learner_id": i.learner_id,
+                "learner_name": i.learner_name,
+                "grade": i.grade,
+                "class_name": i.class_name,
+                "risk_type": i.risk_type,
+                "intervention_type": i.intervention_type,
+                "description": i.description,
+                "status": i.status,
+                "assigned_to_user_id": i.assigned_to_user_id,
+                "created_at": i.created_at.isoformat() if i.created_at else None,
+            }
+            for i in interventions
+        ],
+    })
+
+
+@app.route("/api/early-intervention/create", methods=["POST"])
+@login_required
+def api_early_intervention_create():
+    """Create a new intervention record."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    learner_id = str(data.get("learner_id") or "").strip()
+    risk_type = str(data.get("risk_type") or "").strip()
+    intervention_type = str(data.get("intervention_type") or "").strip()
+    if not learner_id or not risk_type or not intervention_type:
+        return jsonify({"error": "learner_id, risk_type, and intervention_type are required"}), 400
+    inv = EarlyIntervention(
+        learner_id=learner_id,
+        learner_name=str(data.get("learner_name") or "").strip() or None,
+        grade=str(data.get("grade") or "").strip() or None,
+        class_name=str(data.get("class_name") or "").strip() or None,
+        risk_type=risk_type,
+        intervention_type=intervention_type,
+        description=str(data.get("description") or "").strip() or None,
+        assigned_to_user_id=data.get("assigned_to_user_id") or None,
+        created_by_user_id=getattr(current_user, "id", 0) or 0,
+    )
+    db.session.add(inv)
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+        },
+    }), 201
+
+
+@app.route("/api/early-intervention/update", methods=["POST"])
+@login_required
+def api_early_intervention_update():
+    """Update intervention status, outcome_notes, or assigned_to."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    inv_id = data.get("id")
+    if not inv_id:
+        return jsonify({"error": "id required"}), 400
+    inv = db.session.get(EarlyIntervention, inv_id)
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    if "status" in data:
+        new_status = str(data["status"]).strip()
+        inv.status = new_status
+        if new_status in ("resolved", "closed") and not inv.resolved_at:
+            inv.resolved_at = datetime.utcnow()
+    if "outcome_notes" in data:
+        inv.outcome_notes = str(data["outcome_notes"]).strip() or None
+    if "assigned_to_user_id" in data:
+        inv.assigned_to_user_id = data["assigned_to_user_id"] or None
+    if "description" in data:
+        inv.description = str(data["description"]).strip() or None
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "outcome_notes": inv.outcome_notes,
+            "resolved_at": inv.resolved_at.isoformat() if inv.resolved_at else None,
+            "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
+        },
+    })
+
+
+@app.route("/api/early-intervention/detail")
+@login_required
+def api_early_intervention_detail():
+    """Return single intervention with its referrals."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    inv_id = request.args.get("id")
+    if not inv_id:
+        return jsonify({"error": "id required"}), 400
+    inv = db.session.get(EarlyIntervention, int(inv_id))
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    referrals = InterventionReferral.query.filter_by(intervention_id=inv.id).all()
+    return jsonify({
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "outcome_notes": inv.outcome_notes,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
+            "resolved_at": inv.resolved_at.isoformat() if inv.resolved_at else None,
+        },
+        "referrals": [
+            {
+                "id": r.id,
+                "referred_to": r.referred_to,
+                "referred_to_name": r.referred_to_name,
+                "reason": r.reason,
+                "notes": r.notes,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
+                "outcome": r.outcome,
+            }
+            for r in referrals
+        ],
+    })
+
+
+@app.route("/api/early-intervention/referral/create", methods=["POST"])
+@login_required
+def api_early_intervention_referral_create():
+    """Create a referral linked to an intervention."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    intervention_id = data.get("intervention_id")
+    referred_to = str(data.get("referred_to") or "").strip()
+    reason = str(data.get("reason") or "").strip()
+    if not intervention_id or not referred_to or not reason:
+        return jsonify({"error": "intervention_id, referred_to, and reason are required"}), 400
+    inv = db.session.get(EarlyIntervention, intervention_id)
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    ref = InterventionReferral(
+        intervention_id=intervention_id,
+        referred_to=referred_to,
+        referred_to_name=str(data.get("referred_to_name") or "").strip() or None,
+        reason=reason,
+        notes=str(data.get("notes") or "").strip() or None,
+        created_by_user_id=getattr(current_user, "id", 0) or 0,
+    )
+    db.session.add(ref)
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "referral": {
+            "id": ref.id,
+            "intervention_id": ref.intervention_id,
+            "referred_to": ref.referred_to,
+            "referred_to_name": ref.referred_to_name,
+            "reason": ref.reason,
+            "notes": ref.notes,
+            "status": ref.status,
+            "created_at": ref.created_at.isoformat() if ref.created_at else None,
+        },
+    }), 201
+
+
+@app.route("/api/early-intervention/referral/update", methods=["POST"])
+@login_required
+def api_early_intervention_referral_update():
+    """Update referral status and outcome."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    ref_id = data.get("id")
+    if not ref_id:
+        return jsonify({"error": "id required"}), 400
+    ref = db.session.get(InterventionReferral, ref_id)
+    if not ref:
+        return jsonify({"error": "Referral not found"}), 404
+    if "status" in data:
+        ref.status = str(data["status"]).strip()
+        if data["status"] in ("completed", "declined") and not ref.resolved_at:
+            ref.resolved_at = datetime.utcnow()
+    if "outcome" in data:
+        ref.outcome = str(data["outcome"]).strip() or None
+    if "notes" in data:
+        ref.notes = str(data["notes"]).strip() or None
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "referral": {
+            "id": ref.id,
+            "intervention_id": ref.intervention_id,
+            "referred_to": ref.referred_to,
+            "referred_to_name": ref.referred_to_name,
+            "reason": ref.reason,
+            "notes": ref.notes,
+            "status": ref.status,
+            "outcome": ref.outcome,
+            "resolved_at": ref.resolved_at.isoformat() if ref.resolved_at else None,
+        },
+    })
+
+
+@app.route("/api/early-intervention/from-at-risk")
+@login_required
+def api_early_intervention_from_at_risk():
+    """Check which at-risk learners already have open interventions.
+
+    Returns a set of learner_ids that have open (open|in_progress) interventions.
+    """
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    learner_ids_str = str(request.args.get("learner_ids", "")).strip()
+    learner_ids = [lid.strip() for lid in learner_ids_str.split(",") if lid.strip()]
+    if not learner_ids:
+        return jsonify({"open_intervention_learner_ids": []})
+    open_ids = set()
+    for lid in learner_ids:
+        count = EarlyIntervention.query.filter(
+            EarlyIntervention.learner_id == lid,
+            EarlyIntervention.status.in_(["open", "in_progress"]),
+        ).count()
+        if count > 0:
+            open_ids.add(lid)
+    return jsonify({"open_intervention_learner_ids": sorted(open_ids)})
+
+
+# ── Result Analysis ────────────────────────────────────────────────────────
+
+
 @app.route("/api/management-result-analysis")
 @login_required
 def api_management_result_analysis():
@@ -6835,6 +7246,7 @@ MANAGEMENT_REPORT_REGISTRY = [
     {"key": "principal-overview", "title": "Principal Overview", "template": "management/principal_overview.html"},
     {"key": "attendance", "title": "Attendance", "template": "management/attendance.html"},
     {"key": "at-risk-dashboard", "title": "At-Risk Learner Dashboard", "template": "management/at_risk_dashboard.html"},
+    {"key": "early-intervention", "title": "Early Intervention", "template": "management/early_intervention.html"},
     {"key": "learner-chart-report", "title": "Learner Chart Report", "template": "management/learner_chart_report.html"},
     {"key": "school-achievement-report", "title": "School Achievement Report", "template": "management/school_achievement_report.html"},
     {"key": "learner-promotion-rate", "title": "Learner Promotion Rate", "template": "management/learner_promotion_rate.html"},

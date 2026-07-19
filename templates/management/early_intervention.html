@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = true %}
+{% include "management/_report_frame.html" %}
+<p class="small text-muted mb-2">Track and manage early interventions for at-risk learners. Create interventions, assign to staff, and track referrals.</p>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="row g-3 flex-grow-1">
+    <div class="col-md-2"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Open Interventions</div><div id="k-open" class="kpi-value">-</div></div></div>
+    <div class="col-md-2"><div class="kpi-card kpi-card-info"><div class="kpi-label">Pending Referrals</div><div id="k-pending-ref" class="kpi-value">-</div></div></div>
+    <div class="col-md-2"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Notifications Sent</div><div id="k-notifications" class="kpi-value">-</div></div></div>
+    <div class="col-md-2"><div class="kpi-card kpi-card-success"><div class="kpi-label">Resolved Today</div><div id="k-resolved-today" class="kpi-value">-</div></div></div>
+  </div>
+  <div class="ms-3">
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createInterventionModal">
+      <i class="fas fa-plus me-1"></i> Create Intervention
+    </button>
+  </div>
+</div>
+
+<div class="card report-card-accent-primary">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h6 class="mb-0">Early Interventions</h6>
+    <span class="small text-muted" id="intervention-count">0 interventions</span>
+  </div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Learner</th>
+          <th>Grade / Class</th>
+          <th>Risk Type</th>
+          <th>Intervention</th>
+          <th>Status</th>
+          <th>Assigned To</th>
+          <th>Referrals</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-interventions">
+        <tr><td colspan="9" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Intervention Modal -->
+<div class="modal fade" id="createInterventionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create Early Intervention</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="create-intervention-form">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Learner ID <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="ci-learner-id" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Learner Name</label>
+              <input type="text" class="form-control" id="ci-learner-name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Grade</label>
+              <input type="text" class="form-control" id="ci-grade">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Class</label>
+              <input type="text" class="form-control" id="ci-class">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Risk Type <span class="text-danger">*</span></label>
+              <select class="form-select" id="ci-risk-type" required>
+                <option value="">Select risk type...</option>
+                <option value="attendance">Attendance</option>
+                <option value="grade">Grade / Academic</option>
+                <option value="discipline">Discipline</option>
+                <option value="general">General</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Intervention Type <span class="text-danger">*</span></label>
+              <select class="form-select" id="ci-intervention-type" required>
+                <option value="">Select type...</option>
+                <option value="parent_meeting">Parent Meeting</option>
+                <option value="academic_support">Academic Support</option>
+                <option value="counseling">Counseling</option>
+                <option value="tutoring">Tutoring</option>
+                <option value="mentoring">Mentoring</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Assigned To (User ID)</label>
+              <input type="number" class="form-control" id="ci-assigned-to">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea class="form-control" id="ci-description" rows="3"></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-create-intervention">Create Intervention</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Intervention Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Intervention Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="detail-body">
+        <div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Resolve Intervention Modal -->
+<div class="modal fade" id="resolveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Resolve Intervention</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="resolve-id">
+        <div class="mb-3">
+          <label class="form-label">Outcome Notes</label>
+          <textarea class="form-control" id="resolve-notes" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="btn-resolve">Mark as Resolved</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Referral Modal -->
+<div class="modal fade" id="referralModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Referral</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ref-intervention-id">
+        <div class="mb-3">
+          <label class="form-label">Referred To <span class="text-danger">*</span></label>
+          <select class="form-select" id="ref-referred-to" required>
+            <option value="">Select...</option>
+            <option value="counselor">Counselor</option>
+            <option value="academic_head">Academic Head</option>
+            <option value="principal">Principal</option>
+            <option value="support_staff">Support Staff</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Referred To Name</label>
+          <input type="text" class="form-control" id="ref-referred-name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Reason <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="ref-reason" rows="2" required></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="ref-notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-add-referral">Add Referral</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script>
+<script>
+const reportKey = "early-intervention";
+const keys = ["year", "term", "grade"];
+const q = () => mgtParams(keys);
+const fs = (id, v) => { const e = document.getElementById(id), keep = e.value; while(e.options.length > 1) e.remove(1); (v||[]).forEach(x => { const o = document.createElement("option"); o.value = x; o.textContent = x; e.appendChild(o); }); e.value = keep; };
+
+// Status badge helper
+function statusBadge(s) {
+  const m = {open: 'bg-warning text-dark', in_progress: 'bg-info text-dark', resolved: 'bg-success', closed: 'bg-secondary'};
+  return '<span class="badge ' + (m[s] || 'bg-secondary') + '">' + (s || 'unknown') + '</span>';
+}
+function riskBadge(r) {
+  const m = {attendance: 'bg-warning text-dark', grade: 'bg-danger', discipline: 'bg-info text-dark', general: 'bg-secondary'};
+  return '<span class="badge ' + (m[r] || 'bg-secondary') + '">' + (r || '') + '</span>';
+}
+function typeLabel(t) {
+  const m = {parent_meeting: 'Parent Meeting', academic_support: 'Academic Support', counseling: 'Counseling', tutoring: 'Tutoring', mentoring: 'Mentoring', other: 'Other'};
+  return m[t] || t;
+}
+
+async function lf() {
+  const r = await fetch(`/api/management-report-filters?${q()}`);
+  const d = await r.json();
+  if(!d.filters) return;
+  fs("f-year", d.filters.years);
+  fs("f-term", d.filters.terms);
+  fs("f-grade", d.filters.grades);
+  if(d.filters.phase) fs("f-phase", d.filters.phase);
+}
+
+async function lr() {
+  const p = q(); p.set("report_key", reportKey);
+  const r = await fetch(`/api/management-report?${p}`);
+  const d = await r.json();
+  const rd = d.reportData || {};
+  const k = rd.kpis || {};
+  document.getElementById("k-open").textContent = k.openInterventions ?? "-";
+  document.getElementById("k-pending-ref").textContent = k.pendingReferrals ?? "-";
+  document.getElementById("k-notifications").textContent = k.totalNotifications ?? "-";
+  document.getElementById("k-resolved-today").textContent = k.resolvedToday ?? "-";
+  const interventions = rd.interventions || [];
+  document.getElementById("intervention-count").textContent = interventions.length + " interventions";
+  const tbody = document.getElementById("tbl-interventions");
+  if (!interventions.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-muted">No interventions found.</td></tr>'; return; }
+  tbody.innerHTML = interventions.map(function(inv) {
+    return '<tr>'
+      + '<td><strong>' + (inv.learnerName || inv.learnerId) + '</strong><br><small class="text-muted">' + inv.learnerId + '</small></td>'
+      + '<td>' + (inv.grade || '') + ' / ' + (inv.class || '') + '</td>'
+      + '<td>' + riskBadge(inv.riskType) + '</td>'
+      + '<td>' + typeLabel(inv.interventionType) + '</td>'
+      + '<td>' + statusBadge(inv.status) + '</td>'
+      + '<td>' + (inv.assignedTo || '<span class="text-muted">Unassigned</span>') + '</td>'
+      + '<td><span class="badge bg-info">' + (inv.referralCount || 0) + '</span></td>'
+      + '<td>' + (inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '-') + '</td>'
+      + '<td>'
+      + '  <button class="btn btn-sm btn-outline-primary me-1" onclick="viewDetail(' + inv.id + ')" title="View Details"><i class="fas fa-eye"></i></button>'
+      + '  <button class="btn btn-sm btn-outline-success me-1" onclick="openResolve(' + inv.id + ')" title="Resolve"><i class="fas fa-check"></i></button>'
+      + '  <button class="btn btn-sm btn-outline-info" onclick="openReferral(' + inv.id + ')" title="Add Referral"><i class="fas fa-share"></i></button>'
+      + '</td>'
+      + '</tr>';
+  }).join("");
+}
+
+// ── View Detail ──────────────────────────────────────────────────────────
+async function viewDetail(id) {
+  const body = document.getElementById("detail-body");
+  body.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
+  const modal = new bootstrap.Modal(document.getElementById("detailModal"));
+  modal.show();
+  try {
+    const r = await fetch(`/api/early-intervention/detail?id=${id}`);
+    const d = await r.json();
+    const inv = d.intervention || {};
+    const refs = d.referrals || [];
+    let html = '<div class="row mb-3">'
+      + '<div class="col-md-6"><strong>Learner:</strong> ' + (inv.learner_name || inv.learner_id) + '</div>'
+      + '<div class="col-md-3"><strong>Grade/Class:</strong> ' + (inv.grade || '-') + ' / ' + (inv.class_name || '-') + '</div>'
+      + '<div class="col-md-3"><strong>Risk Type:</strong> ' + riskBadge(inv.risk_type) + '</div>'
+      + '</div>'
+      + '<div class="row mb-3">'
+      + '<div class="col-md-4"><strong>Intervention:</strong> ' + typeLabel(inv.intervention_type) + '</div>'
+      + '<div class="col-md-4"><strong>Status:</strong> ' + statusBadge(inv.status) + '</div>'
+      + '<div class="col-md-4"><strong>Created:</strong> ' + (inv.created_at ? new Date(inv.created_at).toLocaleString() : '-') + '</div>'
+      + '</div>';
+    if (inv.description) {
+      html += '<div class="mb-3"><strong>Description:</strong><br>' + inv.description + '</div>';
+    }
+    if (inv.outcome_notes) {
+      html += '<div class="mb-3"><strong>Outcome Notes:</strong><br>' + inv.outcome_notes + '</div>';
+    }
+    // Referrals
+    html += '<h6 class="mt-3 mb-2">Referrals (' + refs.length + ')</h6>';
+    if (refs.length === 0) {
+      html += '<p class="text-muted small">No referrals yet.</p>';
+    } else {
+      html += '<table class="table table-sm table-bordered"><thead><tr><th>Referred To</th><th>Reason</th><th>Status</th><th>Outcome</th></tr></thead><tbody>';
+      refs.forEach(function(ref) {
+        html += '<tr><td>' + (ref.referred_to_name || ref.referred_to) + '</td>'
+          + '<td>' + (ref.reason || '') + '</td>'
+          + '<td>' + statusBadge(ref.status) + '</td>'
+          + '<td>' + (ref.outcome || '<span class="text-muted">-</span>') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div class="alert alert-danger">Failed to load details.</div>';
+  }
+}
+
+// ── Resolve ──────────────────────────────────────────────────────────────
+function openResolve(id) {
+  document.getElementById("resolve-id").value = id;
+  document.getElementById("resolve-notes").value = "";
+  new bootstrap.Modal(document.getElementById("resolveModal")).show();
+}
+document.getElementById("btn-resolve").addEventListener("click", async function() {
+  const id = parseInt(document.getElementById("resolve-id").value);
+  const notes = document.getElementById("resolve-notes").value.trim();
+  try {
+    const r = await fetch("/api/early-intervention/update", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({id: id, status: "resolved", outcome_notes: notes || null}),
+    });
+    const d = await r.json();
+    if (d.status === "success") {
+      bootstrap.Modal.getInstance(document.getElementById("resolveModal")).hide();
+      await lr();
+    } else {
+      alert("Error: " + (d.error || "Unknown"));
+    }
+  } catch(e) {
+    alert("Failed to resolve intervention.");
+  }
+});
+
+// ── Add Referral ─────────────────────────────────────────────────────────
+function openReferral(id) {
+  document.getElementById("ref-intervention-id").value = id;
+  document.getElementById("ref-referred-to").value = "";
+  document.getElementById("ref-referred-name").value = "";
+  document.getElementById("ref-reason").value = "";
+  document.getElementById("ref-notes").value = "";
+  new bootstrap.Modal(document.getElementById("referralModal")).show();
+}
+document.getElementById("btn-add-referral").addEventListener("click", async function() {
+  const interventionId = parseInt(document.getElementById("ref-intervention-id").value);
+  const referredTo = document.getElementById("ref-referred-to").value;
+  const reason = document.getElementById("ref-reason").value.trim();
+  if (!referredTo || !reason) {
+    alert("Please fill in Referred To and Reason.");
+    return;
+  }
+  try {
+    const r = await fetch("/api/early-intervention/referral/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        intervention_id: interventionId,
+        referred_to: referredTo,
+        referred_to_name: document.getElementById("ref-referred-name").value.trim() || null,
+        reason: reason,
+        notes: document.getElementById("ref-notes").value.trim() || null,
+      }),
+    });
+    const d = await r.json();
+    if (d.status === "success") {
+      bootstrap.Modal.getInstance(document.getElementById("referralModal")).hide();
+      await lr();
+    } else {
+      alert("Error: " + (d.error || "Unknown"));
+    }
+  } catch(e) {
+    alert("Failed to create referral.");
+  }
+});
+
+// ── Create Intervention ──────────────────────────────────────────────────
+document.getElementById("btn-create-intervention").addEventListener("click", async function() {
+  const learnerId = document.getElementById("ci-learner-id").value.trim();
+  const riskType = document.getElementById("ci-risk-type").value;
+  const interventionType = document.getElementById("ci-intervention-type").value;
+  if (!learnerId || !riskType || !interventionType) {
+    alert("Please fill in Learner ID, Risk Type, and Intervention Type.");
+    return;
+  }
+  const payload = {
+    learner_id: learnerId,
+    learner_name: document.getElementById("ci-learner-name").value.trim() || null,
+    grade: document.getElementById("ci-grade").value.trim() || null,
+    class_name: document.getElementById("ci-class").value.trim() || null,
+    risk_type: riskType,
+    intervention_type: interventionType,
+    description: document.getElementById("ci-description").value.trim() || null,
+    assigned_to_user_id: parseInt(document.getElementById("ci-assigned-to").value) || null,
+  };
+  try {
+    const r = await fetch("/api/early-intervention/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.status === "success") {
+      bootstrap.Modal.getInstance(document.getElementById("createInterventionModal")).hide();
+      // Reset form
+      document.getElementById("create-intervention-form").reset();
+      await lr();
+    } else {
+      alert("Error: " + (d.error || "Unknown"));
+    }
+  } catch(e) {
+    alert("Failed to create intervention.");
+  }
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────
+["f-year","f-term","f-grade"].forEach(function(k) {
+  var el = document.getElementById(k);
+  if (el) el.addEventListener("change", lf);
+});
+var applyBtn = document.getElementById("apply-filters");
+if (applyBtn) applyBtn.addEventListener("click", lr);
+(async function() { await lf(); await lr(); })();
+</script>
+{% endblock %}
