@@ -127,6 +127,26 @@
                         <div id="reportResult" class="small mt-2 text-muted">No report loaded.</div>
                     </div>
                 </div>
+
+                <div class="card border-warning mt-3">
+                    <div class="card-header bg-warning text-dark py-2"><h6 class="mb-0">5. Reminder History</h6></div>
+                    <div class="card-body">
+                        <button type="button" id="btnLoadReminders" class="btn btn-outline-warning">
+                            <i class="fas fa-history"></i> View Reminder History
+                        </button>
+                        <span class="ms-2 small text-muted">Past finance reminder batches (most recent first).</span>
+                        <div id="remindersResult" class="mt-2 small text-muted">
+                            <span id="remindersStatus">Click the button above to load past batches.</span>
+                        </div>
+                        <div id="reminderDetailArea" class="mt-2 small" style="display:none;">
+                            <hr>
+                            <button type="button" id="btnBackToReminders" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-arrow-left"></i> Back to batch list
+                            </button>
+                            <div id="reminderDetailContent"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -451,6 +471,123 @@
         }).catch(() => {
             document.getElementById('reportResult').innerHTML = '<span class="text-danger">Failed to load report.</span>';
         });
+    });
+
+    // --- Reminder History ---
+    const remindersResultEl = document.getElementById('remindersResult');
+    const remindersStatusEl = document.getElementById('remindersStatus');
+    const reminderDetailArea = document.getElementById('reminderDetailArea');
+    const reminderDetailContent = document.getElementById('reminderDetailContent');
+    let currentRemindersPage = 1;
+
+    function formatReminderDate(isoStr) {
+        if (!isoStr) return '—';
+        const d = new Date(isoStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderRemindersTable(data) {
+        const batches = data.batches || [];
+        if (batches.length === 0) {
+            remindersStatusEl.innerHTML = '<span class="text-muted">No finance reminder batches found.</span>';
+            return;
+        }
+        let html = '<table class="table table-sm table-hover mt-2"><thead><tr>' +
+            '<th>Batch ID</th><th>Date</th><th>Channels</th><th>Total</th><th>Sent</th><th>Failed</th><th></th>' +
+            '</tr></thead><tbody>';
+        batches.forEach(function(b) {
+            html += '<tr>' +
+                '<td><code title="' + b.batch_id + '">' + b.batch_id.slice(0, 12) + '&hellip;</code></td>' +
+                '<td>' + formatReminderDate(b.last_sent) + '</td>' +
+                '<td>' + (b.channels || []).join(', ') + '</td>' +
+                '<td>' + b.total + '</td>' +
+                '<td class="text-success">' + b.sent + '</td>' +
+                '<td class="' + (b.failed > 0 ? 'text-danger' : 'text-muted') + '">' + b.failed + '</td>' +
+                '<td><button type="button" class="btn btn-outline-info btn-sm view-reminder-detail" data-batch-id="' + b.batch_id + '"><i class="fas fa-list"></i> Details</button></td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        // Pagination
+        if (data.total_pages > 1) {
+            html += '<nav><ul class="pagination pagination-sm">';
+            if (data.page > 1) {
+                html += '<li class="page-item"><button class="page-link reminder-page-btn" data-page="' + (data.page - 1) + '">&laquo; Prev</button></li>';
+            }
+            html += '<li class="page-item disabled"><span class="page-link">Page ' + data.page + ' of ' + data.total_pages + '</span></li>';
+            if (data.page < data.total_pages) {
+                html += '<li class="page-item"><button class="page-link reminder-page-btn" data-page="' + (data.page + 1) + '">Next &raquo;</button></li>';
+            }
+            html += '</ul></nav>';
+        }
+        remindersStatusEl.innerHTML = html;
+        remindersStatusEl.querySelectorAll('.view-reminder-detail').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                loadReminderDetail(this.getAttribute('data-batch-id'));
+            });
+        });
+        remindersStatusEl.querySelectorAll('.reminder-page-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                currentRemindersPage = parseInt(this.getAttribute('data-page'));
+                loadReminders(currentRemindersPage);
+            });
+        });
+    }
+
+    function loadReminders(page) {
+        page = page || 1;
+        remindersStatusEl.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</span>';
+        reminderDetailArea.style.display = 'none';
+        fetchJson('{{ url_for("admin_communication_finance_reminders") }}?page=' + page).then(function(data) {
+            renderRemindersTable(data);
+        }).catch(function() {
+            remindersStatusEl.innerHTML = '<span class="text-danger">Failed to load reminder history.</span>';
+        });
+    }
+
+    function loadReminderDetail(batchId) {
+        remindersResultEl.style.display = 'none';
+        reminderDetailArea.style.display = 'block';
+        reminderDetailContent.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading details...</span>';
+        fetchJson('/admin/communication/finance/reminder/' + encodeURIComponent(batchId)).then(function(data) {
+            const deliveries = data.deliveries || [];
+            if (deliveries.length === 0) {
+                reminderDetailContent.innerHTML = '<span class="text-muted">No deliveries in this batch.</span>';
+                return;
+            }
+            let html = '<p class="mt-2"><strong>Batch:</strong> <code>' + data.batch_id + '</code> | <strong>Total deliveries:</strong> ' + data.total + '</p>';
+            html += '<table class="table table-sm"><thead><tr>' +
+                '<th>Recipient</th><th>Phone</th><th>Channel</th><th>Status</th><th>Date</th><th>Ref ID</th>' +
+                '</tr></thead><tbody>';
+            deliveries.forEach(function(d) {
+                const statusClass = d.status === 'sent' ? 'text-success' : 'text-danger';
+                html += '<tr>' +
+                    '<td>' + (d.recipient_name || '—') + '</td>' +
+                    '<td>' + (d.recipient_phone || '—') + '</td>' +
+                    '<td>' + (d.channel || '—') + '</td>' +
+                    '<td class="' + statusClass + '">' + (d.status || '—') + '</td>' +
+                    '<td>' + formatReminderDate(d.sent_at) + '</td>' +
+                    '<td>' + (d.reference_id || '—') + '</td>' +
+                    '</tr>';
+                if (d.error_message) {
+                    html += '<tr><td colspan="6" class="text-danger small">Error: ' + d.error_message + '</td></tr>';
+                }
+            });
+            html += '</tbody></table>';
+            reminderDetailContent.innerHTML = html;
+        }).catch(function() {
+            reminderDetailContent.innerHTML = '<span class="text-danger">Failed to load batch details.</span>';
+        });
+    }
+
+    document.getElementById('btnLoadReminders').addEventListener('click', function() {
+        currentRemindersPage = 1;
+        remindersResultEl.style.display = '';
+        loadReminders(1);
+    });
+
+    document.getElementById('btnBackToReminders').addEventListener('click', function() {
+        reminderDetailArea.style.display = 'none';
+        remindersResultEl.style.display = '';
     });
 })();
 </script>
