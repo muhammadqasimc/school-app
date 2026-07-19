@@ -8,7 +8,7 @@ warnings.filterwarnings(
     category=Warning,
 )
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
+from flask import Flask, Response, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -846,7 +846,7 @@ class SchoolAssetRequest(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # ---------------------------------------------------------------------------
 # Lightweight SQLAlchemy schema bootstrap
@@ -3529,6 +3529,409 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+# ---------------------------------------------------------------------------
+# Teacher Portal — Page routes
+# ---------------------------------------------------------------------------
+@app.route("/teacher/classes")
+@login_required
+def teacher_classes_page():
+    """Teacher classes/roster page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/classes.html")
+
+
+@app.route("/teacher/attendance")
+@login_required
+def teacher_attendance_page():
+    """Teacher attendance page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/attendance.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — API routes
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/dashboard")
+@login_required
+def api_teacher_dashboard():
+    """Return KPI data for the teacher dashboard."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    uid = current_user.id
+
+    # Count assigned classes and distinct grades from UserTeacherAssignment
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=uid, is_active=True
+    ).all()
+    assigned_classes = len(set(a.class_id for a in assignments if a.class_id))
+    assigned_grades = len(set(a.grade for a in assignments if a.grade))
+
+    # Learner count — approximate from MDB
+    learner_count = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Learner_Info]"
+        )
+        if rows:
+            learner_count = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending attendance — count from Absentees in current year
+    pending_attendance = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if rows:
+            pending_attendance = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending assessments — count from ReportMarks in current year
+    pending_assessments = 0
+    try:
+        mark_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if mark_rows:
+            pending_assessments = int(mark_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Recent discipline — count from DisciplinaryLearnerMisconduct
+    recent_discipline = 0
+    try:
+        disc_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct]"
+        )
+        if disc_rows:
+            recent_discipline = int(disc_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    return jsonify({
+        "kpis": {
+            "assignedClasses": assigned_classes,
+            "assignedGrades": assigned_grades,
+            "learnerCount": learner_count,
+            "pendingAttendance": pending_attendance,
+            "pendingAssessments": pending_assessments,
+            "recentDiscipline": recent_discipline,
+        }
+    })
+
+
+@app.route("/api/teacher/classes")
+@login_required
+def api_teacher_classes():
+    """Return the current teacher's class/subject assignments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=current_user.id, is_active=True
+    ).all()
+    return jsonify({
+        "assignments": [
+            {
+                "classId": a.class_id or "",
+                "grade": a.grade or "",
+                "subject": a.subject or "",
+                "academicYear": a.academic_year or "",
+            }
+            for a in assignments
+        ]
+    })
+
+
+@app.route("/api/teacher/roster")
+@login_required
+def api_teacher_roster():
+    """Return learners filtered by grade and/or class_id for roster view."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    return jsonify({
+        "learners": [
+            {
+                "learnerId": str(r.get("LearnerID", r.get("ID", "")) or ""),
+                "name": str(r.get("FName", "") or ""),
+                "surname": str(r.get("SName", "") or ""),
+                "grade": str(r.get("Grade", "") or ""),
+                "classId": str(r.get("Class", "") or ""),
+            }
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/teacher/attendance")
+@login_required
+def api_teacher_attendance():
+    """Return attendance records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Learnerid], [DateAbsent], [Grade], [Class], [ReasonOther] "
+        "FROM [Absentees] ORDER BY [DateAbsent] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/discipline")
+@login_required
+def api_teacher_discipline():
+    """Return discipline records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Date], [Learnerid], [Type], [Demerit], [Merit], [Comment] "
+        "FROM [DisciplinaryLearnerMisconduct] ORDER BY [Date] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/assessments")
+@login_required
+def api_teacher_assessments():
+    """Return assessment records and available subjects."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    # Fetch assessment rows
+    sql = (
+        "SELECT TOP 200 [LearnerID], [SubjectId], [SubjectName], [Mark], [TotalMark], [Datayear], [ReportId] "
+        "FROM [ReportMarks] ORDER BY [Datayear] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+
+    # Fetch subjects for dropdown
+    subjects_sql = "SELECT [ID], [Name] FROM [Subjects]"
+    try:
+        subjects = mdb_conn.execute_query(subjects_sql) or []
+    except Exception:
+        subjects = []
+
+    return jsonify({
+        "rows": rows,
+        "subjects": [{"Id": str(s.get("ID", "") or ""), "Name": str(s.get("Name", "") or "")} for s in subjects],
+    })
+
+
+@app.route("/api/teacher/reports/export")
+@login_required
+def api_teacher_reports_export():
+    """Export a CSV report of learners with attendance, discipline, and assessment counts for the teacher's scope."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    academic_year = request.args.get("academic_year", "").strip() or str(datetime.now().year)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Build learner query
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        learners = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        learners = []
+
+    import csv
+    from io import StringIO
+
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["LearnerID", "Name", "Surname", "Grade", "Class", "AttendanceCount", "DisciplineCount", "AssessmentCount"])
+
+    for l in learners:
+        lid = str(l.get("LearnerID", l.get("ID", "")) or "")
+        # Attendance count for this learner
+        att_count = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE CSTR([Learnerid]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar:
+                att_count = int(ar[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Discipline count
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Assessment count
+        asm_count = 0
+        try:
+            ar2 = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar2:
+                asm_count = int(ar2[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        cw.writerow([
+            lid,
+            str(l.get("FName", "") or ""),
+            str(l.get("SName", "") or ""),
+            str(l.get("Grade", "") or ""),
+            str(l.get("Class", "") or ""),
+            att_count,
+            disc_count,
+            asm_count,
+        ])
+
+    csv_output = si.getvalue()
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=teacher_report_{academic_year}.csv"},
+    )
+
+
+@app.route("/api/teacher/messages/send", methods=["POST"])
+@login_required
+def api_teacher_messages_send():
+    """Send a chat message. Creates a thread if needed."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    recipient_id = request.form.get("recipient_id", "").strip()
+    learner_id = request.form.get("learner_id", "").strip()
+    body = request.form.get("body", "").strip()
+    thread_id = request.form.get("thread_id", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    # Idempotency check
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already sent.", "idempotent": True})
+
+    # Resolve thread
+    thread = None
+    if thread_id:
+        thread = db.session.get(ChatThread, int(thread_id))
+    elif recipient_id:
+        # Look for existing direct thread between these two users + learner
+        participants = (
+            ChatParticipant.query
+            .filter(ChatParticipant.user_id.in_([current_user.id, int(recipient_id)]))
+            .group_by(ChatParticipant.thread_id)
+            .having(db.func.count(ChatParticipant.thread_id) == 2)
+            .all()
+        )
+        for p in participants:
+            t = db.session.get(ChatThread, p.thread_id)
+            if t and t.thread_type == "direct" and t.learner_id == (learner_id or None):
+                thread = t
+                break
+
+    if not thread:
+        thread = ChatThread(
+            thread_type="direct" if not learner_id else "direct",
+            learner_id=learner_id or None,
+            title=body[:100],
+            status="active",
+            created_by_user_id=current_user.id,
+        )
+        db.session.add(thread)
+        db.session.flush()
+        # Add current user as participant
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=current_user.id,
+            can_post=True,
+        ))
+        if recipient_id:
+            db.session.add(ChatParticipant(
+                thread_id=thread.id,
+                user_id=int(recipient_id),
+                can_post=True,
+            ))
+
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"message_id": msg.id}),
+        ))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Message sent.",
+        "thread_id": thread.id,
+        "message_id": msg.id,
+    })
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -4602,7 +5005,7 @@ def api_teacher_announcements_save():
 
     ann_id = request.form.get("id", "").strip()
     if ann_id:
-        ann = TeacherAnnouncement.query.get(int(ann_id))
+        ann = db.session.get(TeacherAnnouncement, int(ann_id))
         if not ann or ann.user_id != current_user.id:
             return jsonify({"error": "Announcement not found."}), 404
     else:
@@ -4626,7 +5029,7 @@ def api_teacher_announcements_delete(ann_id):
     """Delete a teacher announcement."""
     if not is_teacher_user(current_user):
         abort(403)
-    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    ann = db.get_or_404(TeacherAnnouncement, ann_id)
     if ann.user_id != current_user.id:
         abort(403)
     db.session.delete(ann)
@@ -4660,7 +5063,7 @@ def api_announcements():
     )
     rows = []
     for a in q.all():
-        author = User.query.get(a.user_id)
+        author = db.session.get(User, a.user_id)
         rows.append({
             "id": a.id,
             "title": a.title,
@@ -4713,7 +5116,7 @@ def api_announcements_create():
 @login_required
 def api_announcements_toggle(ann_id):
     """Toggle active state of an announcement (admin or teacher-owner)."""
-    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    ann = db.get_or_404(TeacherAnnouncement, ann_id)
     if not (is_admin_user(current_user) or is_manager_user(current_user) or ann.user_id == current_user.id):
         abort(403)
     ann.is_active = not ann.is_active
@@ -4725,7 +5128,7 @@ def api_announcements_toggle(ann_id):
 @login_required
 def api_announcements_delete(ann_id):
     """Delete an announcement (admin, manager, or owner)."""
-    ann = TeacherAnnouncement.query.get_or_404(ann_id)
+    ann = db.get_or_404(TeacherAnnouncement, ann_id)
     if not (is_admin_user(current_user) or is_manager_user(current_user) or ann.user_id == current_user.id):
         abort(403)
     db.session.delete(ann)
@@ -4848,12 +5251,212 @@ def _management_enrolment_trend_rows() -> tuple[list[dict], list[dict]]:
     return trend, phase_chart
 
 
+# ── At-Risk Learners Report ─────────────────────────────────────────────
+def _management_build_at_risk_payload(flt: dict) -> dict:
+    try:
+        year = str(flt.get("year") or "").strip()
+        term = str(flt.get("term") or "").strip()
+
+        # Get all active learners
+        learner_rows = (
+            mdb_conn.execute_query(
+                """
+                SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class], [Gender]
+                FROM Learner_Info
+                WHERE [Status] = ?
+                """,
+                ("C",),
+            )
+            or []
+        )
+
+        # Build a key lookup for learner bio info (maps ID/LearnerID -> row)
+        learner_bio: dict[str, dict] = {}
+        for r in learner_rows:
+            for key in (str(r.get("ID") or ""), str(r.get("LearnerID") or "")):
+                k = key.strip()
+                if k and k != "None" and k not in learner_bio:
+                    learner_bio[k] = r
+
+        total_active_learners = len(learner_rows)
+
+        # ── Attendance counts per learner for the given year ────────────
+        attendance_counts: dict[str, int] = {}
+        if year:
+            try:
+                att_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(a.Learnerid) AS LearnerKey, COUNT(*) AS AbsenceCount
+                        FROM Absentees a
+                        WHERE CAST('20' || SUBSTR(a.DateAbsent, 7, 2) AS TEXT) = ?
+                        GROUP BY CSTR(a.Learnerid)
+                        """,
+                        (year,),
+                    )
+                    or []
+                )
+                for r in att_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        attendance_counts[lk] = int(r.get("AbsenceCount") or 0)
+            except Exception:
+                app.logger.exception("Failed to fetch attendance data for at-risk report")
+
+        # ── Average mark % per learner for the given year/term ──────────
+        avg_pcts: dict[str, float] = {}
+        if year and term:
+            try:
+                mark_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(rm.LearnerID) AS LearnerKey,
+                               AVG(CAST(rm.Mark AS FLOAT) / NULLIF(CAST(rm.TotalMark AS FLOAT), 0) * 100) AS AvgPct
+                        FROM ReportMarks rm, ReportCycles rc
+                        WHERE rm.ReportId = rc.CycleId
+                          AND CSTR(rm.Datayear) = ?
+                          AND CSTR(rc.Term) = ?
+                        GROUP BY CSTR(rm.LearnerID)
+                        """,
+                        (year, term),
+                    )
+                    or []
+                )
+                for r in mark_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        val = r.get("AvgPct")
+                        if val is not None:
+                            avg_pcts[lk] = float(val)
+            except Exception:
+                app.logger.exception("Failed to fetch marks data for at-risk report")
+
+        # ── Discipline balance per learner for the given year ───────────
+        discipline_balances: dict[str, float] = {}
+        if year:
+            try:
+                disc_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(dr.Learnerid) AS LearnerKey,
+                               SUM(IIF(dr.Demerit IS NULL, 0, dr.Demerit)) AS TotalDemerit,
+                               SUM(IIF(dr.Merit IS NULL, 0, dr.Merit)) AS TotalMerit,
+                               SUM(IIF(dr.Demerit IS NULL, 0, dr.Demerit)) - SUM(IIF(dr.Merit IS NULL, 0, dr.Merit)) AS Balance
+                        FROM DisciplinaryRecords dr
+                        WHERE CSTR(dr.Datayear) = ?
+                        GROUP BY CSTR(dr.Learnerid)
+                        """,
+                        (year,),
+                    )
+                    or []
+                )
+                for r in disc_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        discipline_balances[lk] = float(r.get("Balance") or 0)
+            except Exception:
+                app.logger.exception("Failed to fetch discipline data for at-risk report")
+
+        # ── Build at-risk learner list ──────────────────────────────────
+        at_risk_learners: list[dict] = []
+        attendance_risk_count = 0
+        grade_risk_count = 0
+        discipline_risk_count = 0
+
+        for r in learner_rows:
+            learner_id = str(r.get("ID") or "")
+            fname = str(r.get("FName") or "")
+            sname = str(r.get("SName") or "")
+            grade = str(r.get("Grade") or "")
+            class_ = str(r.get("Class") or "")
+
+            # Determine the best key for lookups
+            key = ""
+            for k in (str(r.get("ID") or "").strip(), str(r.get("LearnerID") or "").strip()):
+                if k and k != "None":
+                    key = k
+                    break
+
+            absence_count = attendance_counts.get(key, 0)
+            has_attendance_risk = absence_count >= 5
+
+            avg_pct = avg_pcts.get(key)
+            has_grade_risk = avg_pct is not None and avg_pct < 40.0
+
+            demerit_balance = discipline_balances.get(key, 0.0)
+            has_discipline_risk = demerit_balance >= 3
+
+            # Skip learners with no risk flags
+            if not (has_attendance_risk or has_grade_risk or has_discipline_risk):
+                continue
+
+            risk_flags: list[str] = []
+            if has_attendance_risk:
+                risk_flags.append("attendance")
+                attendance_risk_count += 1
+            if has_grade_risk:
+                risk_flags.append("grade")
+                grade_risk_count += 1
+            if has_discipline_risk:
+                risk_flags.append("discipline")
+                discipline_risk_count += 1
+
+            num_flags = len(risk_flags)
+            if num_flags == 3:
+                risk_level = "high"
+            elif num_flags == 2:
+                risk_level = "medium"
+            else:
+                risk_level = "low"
+
+            at_risk_learners.append({
+                "id": learner_id,
+                "name": fname,
+                "surname": sname,
+                "grade": grade,
+                "class": class_,
+                "absenceCount": absence_count,
+                "hasAttendanceRisk": has_attendance_risk,
+                "avgPct": avg_pct,
+                "hasGradeRisk": has_grade_risk,
+                "demeritBalance": demerit_balance,
+                "hasDisciplineRisk": has_discipline_risk,
+                "riskLevel": risk_level,
+                "riskFlags": risk_flags,
+            })
+
+        return {
+            "reportData": {
+                "kpis": {
+                    "learners": total_active_learners,
+                    "atRisk": len(at_risk_learners),
+                    "attendanceFlags": attendance_risk_count,
+                    "gradeFlags": grade_risk_count,
+                    "disciplineFlags": discipline_risk_count,
+                },
+                "riskBreakdown": [
+                    {"label": "Attendance Risk", "value": attendance_risk_count},
+                    {"label": "Grade Risk", "value": grade_risk_count},
+                    {"label": "Discipline Risk", "value": discipline_risk_count},
+                ],
+                "learners": at_risk_learners,
+            }
+        }
+    except Exception:
+        app.logger.exception("Failed to build at-risk learners report")
+        return {"reportData": {"kpis": {}, "charts": {}, "tables": {}}}
+
+
 def _management_build_generic_report_payload(report_key: str) -> dict:
     flt = _management_filters_from_request()
 
     # Finance overview doesn't need marks — skip the expensive ReportMarks query
     if report_key == "finance-overview":
         return _management_build_finance_payload(flt)
+
+    # At-risk learners has its own specialised queries — skip the generic marks pipeline
+    if report_key == "at-risk-learners":
+        return _management_build_at_risk_payload(flt)
 
     marks = _management_dashboard_fetch_marks(flt)
     year = str(flt.get("year") or "").strip()
@@ -6653,6 +7256,7 @@ MANAGEMENT_REPORT_REGISTRY = [
     {"key": "learner-movement", "title": "Learners who dropped Out or are Repeating a Grade", "template": "management/learner_movement.html"},
     {"key": "result-analysis", "title": "Result Analysis", "template": "management/result_analysis.html"},
     {"key": "top3", "title": "Top 3", "template": "management/top3.html"},
+    {"key": "at-risk-learners", "title": "At-Risk Learners", "template": "management/at_risk_learners.html"},
 ]
 MANAGEMENT_REPORTS_BY_KEY = {r["key"]: r for r in MANAGEMENT_REPORT_REGISTRY}
 

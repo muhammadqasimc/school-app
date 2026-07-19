@@ -141,7 +141,7 @@ def register_inventory(flask_app: Flask) -> None:
         act_rows = (
             Aact.query.order_by(Aact.created_at.desc()).limit(40).all()
         )
-        enriched = [(a, r.User.query.get(a.actor_user_id)) for a in act_rows]
+        enriched = [(a, r.db.session.get(r.User, a.actor_user_id)) for a in act_rows]
 
         return render_template(
             "inventory/dashboard.html",
@@ -221,11 +221,11 @@ def register_inventory(flask_app: Flask) -> None:
         rows = q.order_by(Ai.tag).limit(500).all()
         out = []
         for it in rows:
-            mo = Am.query.get(it.model_id)
+            mo = r.db.session.get(r.SchoolAssetModel, it.model_id)
             oc = open_checkout(r, it.id)
             assignee = None
             if oc:
-                assignee = r.User.query.get(oc.assignee_user_id)
+                assignee = r.db.session.get(r.User, oc.assignee_user_id)
             lab = effective_status_label(it, oc)
             if st and lab != st:
                 continue
@@ -286,7 +286,7 @@ def register_inventory(flask_app: Flask) -> None:
 
             mo = None
             if mid:
-                mo = r.SchoolAssetModel.query.get(mid)
+                mo = r.db.session.get(r.SchoolAssetModel, mid)
                 if not mo:
                     flash("That kind no longer exists — pick another or describe a new one.", "error")
                     return _render_new_form([], None, draft)
@@ -398,7 +398,7 @@ def register_inventory(flask_app: Flask) -> None:
         except ValueError:
             _mid_pre = 0
         if _mid_pre:
-            preset_model_obj = r.SchoolAssetModel.query.get(_mid_pre)
+            preset_model_obj = r.db.session.get(r.SchoolAssetModel, _mid_pre)
             if preset_model_obj:
                 cfs = (
                     r.SchoolAssetCustomField.query.filter_by(model_id=_mid_pre)
@@ -427,11 +427,11 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         if item.deleted_at:
             flash("This item was deleted.", "error")
             return redirect(url_for("inventory_items"))
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         cfs = (
             r.SchoolAssetCustomField.query.filter_by(model_id=item.model_id)
             .order_by(r.SchoolAssetCustomField.sort_index)
@@ -442,7 +442,7 @@ def register_inventory(flask_app: Flask) -> None:
         except Exception:
             cv = {}
         oc = open_checkout(r, item.id)
-        assignee = r.User.query.get(oc.assignee_user_id) if oc else None
+        assignee = r.db.session.get(r.User, oc.assignee_user_id) if oc else None
         history = (
             r.SchoolAssetActivity.query.filter_by(item_id=item.id)
             .order_by(r.SchoolAssetActivity.created_at.desc())
@@ -497,7 +497,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         if item.deleted_at:
             abort(404)
         models = (
@@ -532,7 +532,7 @@ def register_inventory(flask_app: Flask) -> None:
             item.ops_status = (request.form.get("ops_status") or item.ops_status).strip()
             if item.ops_status not in OPS_STATUSES:
                 item.ops_status = "ready"
-            mo = r.SchoolAssetModel.query.get(item.model_id)
+            mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
             if consumable_bulk(mo):
                 item.quantity_on_hand = max(
                     0, int(request.form.get("quantity_on_hand") or 0)
@@ -592,16 +592,16 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         if item.deleted_at or item.ops_status == "archived":
             flash("Cannot check out archived or deleted items.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
         if open_checkout(r, item.id):
             flash("Item already has an open checkout.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         assignee = int(request.form.get("assignee_user_id") or 0)
-        if not r.User.query.get(assignee):
+        if not r.db.session.get(r.User, assignee):
             flash("Select a valid assignee.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
         qty = max(1, int(request.form.get("quantity") or 1))
@@ -635,7 +635,7 @@ def register_inventory(flask_app: Flask) -> None:
             or None,
         )
         r.db.session.add(co)
-        assignee_u = r.User.query.get(assignee)
+        assignee_u = r.db.session.get(r.User, assignee)
         activity(
             item.id,
             "checkout",
@@ -653,12 +653,12 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         co = open_checkout(r, item.id)
         if not co:
             flash("No open checkout for this item.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         if consumable_bulk(mo):
             rqty = co.quantity
         else:
@@ -667,7 +667,7 @@ def register_inventory(flask_app: Flask) -> None:
         co.checkin_at = datetime.utcnow()
         if consumable_bulk(mo):
             item.quantity_on_hand += rqty
-        assignee_u = r.User.query.get(co.assignee_user_id)
+        assignee_u = r.db.session.get(r.User, co.assignee_user_id)
         activity(
             item.id,
             "checkin",
@@ -685,7 +685,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         if open_checkout(r, item.id):
             flash("Check the item in before deleting.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
@@ -704,7 +704,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         summ = (request.form.get("summary") or "").strip()
         if not summ:
             flash("Summary required.", "error")
@@ -734,8 +734,8 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         if not effective_requestable(item, mo):
             flash("This item is not marked as requestable.", "error")
             return redirect(url_for("inventory_item_detail", item_id=item.id))
@@ -768,10 +768,10 @@ def register_inventory(flask_app: Flask) -> None:
         )
         enriched = []
         for rq in rows:
-            req_u = r.User.query.get(rq.requester_user_id)
+            req_u = r.db.session.get(r.User, rq.requester_user_id)
             tag = None
             if rq.item_id:
-                it = r.SchoolAssetItem.query.get(rq.item_id)
+                it = r.db.session.get(r.SchoolAssetItem, rq.item_id)
                 tag = it.tag if it else None
             enriched.append((rq, req_u, tag))
         return render_template("inventory/requests_list.html", enriched=enriched)
@@ -783,7 +783,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        req = r.SchoolAssetRequest.query.get_or_404(rid)
+        req = r.db.get_or_404(r.SchoolAssetRequest, rid)
         if req.status != "pending":
             flash("Already decided.", "error")
             return redirect(url_for("inventory_requests_list"))
@@ -882,7 +882,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        m = r.SchoolAssetModel.query.get_or_404(mid)
+        m = r.db.get_or_404(r.SchoolAssetModel, mid)
         cats = r.SchoolAssetCategory.query.order_by(
             r.SchoolAssetCategory.sort_index, r.SchoolAssetCategory.name
         ).all()
@@ -929,7 +929,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        r.SchoolAssetModel.query.get_or_404(mid)
+        r.db.get_or_404(r.SchoolAssetModel, mid)
         key = (request.form.get("field_key") or "").strip().lower().replace(" ", "_")
         label = (request.form.get("field_label") or "").strip()
         ftype = (request.form.get("field_type") or "text").strip()
@@ -995,10 +995,10 @@ def register_inventory(flask_app: Flask) -> None:
         )
         out = []
         for co in rows:
-            it = r.SchoolAssetItem.query.get(co.item_id)
+            it = r.db.session.get(r.SchoolAssetItem, co.item_id)
             if not it or it.deleted_at:
                 continue
-            ou = r.User.query.get(co.assignee_user_id)
+            ou = r.db.session.get(r.User, co.assignee_user_id)
             out.append((co, it, ou))
         return render_template(
             "inventory/report_expected.html", rows=out, now=datetime.utcnow()
@@ -1033,7 +1033,7 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         import qrcode
 
         p = urlparse(request.host_url)
@@ -1059,10 +1059,10 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
         if item.deleted_at:
             abort(404)
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         p = urlparse(request.host_url)
         ext_scan_url = f"{p.scheme}://{p.netloc}{url_for('inventory_scan_token', token=item.scan_token)}"
         return render_template(
@@ -1079,8 +1079,8 @@ def register_inventory(flask_app: Flask) -> None:
         g = r.require_inventory_staff()
         if g:
             return g
-        item = r.SchoolAssetItem.query.get_or_404(item_id)
-        mo = r.SchoolAssetModel.query.get(item.model_id)
+        item = r.db.get_or_404(r.SchoolAssetItem, item_id)
+        mo = r.db.session.get(r.SchoolAssetModel, item.model_id)
         import qrcode
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
@@ -1177,7 +1177,7 @@ def register_inventory(flask_app: Flask) -> None:
             ]
         )
         for it in rows:
-            mo = Am.query.get(it.model_id)
+            mo = r.db.session.get(r.SchoolAssetModel, it.model_id)
             w.writerow(
                 [
                     it.tag,
