@@ -1877,7 +1877,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_download(batch_id: int, kind: str):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         if kind == "notifications":
             path = Path(b.notifications_relpath)
         elif kind == "attendance":
@@ -1893,7 +1893,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_batch_learners(batch_id: int):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         meta = _detention_meta(b)
         applied = set(meta.get("merit_applied") or [])
         learners = []
@@ -1921,7 +1921,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_apply_merit(batch_id: int):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         body = request.get_json(force=True, silent=True) or {}
         chosen = [str(x).strip() for x in (body.get("learner_ids") or []) if str(x).strip()]
         meta = _detention_meta(b)
@@ -2051,7 +2051,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def toggle_slideshow_image(image_id: int):
         require_admin()
-        img = r.SlideshowImage.query.get_or_404(image_id)
+        img = r.db.get_or_404(r.SlideshowImage, image_id)
         img.is_active = not bool(img.is_active)
         r.db.session.commit()
         return redirect(url_for("admin_slideshow"))
@@ -2060,7 +2060,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def delete_slideshow_image(image_id: int):
         require_admin()
-        img = r.SlideshowImage.query.get_or_404(image_id)
+        img = r.db.get_or_404(r.SlideshowImage, image_id)
         r.db.session.delete(img)
         r.db.session.commit()
         flash("Deleted.", "success")
@@ -2082,7 +2082,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         rows = q.offset((page - 1) * per_page).limit(per_page).all()
         items = []
         for a in rows:
-            author = r.User.query.get(a.user_id)
+            author = r.db.session.get(r.User, a.user_id)
             author_name = author.username if author else "Unknown"
             if a.expires_at and a.expires_at < datetime.utcnow():
                 expired = True
@@ -2112,7 +2112,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_announcements_toggle(ann_id: int):
         require_admin()
-        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        a = r.db.get_or_404(r.TeacherAnnouncement, ann_id)
         a.is_active = not a.is_active
         r.db.session.commit()
         return redirect(url_for("admin_announcements"))
@@ -2121,7 +2121,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_announcements_delete(ann_id: int):
         require_admin()
-        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        a = r.db.get_or_404(r.TeacherAnnouncement, ann_id)
         r.db.session.delete(a)
         r.db.session.commit()
         flash("Announcement deleted.", "success")
@@ -2200,7 +2200,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_sick_note_file(submission_id: int):
         require_admin()
-        sub = r.SickNoteSubmission.query.get_or_404(submission_id)
+        sub = r.db.get_or_404(r.SickNoteSubmission, submission_id)
         base = Path(r.app.root_path)
         path = base / sub.storage_relpath
         if not path.is_file():
@@ -2289,7 +2289,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         uid = request.form.get("user_id")
         phone = str(request.form.get("phone", "")).strip()
         if uid:
-            u = r.User.query.get(int(uid))
+            u = r.db.session.get(r.User, int(uid))
         elif phone:
             p = r.normalize_phone(phone)
             u = r.User.query.filter_by(phone=p).first()
@@ -2311,7 +2311,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_mgmt_permissions():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         u.mgmt_can_view_academics = bool(request.form.get("can_academics"))
         u.mgmt_can_view_disciplinary = bool(request.form.get("can_disciplinary"))
         u.mgmt_can_view_attendance = bool(request.form.get("can_attendance"))
@@ -2324,7 +2324,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_teacher():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         if u.username == r.ADMIN_USERNAME:
             flash("Cannot change admin.", "error")
             return redirect(url_for("admin_users"))
@@ -2339,7 +2339,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_teacher_permissions():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         u.can_teacher_attendance = bool(request.form.get("can_teacher_attendance"))
         u.can_teacher_discipline = bool(request.form.get("can_teacher_discipline"))
         u.can_teacher_assessments = bool(request.form.get("can_teacher_assessments"))
@@ -2354,7 +2354,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_teacher_assignment_add():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         a = r.UserTeacherAssignment(
             user_id=u.id,
             class_id=str(request.form.get("class_id", "")).strip(),
@@ -2382,7 +2382,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         selected = None
         items = []
         if req_id:
-            selected = r.ProfileChangeRequest.query.get(int(req_id))
+            selected = r.db.session.get(r.ProfileChangeRequest, int(req_id))
             if selected:
                 items = r._profile_change_items_for_request(selected.id)
         uids = {x.submitted_by_user_id for x in requests_rows}
@@ -2405,7 +2405,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_profile_change_request_approve(request_id: int):
         require_admin()
-        req = r.ProfileChangeRequest.query.get_or_404(request_id)
+        req = r.db.get_or_404(r.ProfileChangeRequest, request_id)
         if req.status != "pending":
             flash("Already processed.", "error")
             return redirect(url_for("admin_profile_change_requests", status="all", request_id=request_id))
@@ -2435,7 +2435,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_profile_change_request_reject(request_id: int):
         require_admin()
-        req = r.ProfileChangeRequest.query.get_or_404(request_id)
+        req = r.db.get_or_404(r.ProfileChangeRequest, request_id)
         reason = str(request.form.get("admin_comment", "")).strip()
         if not reason:
             flash("Rejection reason required.", "error")
