@@ -853,18 +853,53 @@ class SchoolAssetRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
-class MessageTemplate(db.Model):
-    __tablename__ = 'message_template'
-
+class EarlyIntervention(db.Model):
+    __tablename__ = 'early_intervention'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
-    body = db.Column(db.Text, nullable=False)
-    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
-    is_active = db.Column(db.Boolean, default=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    learner_name = db.Column(db.String(200), nullable=True)
+    grade = db.Column(db.String(20), nullable=True)
+    class_name = db.Column(db.String(50), nullable=True)
+    risk_type = db.Column(db.String(32), nullable=False)  # attendance|grade|discipline|general
+    intervention_type = db.Column(db.String(64), nullable=False)  # parent_meeting|academic_support|counseling|tutoring|mentoring|other
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='open', index=True)  # open|in_progress|resolved|closed
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome_notes = db.Column(db.Text, nullable=True)
+
+
+class InterventionNotification(db.Model):
+    __tablename__ = 'intervention_notification'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    recipient_name = db.Column(db.String(160), nullable=True)
+    recipient_phone = db.Column(db.String(32), nullable=False)
+    channel = db.Column(db.String(16), nullable=False, default='sms')  # sms|whatsapp
+    message_snapshot = db.Column(db.Text, nullable=False)
+    communication_log_id = db.Column(db.Integer, db.ForeignKey('communication_delivery_log.id'), nullable=True)
+    sent_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(24), nullable=False, default='sent')
+
+
+class InterventionReferral(db.Model):
+    __tablename__ = 'intervention_referral'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    referred_to = db.Column(db.String(64), nullable=False)  # counselor|academic_head|principal|support_staff|other
+    referred_to_name = db.Column(db.String(200), nullable=True)
+    reason = db.Column(db.Text, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='pending', index=True)  # pending|accepted|completed|declined
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome = db.Column(db.Text, nullable=True)
 
 
 @login_manager.user_loader
