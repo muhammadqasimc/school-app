@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = true %}
+{% include "management/_report_frame.html" %}
+<p class="small text-muted mb-2">At-risk analysis spans attendance (&ge;5 absences), grade average (&lt;40%), and discipline (&ge;2 incidents). Subject filter does not apply.</p>
+<div class="row g-3 mb-3">
+  <div class="col-md-2"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Tracked</div><div id="k-tracked" class="kpi-value">-</div></div></div>
+  <div class="col-md-2"><div class="kpi-card kpi-card-danger"><div class="kpi-label">High Risk</div><div id="k-highrisk" class="kpi-value">-</div></div></div>
+  <div class="col-md-2"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Medium Risk</div><div id="k-mediumrisk" class="kpi-value">-</div></div></div>
+  <div class="col-md-2"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Attendance Flags</div><div id="k-attflags" class="kpi-value">-</div></div></div>
+  <div class="col-md-2"><div class="kpi-card kpi-card-info"><div class="kpi-label">Grade Flags</div><div id="k-gradeflags" class="kpi-value">-</div></div></div>
+  <div class="col-md-2"><div class="kpi-card kpi-card-secondary"><div class="kpi-label">Discipline Flags</div><div id="k-discflags" class="kpi-value">-</div></div></div>
+</div>
+<div class="card report-card-accent-primary">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h6 class="mb-0">At-Risk Learners</h6>
+    <span class="small text-muted" id="learner-count">0 learners</span>
+  </div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Learner</th>
+          <th>Grade</th>
+          <th>Class</th>
+          <th>Attendance</th>
+          <th>Grades</th>
+          <th>Discipline</th>
+          <th>Risk Level</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-risk">
+        <tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script>
+<script>
+const reportKey = "at-risk-dashboard";
+const keys = ["year", "term", "grade"];
+const q = () => mgtParams(keys);
+const fs = (id, v) => { const e = document.getElementById(id), keep = e.value; while(e.options.length > 1) e.remove(1); (v||[]).forEach(x => { const o = document.createElement("option"); o.value = x; o.textContent = x; e.appendChild(o); }); e.value = keep; };
+async function lf() { const r = await fetch(`/api/management-report-filters?${q()}`); const d = await r.json(); if(!d.filters) return; fs("f-year", d.filters.years); fs("f-term", d.filters.terms); fs("f-grade", d.filters.grades); if(d.filters.phase) fs("f-phase", d.filters.phase); }
+async function lr() {
+  const p = q(); p.set("report_key", reportKey);
+  const r = await fetch(`/api/management-report?${p}`);
+  const d = await r.json();
+  const k = (d.reportData || {}).kpis || {};
+  document.getElementById("k-tracked").textContent = k.totalTracked ?? "-";
+  document.getElementById("k-highrisk").textContent = k.highRisk ?? "-";
+  document.getElementById("k-mediumrisk").textContent = k.mediumRisk ?? "-";
+  document.getElementById("k-attflags").textContent = k.attendanceFlags ?? "-";
+  document.getElementById("k-gradeflags").textContent = k.gradeFlags ?? "-";
+  document.getElementById("k-discflags").textContent = k.disciplineFlags ?? "-";
+  const learners = (d.reportData || {}).learners || [];
+  document.getElementById("learner-count").textContent = learners.length + " learners";
+  const tbody = document.getElementById("tbl-risk");
+  if (!learners.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-muted">No at-risk learners found.</td></tr>'; return; }
+  tbody.innerHTML = learners.map(l => {
+    const riskBadge = l.riskLevel === "High"
+      ? '<span class="badge bg-danger">High</span>'
+      : '<span class="badge bg-warning text-dark">Medium</span>';
+    const attCell = l.attendanceFlag
+      ? '<span class="text-danger fw-semibold">&#9888; ' + (l.absenceCount || 0) + ' absences</span>'
+      : '<span class="text-muted">-</span>';
+    const gradeCell = l.gradeFlag
+      ? '<span class="text-danger fw-semibold">&#9888; ' + (l.avgPct != null ? l.avgPct + '%' : 'N/A') + '</span>'
+      : '<span class="text-muted">' + (l.avgPct != null ? l.avgPct + '%' : '-') + '</span>';
+    const discCell = l.disciplineFlag
+      ? '<span class="text-danger fw-semibold">&#9888; ' + (l.incidentCount || 0) + ' incidents</span>'
+      : '<span class="text-muted">' + (l.incidentCount || '-') + '</span>';
+    return '<tr><td>' + (l.name || l.id) + '</td><td>' + (l.grade || '') + '</td><td>' + (l.class || '') + '</td>'
+      + '<td>' + attCell + '</td><td>' + gradeCell + '</td><td>' + discCell + '</td><td>' + riskBadge + '</td></tr>';
+  }).join("");
+}
+["f-year","f-term","f-grade"].forEach(k => document.getElementById(k).addEventListener("change", lf));
+document.getElementById("apply-filters").addEventListener("click", lr);
+(async() => { await lf(); await lr(); })();
+</script>
+{% endblock %}

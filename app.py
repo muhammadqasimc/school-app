@@ -4848,12 +4848,210 @@ def _management_enrolment_trend_rows() -> tuple[list[dict], list[dict]]:
     return trend, phase_chart
 
 
+def _management_at_risk_payload(flt: dict) -> dict:
+    """Build at-risk learner dashboard payload.
+
+    Queries all active learners and computes three risk dimensions:
+      - Attendance risk  (>=5 absences; severe >=10)
+      - Grade risk       (avg mark <40%; severe <30%)
+      - Discipline risk  (>=2 incidents with Demerit>0; severe >=5)
+
+    Overall risk level:
+      High   — 2+ flags OR any single flag reaching severe threshold
+      Medium — exactly 1 flag
+      Not At Risk — 0 flags
+    """
+    year = str(flt.get("year") or "").strip()
+    term = str(flt.get("term") or "").strip()
+    grade_filter = str(flt.get("grade") or "").strip()
+
+    # ── 1. Fetch all active learners ──────────────────────────────────
+    learner_where = ["(Status IS NULL OR Status = '' OR Status = 'C')"]
+    learner_params = []
+    if grade_filter:
+        learner_where.append("CSTR(Grade) = ?")
+        learner_params.append(grade_filter)
+
+    learner_rows = (
+        mdb_conn.execute_query(
+            f"""
+            SELECT CSTR([ID]) AS Lid,
+                   [FName], [SName],
+                   CSTR([Grade]) AS Grade,
+                   CSTR([Class]) AS Class
+            FROM Learner_Info
+            WHERE {' AND '.join(learner_where)}
+            """,
+            tuple(learner_params),
+        )
+        or []
+    )
+
+    learners_map: dict[str, dict] = {}
+    for r in learner_rows:
+        lid = str(r.get("Lid") or "").strip()
+        if lid:
+            learners_map[lid] = {
+                "id": lid,
+                "name": f"{r.get('FName') or ''} {r.get('SName') or ''}".strip(),
+                "grade": str(r.get("Grade") or "").strip(),
+                "class": str(r.get("Class") or "").strip(),
+            }
+
+    total_tracked = len(learners_map)
+    if not total_tracked:
+        return {
+            "reportData": {
+                "kpis": {
+                    "totalTracked": 0, "highRisk": 0, "mediumRisk": 0,
+                    "attendanceFlags": 0, "gradeFlags": 0, "disciplineFlags": 0,
+                },
+                "learners": [],
+            }
+        }
+
+    # ── 2. Attendance risk — count absences per learner ───────────────
+    abs_q = "SELECT CSTR([Learnerid]) AS Lid, COUNT(*) AS AbsenceCount FROM Absentees WHERE 1=1"
+    abs_params: list[str] = []
+    if year:
+        abs_q += " AND CAST('20' || SUBSTR(DateAbsent, 7, 2) AS TEXT) = ?"
+        abs_params.append(year)
+    if grade_filter:
+        abs_q += " AND CSTR(Grade) = ?"
+        abs_params.append(grade_filter)
+    abs_q += " GROUP BY CSTR([Learnerid])"
+
+    absence_counts: dict[str, int] = {}
+    for r in mdb_conn.execute_query(abs_q, tuple(abs_params)) or []:
+        lid = str(r.get("Lid") or "").strip()
+        if lid:
+            absence_counts[lid] = int(r.get("AbsenceCount") or 0)
+
+    # ── 3. Grade / Academic risk — average mark per learner ───────────
+    grade_q = """
+        SELECT CSTR([LearnerID]) AS Lid,
+               AVG(CAST(Mark AS REAL) * 100.0 / NULLIF(CAST(TotalMark AS REAL), 0)) AS AvgPct
+        FROM ReportMarks
+        WHERE TotalMark IS NOT NULL AND TotalMark > 0
+          AND Mark IS NOT NULL
+    """
+    grade_params: list[str] = []
+    if year:
+        grade_q += " AND CSTR(Datayear) = ?"
+        grade_params.append(year)
+    if term:
+        grade_q += " AND CSTR(Level) = ?"
+        grade_params.append(term)
+    grade_q += " GROUP BY CSTR([LearnerID])"
+
+    grade_avgs: dict[str, float] = {}
+    for r in mdb_conn.execute_query(grade_q, tuple(grade_params)) or []:
+        lid = str(r.get("Lid") or "").strip()
+        if lid:
+            val = r.get("AvgPct")
+            if val is not None:
+                grade_avgs[lid] = float(val)
+
+    # ── 4. Discipline risk — count disciplinary incidents per learner ─
+    disc_q = """
+        SELECT CSTR([Learnerid]) AS Lid, COUNT(*) AS IncidentCount
+        FROM DisciplinaryRecords
+        WHERE Demerit IS NOT NULL AND Demerit > 0
+    """
+    disc_params: list[str] = []
+    if year:
+        disc_q += " AND CSTR(Datayear) = ?"
+        disc_params.append(year)
+    disc_q += " GROUP BY CSTR([Learnerid])"
+
+    disc_counts: dict[str, int] = {}
+    for r in mdb_conn.execute_query(disc_q, tuple(disc_params)) or []:
+        lid = str(r.get("Lid") or "").strip()
+        if lid:
+            disc_counts[lid] = int(r.get("IncidentCount") or 0)
+
+    # ── 5. Compute risk level for each learner ────────────────────────
+    high_risk: list[dict] = []
+    medium_risk: list[dict] = []
+    attendance_flags = 0
+    grade_flags = 0
+    discipline_flags = 0
+
+    for lid, info in learners_map.items():
+        abs_count = absence_counts.get(lid, 0)
+        avg_pct = grade_avgs.get(lid)
+        disc_count = disc_counts.get(lid, 0)
+
+        att_flag = abs_count >= 5
+        grade_flag = avg_pct is not None and avg_pct < 40.0
+        disc_flag = disc_count >= 2
+
+        if att_flag:
+            attendance_flags += 1
+        if grade_flag:
+            grade_flags += 1
+        if disc_flag:
+            discipline_flags += 1
+
+        flags = sum([att_flag, grade_flag, disc_flag])
+        severe_att = abs_count >= 10
+        severe_grade = avg_pct is not None and avg_pct < 30.0
+        severe_disc = disc_count >= 5
+
+        if flags == 0:
+            continue  # Not at risk — skip
+
+        if flags >= 2 or severe_att or severe_grade or severe_disc:
+            risk_level = "High"
+        else:
+            risk_level = "Medium"
+
+        entry = {
+            "id": lid,
+            "name": info["name"],
+            "grade": info["grade"],
+            "class": info["class"],
+            "attendanceFlag": att_flag,
+            "absenceCount": abs_count,
+            "gradeFlag": grade_flag,
+            "avgPct": round(avg_pct, 1) if avg_pct is not None else None,
+            "disciplineFlag": disc_flag,
+            "incidentCount": disc_count,
+            "riskLevel": risk_level,
+        }
+
+        if risk_level == "High":
+            high_risk.append(entry)
+        else:
+            medium_risk.append(entry)
+
+    sorted_learners = high_risk + medium_risk
+
+    return {
+        "reportData": {
+            "kpis": {
+                "totalTracked": total_tracked,
+                "highRisk": len(high_risk),
+                "mediumRisk": len(medium_risk),
+                "attendanceFlags": attendance_flags,
+                "gradeFlags": grade_flags,
+                "disciplineFlags": discipline_flags,
+            },
+            "learners": sorted_learners,
+        }
+    }
+
+
 def _management_build_generic_report_payload(report_key: str) -> dict:
     flt = _management_filters_from_request()
 
     # Finance overview doesn't need marks — skip the expensive ReportMarks query
     if report_key == "finance-overview":
         return _management_build_finance_payload(flt)
+
+    # At-risk dashboard builds its own focused queries — skip generic marks
+    if report_key == "at-risk-dashboard":
+        return _management_at_risk_payload(flt)
 
     marks = _management_dashboard_fetch_marks(flt)
     year = str(flt.get("year") or "").strip()
@@ -6636,6 +6834,7 @@ MANAGEMENT_REPORT_REGISTRY = [
     {"key": "general-overview", "title": "General Overview", "template": "management/general_overview.html"},
     {"key": "principal-overview", "title": "Principal Overview", "template": "management/principal_overview.html"},
     {"key": "attendance", "title": "Attendance", "template": "management/attendance.html"},
+    {"key": "at-risk-dashboard", "title": "At-Risk Learner Dashboard", "template": "management/at_risk_dashboard.html"},
     {"key": "learner-chart-report", "title": "Learner Chart Report", "template": "management/learner_chart_report.html"},
     {"key": "school-achievement-report", "title": "School Achievement Report", "template": "management/school_achievement_report.html"},
     {"key": "learner-promotion-rate", "title": "Learner Promotion Rate", "template": "management/learner_promotion_rate.html"},
