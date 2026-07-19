@@ -6,14 +6,13 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-[ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
-[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
-[ ] Add saved filter presets for management report pages
-[ ] Add parent/guardian notification workflows for attendance, discipline, and finance events
-[ ] Add overdue finance reminders with channel selection and resend tracking
-[ ] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
+[x] Add parent/guardian notification workflows for attendance, discipline, and finance events
+[x] Add overdue finance reminders with channel selection and resend tracking
+[x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
 [ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+[ ] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
+[ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
