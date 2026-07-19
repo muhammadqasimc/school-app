@@ -4848,12 +4848,212 @@ def _management_enrolment_trend_rows() -> tuple[list[dict], list[dict]]:
     return trend, phase_chart
 
 
+# ── At-Risk Learners Report ─────────────────────────────────────────────
+def _management_build_at_risk_payload(flt: dict) -> dict:
+    try:
+        year = str(flt.get("year") or "").strip()
+        term = str(flt.get("term") or "").strip()
+
+        # Get all active learners
+        learner_rows = (
+            mdb_conn.execute_query(
+                """
+                SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class], [Gender]
+                FROM Learner_Info
+                WHERE [Status] = ?
+                """,
+                ("C",),
+            )
+            or []
+        )
+
+        # Build a key lookup for learner bio info (maps ID/LearnerID -> row)
+        learner_bio: dict[str, dict] = {}
+        for r in learner_rows:
+            for key in (str(r.get("ID") or ""), str(r.get("LearnerID") or "")):
+                k = key.strip()
+                if k and k != "None" and k not in learner_bio:
+                    learner_bio[k] = r
+
+        total_active_learners = len(learner_rows)
+
+        # ── Attendance counts per learner for the given year ────────────
+        attendance_counts: dict[str, int] = {}
+        if year:
+            try:
+                att_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(a.Learnerid) AS LearnerKey, COUNT(*) AS AbsenceCount
+                        FROM Absentees a
+                        WHERE CAST('20' || SUBSTR(a.DateAbsent, 7, 2) AS TEXT) = ?
+                        GROUP BY CSTR(a.Learnerid)
+                        """,
+                        (year,),
+                    )
+                    or []
+                )
+                for r in att_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        attendance_counts[lk] = int(r.get("AbsenceCount") or 0)
+            except Exception:
+                app.logger.exception("Failed to fetch attendance data for at-risk report")
+
+        # ── Average mark % per learner for the given year/term ──────────
+        avg_pcts: dict[str, float] = {}
+        if year and term:
+            try:
+                mark_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(rm.LearnerID) AS LearnerKey,
+                               AVG(CAST(rm.Mark AS FLOAT) / NULLIF(CAST(rm.TotalMark AS FLOAT), 0) * 100) AS AvgPct
+                        FROM ReportMarks rm, ReportCycles rc
+                        WHERE rm.ReportId = rc.CycleId
+                          AND CSTR(rm.Datayear) = ?
+                          AND CSTR(rc.Term) = ?
+                        GROUP BY CSTR(rm.LearnerID)
+                        """,
+                        (year, term),
+                    )
+                    or []
+                )
+                for r in mark_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        val = r.get("AvgPct")
+                        if val is not None:
+                            avg_pcts[lk] = float(val)
+            except Exception:
+                app.logger.exception("Failed to fetch marks data for at-risk report")
+
+        # ── Discipline balance per learner for the given year ───────────
+        discipline_balances: dict[str, float] = {}
+        if year:
+            try:
+                disc_rows = (
+                    mdb_conn.execute_query(
+                        """
+                        SELECT CSTR(dr.Learnerid) AS LearnerKey,
+                               SUM(IIF(dr.Demerit IS NULL, 0, dr.Demerit)) AS TotalDemerit,
+                               SUM(IIF(dr.Merit IS NULL, 0, dr.Merit)) AS TotalMerit,
+                               SUM(IIF(dr.Demerit IS NULL, 0, dr.Demerit)) - SUM(IIF(dr.Merit IS NULL, 0, dr.Merit)) AS Balance
+                        FROM DisciplinaryRecords dr
+                        WHERE CSTR(dr.Datayear) = ?
+                        GROUP BY CSTR(dr.Learnerid)
+                        """,
+                        (year,),
+                    )
+                    or []
+                )
+                for r in disc_rows:
+                    lk = str(r.get("LearnerKey") or "").strip()
+                    if lk:
+                        discipline_balances[lk] = float(r.get("Balance") or 0)
+            except Exception:
+                app.logger.exception("Failed to fetch discipline data for at-risk report")
+
+        # ── Build at-risk learner list ──────────────────────────────────
+        at_risk_learners: list[dict] = []
+        attendance_risk_count = 0
+        grade_risk_count = 0
+        discipline_risk_count = 0
+
+        for r in learner_rows:
+            learner_id = str(r.get("ID") or "")
+            fname = str(r.get("FName") or "")
+            sname = str(r.get("SName") or "")
+            grade = str(r.get("Grade") or "")
+            class_ = str(r.get("Class") or "")
+
+            # Determine the best key for lookups
+            key = ""
+            for k in (str(r.get("ID") or "").strip(), str(r.get("LearnerID") or "").strip()):
+                if k and k != "None":
+                    key = k
+                    break
+
+            absence_count = attendance_counts.get(key, 0)
+            has_attendance_risk = absence_count >= 5
+
+            avg_pct = avg_pcts.get(key)
+            has_grade_risk = avg_pct is not None and avg_pct < 40.0
+
+            demerit_balance = discipline_balances.get(key, 0.0)
+            has_discipline_risk = demerit_balance >= 3
+
+            # Skip learners with no risk flags
+            if not (has_attendance_risk or has_grade_risk or has_discipline_risk):
+                continue
+
+            risk_flags: list[str] = []
+            if has_attendance_risk:
+                risk_flags.append("attendance")
+                attendance_risk_count += 1
+            if has_grade_risk:
+                risk_flags.append("grade")
+                grade_risk_count += 1
+            if has_discipline_risk:
+                risk_flags.append("discipline")
+                discipline_risk_count += 1
+
+            num_flags = len(risk_flags)
+            if num_flags == 3:
+                risk_level = "high"
+            elif num_flags == 2:
+                risk_level = "medium"
+            else:
+                risk_level = "low"
+
+            at_risk_learners.append({
+                "id": learner_id,
+                "name": fname,
+                "surname": sname,
+                "grade": grade,
+                "class": class_,
+                "absenceCount": absence_count,
+                "hasAttendanceRisk": has_attendance_risk,
+                "avgPct": avg_pct,
+                "hasGradeRisk": has_grade_risk,
+                "demeritBalance": demerit_balance,
+                "hasDisciplineRisk": has_discipline_risk,
+                "riskLevel": risk_level,
+                "riskFlags": risk_flags,
+            })
+
+        return {
+            "reportData": {
+                "kpis": {
+                    "learners": total_active_learners,
+                    "atRisk": len(at_risk_learners),
+                    "attendanceFlags": attendance_risk_count,
+                    "gradeFlags": grade_risk_count,
+                    "disciplineFlags": discipline_risk_count,
+                },
+                "riskBreakdown": [
+                    {"label": "Attendance Risk", "value": attendance_risk_count},
+                    {"label": "Grade Risk", "value": grade_risk_count},
+                    {"label": "Discipline Risk", "value": discipline_risk_count},
+                ],
+                "learners": at_risk_learners,
+            }
+        }
+    except Exception:
+        app.logger.exception("Failed to build at-risk learners report")
+        return {"reportData": {"kpis": {}, "charts": {}, "tables": {}}}
+
+
 def _management_build_generic_report_payload(report_key: str) -> dict:
     flt = _management_filters_from_request()
 
     # Finance overview doesn't need marks — skip the expensive ReportMarks query
     if report_key == "finance-overview":
         return _management_build_finance_payload(flt)
+
+    # At-risk learners has its own specialised queries — skip the generic marks pipeline
+    if report_key == "at-risk-learners":
+        return _management_build_at_risk_payload(flt)
 
     marks = _management_dashboard_fetch_marks(flt)
     year = str(flt.get("year") or "").strip()
@@ -6653,6 +6853,7 @@ MANAGEMENT_REPORT_REGISTRY = [
     {"key": "learner-movement", "title": "Learners who dropped Out or are Repeating a Grade", "template": "management/learner_movement.html"},
     {"key": "result-analysis", "title": "Result Analysis", "template": "management/result_analysis.html"},
     {"key": "top3", "title": "Top 3", "template": "management/top3.html"},
+    {"key": "at-risk-learners", "title": "At-Risk Learners", "template": "management/at_risk_learners.html"},
 ]
 MANAGEMENT_REPORTS_BY_KEY = {r["key"]: r for r in MANAGEMENT_REPORT_REGISTRY}
 

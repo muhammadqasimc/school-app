@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+{% set disable_subject_filter = true %}
+{% include "management/_report_frame.html" %}
+
+<div class="row g-3 mb-3">
+  <div class="col"><div class="kpi-card kpi-card-primary"><div class="kpi-label">Total Learners</div><div id="k-learners" class="kpi-value">-</div></div></div>
+  <div class="col"><div class="kpi-card kpi-card-danger"><div class="kpi-label">At Risk</div><div id="k-atrisk" class="kpi-value">-</div></div></div>
+  <div class="col"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Attendance Flags</div><div id="k-attendanceflags" class="kpi-value">-</div></div></div>
+  <div class="col"><div class="kpi-card kpi-card-danger"><div class="kpi-label">Grade Flags</div><div id="k-gradefLags" class="kpi-value">-</div></div></div>
+  <div class="col"><div class="kpi-card kpi-card-warning"><div class="kpi-label">Discipline Flags</div><div id="k-disciplineflags" class="kpi-value">-</div></div></div>
+</div>
+
+<div class="card report-card-accent-primary mb-3">
+  <div class="card-body">
+    <div class="mgt-chart-container">
+      <canvas id="chart-risk"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="card report-card-accent-primary">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Grade</th>
+            <th>Class</th>
+            <th>Absences</th>
+            <th>Avg %</th>
+            <th>Demerits</th>
+            <th>Risk Flags</th>
+            <th>Risk Level</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-learners">
+          <tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script>
+<script>
+const reportKey = "at-risk-learners";
+let riskChart = null;
+
+function params() {
+  return mgtParams(["year", "term", "phase", "grade", "subject"]);
+}
+
+function fillSelect(id, values) {
+  mgtFillSelect(id, values);
+}
+
+async function loadFilters() {
+  await mgtLoadFilters(["year", "term", "phase", "grade", "subject"]);
+}
+
+function renderRiskBadge(flag) {
+  if (flag === "attendance") return '<span class="badge bg-warning me-1">Attendance</span>';
+  if (flag === "grade") return '<span class="badge bg-danger me-1">Grade</span>';
+  if (flag === "discipline") return '<span class="badge bg-warning text-dark me-1">Discipline</span>';
+  return '';
+}
+
+function renderRiskLevelBadge(level) {
+  var cls = "bg-success";
+  if (level === "medium") cls = "bg-warning text-dark";
+  else if (level === "high") cls = "bg-danger";
+  return '<span class="badge ' + cls + '">' + (level || "low") + '</span>';
+}
+
+function loadReport() {
+  const p = params();
+  p.set("report_key", reportKey);
+  fetch("/api/management-report?" + p.toString())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var rd = data.reportData || {};
+      var k = rd.kpis || {};
+
+      mgtKpi("k-learners", k.learners);
+      mgtKpi("k-atrisk", k.atRisk);
+      mgtKpi("k-attendanceflags", k.attendanceFlags);
+      mgtKpi("k-gradefLags", k.gradeFlags);
+      mgtKpi("k-disciplineflags", k.disciplineFlags);
+
+      if (riskChart) riskChart.destroy();
+      riskChart = mgtChart("chart-risk", "bar", "Risk Count", rd.riskBreakdown || [], "rgba(220,53,69,0.7)");
+
+      mgtTable("tbl-learners", rd.learners || [], function(l) {
+        var flags = (l.riskFlags || []).map(renderRiskBadge).join("");
+        if (!flags) flags = '<span class="text-muted">&mdash;</span>';
+
+        var name = (l.name || "") + " " + (l.surname || "");
+
+        return "<tr>" +
+          "<td>" + name + "</td>" +
+          "<td>" + (l.grade || "") + "</td>" +
+          "<td>" + (l.class || "") + "</td>" +
+          "<td>" + (l.absenceCount != null ? l.absenceCount : "") + "</td>" +
+          "<td>" + (l.avgPct != null ? l.avgPct + "%" : "") + "</td>" +
+          "<td>" + (l.demeritBalance != null ? l.demeritBalance : "") + "</td>" +
+          "<td>" + flags + "</td>" +
+          "<td>" + renderRiskLevelBadge(l.riskLevel) + "</td>" +
+          "</tr>";
+      }, "No at-risk learners found for the selected filters.");
+    });
+}
+
+mgtBindFilters(["f-year", "f-term", "f-phase", "f-grade", "f-subject"], loadFilters);
+document.getElementById("apply-filters").addEventListener("click", loadReport);
+
+(async function() {
+  await loadFilters();
+  loadReport();
+})();
+</script>
+{% endblock %}
