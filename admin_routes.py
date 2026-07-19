@@ -26,6 +26,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import func
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -1386,6 +1387,251 @@ def register_admin_routes(flask_app: Flask) -> None:
                         failed.append({"learner_id": lid, "error": str(exc)})
         return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
 
+    @flask_app.route("/admin/communication/finance/reminders")
+    @login_required
+    def admin_communication_finance_reminders():
+        """List past finance reminder batches grouped by batch_id."""
+        require_admin()
+        page = max(1, int(request.args.get("page", "1")))
+        per_page = 20
+
+        # Get unique batch_ids for finance category with aggregate stats
+        batches_q = r.db.session.query(
+            r.CommunicationDeliveryLog.batch_id,
+            func.count(r.CommunicationDeliveryLog.id).label("total"),
+            func.max(r.CommunicationDeliveryLog.sent_at).label("last_sent"),
+        ).filter(
+            r.CommunicationDeliveryLog.category == "finance"
+        ).group_by(
+            r.CommunicationDeliveryLog.batch_id
+        ).order_by(
+            func.max(r.CommunicationDeliveryLog.sent_at).desc()
+        )
+
+        # Manual pagination
+        total = batches_q.count()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        offset = (page - 1) * per_page
+        rows = batches_q.offset(offset).limit(per_page).all()
+
+        batches = []
+        for row in rows:
+            # Count sent vs failed for this batch
+            sent_count = r.CommunicationDeliveryLog.query.filter_by(
+                batch_id=row.batch_id, category="finance", status="sent"
+            ).count()
+            # Get channels used in this batch
+            ch_rows = r.db.session.query(r.CommunicationDeliveryLog.channel).filter(
+                r.CommunicationDeliveryLog.batch_id == row.batch_id,
+                r.CommunicationDeliveryLog.category == "finance",
+            ).distinct().all()
+            channels = [c[0] for c in ch_rows]
+            batches.append({
+                "batch_id": row.batch_id,
+                "total": row.total,
+                "sent": sent_count,
+                "failed": row.total - sent_count,
+                "last_sent": row.last_sent.isoformat() if row.last_sent else None,
+                "channels": channels,
+            })
+
+        return jsonify({
+            "batches": batches,
+            "page": page,
+            "total_pages": total_pages,
+            "total_batches": total,
+        })
+
+    @flask_app.route("/admin/communication/finance/reminder/<batch_id>")
+    @login_required
+    def admin_communication_finance_reminder_detail(batch_id: str):
+        """Get delivery details for a specific finance batch."""
+        require_admin()
+        deliveries = r.CommunicationDeliveryLog.query.filter_by(
+            batch_id=str(batch_id), category="finance"
+        ).order_by(r.CommunicationDeliveryLog.sent_at.desc()).all()
+
+        return jsonify({
+            "deliveries": [
+                {
+                    "id": d.id,
+                    "recipient_name": d.recipient_name,
+                    "recipient_phone": d.recipient_phone,
+                    "channel": d.channel,
+                    "status": d.status,
+                    "sent_at": d.sent_at.isoformat() if d.sent_at else None,
+                    "reference_id": d.reference_id,
+                    "error_message": d.error_message,
+                }
+                for d in deliveries
+            ],
+            "batch_id": batch_id,
+            "total": len(deliveries),
+        })
+
+    # --- Attendance notification workflow -------------------------------------------
+
+    @flask_app.route("/admin/communication/attendance/learners")
+    @login_required
+    def admin_communication_attendance_learners():
+        """Return learners with attendance (absence) records for notification."""
+        require_admin()
+        year_s = str(request.args.get("year", "") or datetime.utcnow().year).strip()
+        grade = str(request.args.get("grade", "")).strip()
+        surname = str(request.args.get("surname", "")).strip()
+        learner_id = str(request.args.get("learner_id", "")).strip()
+        start_date = str(request.args.get("start_date", "")).strip()
+        end_date = str(request.args.get("end_date", "")).strip()
+        try:
+            limit = min(int(request.args.get("limit", "500")), 2000)
+        except ValueError:
+            limit = 500
+        try:
+            y_int = int(year_s)
+        except ValueError:
+            y_int = datetime.utcnow().year
+
+        # Build query: absence count per learner from Absentees, joined with Learner_Info for name
+        joins = ["FROM [Absentees] a INNER JOIN [Learner_Info] li ON CSTR(a.[Learnerid]) = CSTR(li.[ID])"]
+        wh = ["li.[Status] = 'C'"]
+        params: list = []
+
+        if year_s:
+            wh.append("CSTR(a.[Datayear]) = ?")
+            params.append(year_s)
+        if grade:
+            wh.append("CSTR(li.[Grade]) = ?")
+            params.append(grade)
+        if surname:
+            wh.append("li.[SName] LIKE ?")
+            params.append(f"%{surname}%")
+        if learner_id:
+            wh.append("(CSTR(li.[ID]) = ? OR CSTR(li.[LearnerID]) = ?)")
+            params.extend([learner_id, learner_id])
+        if start_date:
+            wh.append("a.[DateAbsent] >= ?")
+            params.append(start_date)
+        if end_date:
+            wh.append("a.[DateAbsent] <= ?")
+            params.append(end_date + " 23:59:59")
+
+        where_sql = " AND ".join(wh) if wh else "1=1"
+        sql = (
+            f"SELECT TOP {limit} li.[ID], li.[FName], li.[SName], li.[Grade], "
+            f"COUNT(a.[Learnerid]) AS AbsenceCount "
+            f"{' '.join(joins)} WHERE {where_sql} "
+            f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+            f"ORDER BY li.[SName], li.[FName]"
+        )
+        try:
+            rows = r.mdb_conn.execute_query(sql, tuple(params)) or []
+        except Exception:
+            # Fallback: try without TOP
+            alt_sql = (
+                f"SELECT li.[ID], li.[FName], li.[SName], li.[Grade], "
+                f"COUNT(a.[Learnerid]) AS AbsenceCount "
+                f"{' '.join(joins)} WHERE {where_sql} "
+                f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+                f"ORDER BY li.[SName], li.[FName]"
+            )
+            try:
+                rows = r.mdb_conn.execute_query(alt_sql, tuple(params)) or []
+                rows = rows[:limit]
+            except Exception:
+                rows = []
+
+        out = []
+        for row in rows:
+            lid = str(row.get("ID") or "").strip()
+            if not lid:
+                continue
+            nm = (str(row.get("SName") or "").strip() + ", " + str(row.get("FName") or "").strip()).strip(", ")
+            absence_count = int(row.get("AbsenceCount") or 0)
+            out.append({
+                "id": lid,
+                "learner_name": nm,
+                "learner_id": lid,
+                "grade": str(row.get("Grade") or ""),
+                "year": y_int,
+                "absence_count": absence_count,
+                "preview_message": f"{nm} (Gr {row.get('Grade')}) — {absence_count} absence(s)",
+            })
+        return jsonify({"learners": out})
+
+    @flask_app.route("/admin/communication/attendance/send", methods=["POST"])
+    @login_required
+    def admin_communication_attendance_send():
+        """Send attendance notifications to parents/guardians."""
+        require_admin()
+        body = request.get_json(force=True, silent=True) or {}
+        channels = [str(c).lower() for c in (body.get("channels") or [])]
+        learners = body.get("learners") or []
+        tpl = str(body.get("attendance_template") or "").strip()
+        school = (os.environ.get("SCHOOL_DISPLAY_NAME") or "School").strip()
+        if not learners:
+            return jsonify({"ok": False, "error": "No learners."}), 400
+        batch_id = _comm_batch_id()
+        sent = 0
+        failed: list[dict] = []
+        for L in learners:
+            lid = str(L.get("learner_id") or L.get("id") or "").strip()
+            if not lid:
+                continue
+            nm = str(L.get("learner_name") or "")
+            gr = str(L.get("grade") or "")
+            yr = str(L.get("year") or datetime.utcnow().year)
+            ac = str(L.get("absence_count") or "0")
+            msg = (
+                tpl.replace("{parent_name}", "Parent/Guardian")
+                .replace("{learner_name}", nm)
+                .replace("{grade}", gr)
+                .replace("{year}", yr)
+                .replace("{absence_count}", ac)
+                .replace("{school_name}", school)
+            )
+            seen_phones: set[str] = set()
+            for ph, pname in r._get_parent_phones_from_mdb([lid]):
+                ph_key = str(ph or "").strip()
+                if not ph_key or ph_key in seen_phones:
+                    continue
+                seen_phones.add(ph_key)
+                msg_f = msg.replace("{parent_name}", pname or "Parent/Guardian")
+                for ch in channels:
+                    try:
+                        if ch == "sms":
+                            r.send_sms_message(ph, msg_f)
+                            _log_delivery(
+                                batch_id=batch_id,
+                                category="attendance",
+                                channel="sms",
+                                phone=ph,
+                                message=msg_f,
+                                status="sent",
+                                recipient_name=pname,
+                                reference_type="learner",
+                                reference_id=lid,
+                            )
+                            sent += 1
+                        elif ch == "whatsapp":
+                            if r.send_whatsapp_message(ph, msg_f):
+                                _log_delivery(
+                                    batch_id=batch_id,
+                                    category="attendance",
+                                    channel="whatsapp",
+                                    phone=ph,
+                                    message=msg_f,
+                                    status="sent",
+                                    recipient_name=pname,
+                                    reference_type="learner",
+                                    reference_id=lid,
+                                )
+                                sent += 1
+                            else:
+                                failed.append({"learner_id": lid, "phone": ph, "channel": "whatsapp"})
+                    except Exception as exc:
+                        failed.append({"learner_id": lid, "phone": ph, "channel": ch, "error": str(exc)})
+        return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
+
     @flask_app.route("/admin/communication/delivery-report/<batch_id>")
     @login_required
     def admin_communication_delivery_report(batch_id: str):
@@ -1631,7 +1877,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_download(batch_id: int, kind: str):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         if kind == "notifications":
             path = Path(b.notifications_relpath)
         elif kind == "attendance":
@@ -1647,7 +1893,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_batch_learners(batch_id: int):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         meta = _detention_meta(b)
         applied = set(meta.get("merit_applied") or [])
         learners = []
@@ -1675,7 +1921,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_detention_apply_merit(batch_id: int):
         require_admin()
-        b = r.DetentionNoticeBatch.query.get_or_404(batch_id)
+        b = r.db.get_or_404(r.DetentionNoticeBatch, batch_id)
         body = request.get_json(force=True, silent=True) or {}
         chosen = [str(x).strip() for x in (body.get("learner_ids") or []) if str(x).strip()]
         meta = _detention_meta(b)
@@ -1805,7 +2051,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def toggle_slideshow_image(image_id: int):
         require_admin()
-        img = r.SlideshowImage.query.get_or_404(image_id)
+        img = r.db.get_or_404(r.SlideshowImage, image_id)
         img.is_active = not bool(img.is_active)
         r.db.session.commit()
         return redirect(url_for("admin_slideshow"))
@@ -1814,7 +2060,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def delete_slideshow_image(image_id: int):
         require_admin()
-        img = r.SlideshowImage.query.get_or_404(image_id)
+        img = r.db.get_or_404(r.SlideshowImage, image_id)
         r.db.session.delete(img)
         r.db.session.commit()
         flash("Deleted.", "success")
@@ -1836,7 +2082,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         rows = q.offset((page - 1) * per_page).limit(per_page).all()
         items = []
         for a in rows:
-            author = r.User.query.get(a.user_id)
+            author = r.db.session.get(r.User, a.user_id)
             author_name = author.username if author else "Unknown"
             if a.expires_at and a.expires_at < datetime.utcnow():
                 expired = True
@@ -1866,7 +2112,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_announcements_toggle(ann_id: int):
         require_admin()
-        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        a = r.db.get_or_404(r.TeacherAnnouncement, ann_id)
         a.is_active = not a.is_active
         r.db.session.commit()
         return redirect(url_for("admin_announcements"))
@@ -1875,7 +2121,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_announcements_delete(ann_id: int):
         require_admin()
-        a = r.TeacherAnnouncement.query.get_or_404(ann_id)
+        a = r.db.get_or_404(r.TeacherAnnouncement, ann_id)
         r.db.session.delete(a)
         r.db.session.commit()
         flash("Announcement deleted.", "success")
@@ -1954,7 +2200,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_sick_note_file(submission_id: int):
         require_admin()
-        sub = r.SickNoteSubmission.query.get_or_404(submission_id)
+        sub = r.db.get_or_404(r.SickNoteSubmission, submission_id)
         base = Path(r.app.root_path)
         path = base / sub.storage_relpath
         if not path.is_file():
@@ -2043,7 +2289,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         uid = request.form.get("user_id")
         phone = str(request.form.get("phone", "")).strip()
         if uid:
-            u = r.User.query.get(int(uid))
+            u = r.db.session.get(r.User, int(uid))
         elif phone:
             p = r.normalize_phone(phone)
             u = r.User.query.filter_by(phone=p).first()
@@ -2065,7 +2311,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_mgmt_permissions():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         u.mgmt_can_view_academics = bool(request.form.get("can_academics"))
         u.mgmt_can_view_disciplinary = bool(request.form.get("can_disciplinary"))
         u.mgmt_can_view_attendance = bool(request.form.get("can_attendance"))
@@ -2078,7 +2324,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_teacher():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         if u.username == r.ADMIN_USERNAME:
             flash("Cannot change admin.", "error")
             return redirect(url_for("admin_users"))
@@ -2093,7 +2339,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_users_set_teacher_permissions():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         u.can_teacher_attendance = bool(request.form.get("can_teacher_attendance"))
         u.can_teacher_discipline = bool(request.form.get("can_teacher_discipline"))
         u.can_teacher_assessments = bool(request.form.get("can_teacher_assessments"))
@@ -2108,7 +2354,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_teacher_assignment_add():
         require_admin()
-        u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        u = r.db.get_or_404(r.User, int(request.form.get("user_id", 0)))
         a = r.UserTeacherAssignment(
             user_id=u.id,
             class_id=str(request.form.get("class_id", "")).strip(),
@@ -2136,7 +2382,7 @@ def register_admin_routes(flask_app: Flask) -> None:
         selected = None
         items = []
         if req_id:
-            selected = r.ProfileChangeRequest.query.get(int(req_id))
+            selected = r.db.session.get(r.ProfileChangeRequest, int(req_id))
             if selected:
                 items = r._profile_change_items_for_request(selected.id)
         uids = {x.submitted_by_user_id for x in requests_rows}
@@ -2159,7 +2405,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_profile_change_request_approve(request_id: int):
         require_admin()
-        req = r.ProfileChangeRequest.query.get_or_404(request_id)
+        req = r.db.get_or_404(r.ProfileChangeRequest, request_id)
         if req.status != "pending":
             flash("Already processed.", "error")
             return redirect(url_for("admin_profile_change_requests", status="all", request_id=request_id))
@@ -2189,7 +2435,7 @@ def register_admin_routes(flask_app: Flask) -> None:
     @login_required
     def admin_profile_change_request_reject(request_id: int):
         require_admin()
-        req = r.ProfileChangeRequest.query.get_or_404(request_id)
+        req = r.db.get_or_404(r.ProfileChangeRequest, request_id)
         reason = str(request.form.get("admin_comment", "")).strip()
         if not reason:
             flash("Rejection reason required.", "error")
