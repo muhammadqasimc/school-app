@@ -1,3 +1,33 @@
+2026-07-20 05:00 — Cron intake scan
+====================================
+
+HEAD: 0b71a60 feat: add early intervention core tracking with referrals management
+
+State: Clean working tree. 295 tests (288 pass, 7 fail, 53 warnings).
+
+New since last scan:
+  [x] Early intervention core tracking with referrals management (0b71a60) — 16/16 tests pass
+  [x] New EarlyIntervention, EarlyInterventionReferral, EarlyInterventionNotification models
+  [x] API routes: /api/early-intervention/{list,create,update,detail,referral/*,from-at-risk}
+
+Still failing (7 tests, unchanged):
+  1. test_chat_routes_exist — chat API routes never implemented
+  2. test_chat_thread_lifecycle_smoke — POST /api/chat/threads returns 404
+  3-5. test_translate_* (3 tests) — call deleted MDBConnection._translate_access_to_postgres
+  6. test_teacher_routes_exist — expects /teacher/classes; only /teacher and /teacher/announcements exist
+  7. test_teacher_api_smoke_authenticated — teacher API endpoints return 404
+
+Regressions: None detected. No new test failures.
+
+Warnings increased: 53 (was 18). New .query.get() calls in early intervention test file (2 calls) and app.py (4 calls, was 3). The feature added legacy calls instead of replacing them.
+
+Legacy Query.get() count: 28 production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 test (test_early_intervention.py) — was 27 production + 0 test.
+
+Notable:
+  - Early intervention feature is well-tested (16 tests, all pass) and has full API routes.
+  - The `.query.get()` migration has regressed — new code re-introduces the legacy pattern.
+  - Teacher portal and chat platform are still the two biggest feature gaps (no progress since last scan).
+
 2026-07-19 22:29 — Cron intake scan
 ====================================
 
@@ -31,3 +61,4 @@ Notable:
   - The PG compat translation tests are stale — they test a private method that was removed when MDBConnection was refactored to use MDBRepository directly. Either delete/update tests or reimplement the method.
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
+  - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.

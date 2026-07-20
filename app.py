@@ -8,7 +8,7 @@ warnings.filterwarnings(
     category=Warning,
 )
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
+from flask import Flask, Response, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -842,6 +842,20 @@ class SchoolAssetRequest(db.Model):
     decided_at = db.Column(db.DateTime, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
+    body = db.Column(db.Text, nullable=False)
+    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 @login_manager.user_loader
@@ -3529,6 +3543,409 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+# ---------------------------------------------------------------------------
+# Teacher Portal — Page routes
+# ---------------------------------------------------------------------------
+@app.route("/teacher/classes")
+@login_required
+def teacher_classes_page():
+    """Teacher classes/roster page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/classes.html")
+
+
+@app.route("/teacher/attendance")
+@login_required
+def teacher_attendance_page():
+    """Teacher attendance page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/attendance.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — API routes
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/dashboard")
+@login_required
+def api_teacher_dashboard():
+    """Return KPI data for the teacher dashboard."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    uid = current_user.id
+
+    # Count assigned classes and distinct grades from UserTeacherAssignment
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=uid, is_active=True
+    ).all()
+    assigned_classes = len(set(a.class_id for a in assignments if a.class_id))
+    assigned_grades = len(set(a.grade for a in assignments if a.grade))
+
+    # Learner count — approximate from MDB
+    learner_count = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Learner_Info]"
+        )
+        if rows:
+            learner_count = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending attendance — count from Absentees in current year
+    pending_attendance = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if rows:
+            pending_attendance = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending assessments — count from ReportMarks in current year
+    pending_assessments = 0
+    try:
+        mark_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if mark_rows:
+            pending_assessments = int(mark_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Recent discipline — count from DisciplinaryLearnerMisconduct
+    recent_discipline = 0
+    try:
+        disc_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct]"
+        )
+        if disc_rows:
+            recent_discipline = int(disc_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    return jsonify({
+        "kpis": {
+            "assignedClasses": assigned_classes,
+            "assignedGrades": assigned_grades,
+            "learnerCount": learner_count,
+            "pendingAttendance": pending_attendance,
+            "pendingAssessments": pending_assessments,
+            "recentDiscipline": recent_discipline,
+        }
+    })
+
+
+@app.route("/api/teacher/classes")
+@login_required
+def api_teacher_classes():
+    """Return the current teacher's class/subject assignments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=current_user.id, is_active=True
+    ).all()
+    return jsonify({
+        "assignments": [
+            {
+                "classId": a.class_id or "",
+                "grade": a.grade or "",
+                "subject": a.subject or "",
+                "academicYear": a.academic_year or "",
+            }
+            for a in assignments
+        ]
+    })
+
+
+@app.route("/api/teacher/roster")
+@login_required
+def api_teacher_roster():
+    """Return learners filtered by grade and/or class_id for roster view."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    return jsonify({
+        "learners": [
+            {
+                "learnerId": str(r.get("LearnerID", r.get("ID", "")) or ""),
+                "name": str(r.get("FName", "") or ""),
+                "surname": str(r.get("SName", "") or ""),
+                "grade": str(r.get("Grade", "") or ""),
+                "classId": str(r.get("Class", "") or ""),
+            }
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/teacher/attendance")
+@login_required
+def api_teacher_attendance():
+    """Return attendance records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Learnerid], [DateAbsent], [Grade], [Class], [ReasonOther] "
+        "FROM [Absentees] ORDER BY [DateAbsent] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/discipline")
+@login_required
+def api_teacher_discipline():
+    """Return discipline records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Date], [Learnerid], [Type], [Demerit], [Merit], [Comment] "
+        "FROM [DisciplinaryLearnerMisconduct] ORDER BY [Date] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/assessments")
+@login_required
+def api_teacher_assessments():
+    """Return assessment records and available subjects."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    # Fetch assessment rows
+    sql = (
+        "SELECT TOP 200 [LearnerID], [SubjectId], [SubjectName], [Mark], [TotalMark], [Datayear], [ReportId] "
+        "FROM [ReportMarks] ORDER BY [Datayear] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+
+    # Fetch subjects for dropdown
+    subjects_sql = "SELECT [ID], [Name] FROM [Subjects]"
+    try:
+        subjects = mdb_conn.execute_query(subjects_sql) or []
+    except Exception:
+        subjects = []
+
+    return jsonify({
+        "rows": rows,
+        "subjects": [{"Id": str(s.get("ID", "") or ""), "Name": str(s.get("Name", "") or "")} for s in subjects],
+    })
+
+
+@app.route("/api/teacher/reports/export")
+@login_required
+def api_teacher_reports_export():
+    """Export a CSV report of learners with attendance, discipline, and assessment counts for the teacher's scope."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    academic_year = request.args.get("academic_year", "").strip() or str(datetime.now().year)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Build learner query
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        learners = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        learners = []
+
+    import csv
+    from io import StringIO
+
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["LearnerID", "Name", "Surname", "Grade", "Class", "AttendanceCount", "DisciplineCount", "AssessmentCount"])
+
+    for l in learners:
+        lid = str(l.get("LearnerID", l.get("ID", "")) or "")
+        # Attendance count for this learner
+        att_count = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE CSTR([Learnerid]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar:
+                att_count = int(ar[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Discipline count
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Assessment count
+        asm_count = 0
+        try:
+            ar2 = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar2:
+                asm_count = int(ar2[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        cw.writerow([
+            lid,
+            str(l.get("FName", "") or ""),
+            str(l.get("SName", "") or ""),
+            str(l.get("Grade", "") or ""),
+            str(l.get("Class", "") or ""),
+            att_count,
+            disc_count,
+            asm_count,
+        ])
+
+    csv_output = si.getvalue()
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=teacher_report_{academic_year}.csv"},
+    )
+
+
+@app.route("/api/teacher/messages/send", methods=["POST"])
+@login_required
+def api_teacher_messages_send():
+    """Send a chat message. Creates a thread if needed."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    recipient_id = request.form.get("recipient_id", "").strip()
+    learner_id = request.form.get("learner_id", "").strip()
+    body = request.form.get("body", "").strip()
+    thread_id = request.form.get("thread_id", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    # Idempotency check
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already sent.", "idempotent": True})
+
+    # Resolve thread
+    thread = None
+    if thread_id:
+        thread = ChatThread.query.get(int(thread_id))
+    elif recipient_id:
+        # Look for existing direct thread between these two users + learner
+        participants = (
+            ChatParticipant.query
+            .filter(ChatParticipant.user_id.in_([current_user.id, int(recipient_id)]))
+            .group_by(ChatParticipant.thread_id)
+            .having(db.func.count(ChatParticipant.thread_id) == 2)
+            .all()
+        )
+        for p in participants:
+            t = ChatThread.query.get(p.thread_id)
+            if t and t.thread_type == "direct" and t.learner_id == (learner_id or None):
+                thread = t
+                break
+
+    if not thread:
+        thread = ChatThread(
+            thread_type="direct" if not learner_id else "direct",
+            learner_id=learner_id or None,
+            title=body[:100],
+            status="active",
+            created_by_user_id=current_user.id,
+        )
+        db.session.add(thread)
+        db.session.flush()
+        # Add current user as participant
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=current_user.id,
+            can_post=True,
+        ))
+        if recipient_id:
+            db.session.add(ChatParticipant(
+                thread_id=thread.id,
+                user_id=int(recipient_id),
+                can_post=True,
+            ))
+
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"message_id": msg.id}),
+        ))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Message sent.",
+        "thread_id": thread.id,
+        "message_id": msg.id,
+    })
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -5042,6 +5459,83 @@ def _management_at_risk_payload(flt: dict) -> dict:
     }
 
 
+def _management_early_intervention_payload(flt: dict) -> dict:
+    """Build the early intervention dashboard payload.
+
+    Queries SQLite models (EarlyIntervention, InterventionReferral) and
+    returns KPIs plus a list of interventions with referral counts.
+    """
+    status_filter = str(flt.get("status") or "").strip()
+    risk_filter = str(flt.get("risk_type") or "").strip()
+    grade_filter = str(flt.get("grade") or "").strip()
+
+    query = EarlyIntervention.query
+    if status_filter:
+        query = query.filter(EarlyIntervention.status == status_filter)
+    if risk_filter:
+        query = query.filter(EarlyIntervention.risk_type == risk_filter)
+    if grade_filter:
+        query = query.filter(EarlyIntervention.grade == grade_filter)
+
+    interventions = query.order_by(EarlyIntervention.created_at.desc()).all()
+
+    # KPIs
+    open_interventions = EarlyIntervention.query.filter(
+        EarlyIntervention.status.in_(["open", "in_progress"])
+    ).count()
+    pending_referrals = InterventionReferral.query.filter(
+        InterventionReferral.status == "pending"
+    ).count()
+    total_notifications = InterventionNotification.query.count()
+    resolved_today = EarlyIntervention.query.filter(
+        EarlyIntervention.status == "resolved",
+        db.func.date(EarlyIntervention.resolved_at) == db.func.date("now"),
+    ).count()
+
+    # Build intervention list with referral counts and assigned staff names
+    interventions_list = []
+    for inv in interventions:
+        referral_count = InterventionReferral.query.filter(
+            InterventionReferral.intervention_id == inv.id
+        ).count()
+        assigned_name = None
+        if inv.assigned_to_user_id:
+            u = User.query.get(inv.assigned_to_user_id)
+            if u:
+                assigned_name = u.username
+
+        interventions_list.append({
+            "id": inv.id,
+            "learnerId": inv.learner_id,
+            "learnerName": inv.learner_name,
+            "grade": inv.grade,
+            "class": inv.class_name,
+            "riskType": inv.risk_type,
+            "interventionType": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assignedTo": assigned_name,
+            "assignedToUserId": inv.assigned_to_user_id,
+            "createdAt": inv.created_at.isoformat() if inv.created_at else None,
+            "updatedAt": inv.updated_at.isoformat() if inv.updated_at else None,
+            "resolvedAt": inv.resolved_at.isoformat() if inv.resolved_at else None,
+            "outcomeNotes": inv.outcome_notes,
+            "referralCount": referral_count,
+        })
+
+    return {
+        "reportData": {
+            "kpis": {
+                "openInterventions": open_interventions,
+                "pendingReferrals": pending_referrals,
+                "totalNotifications": total_notifications,
+                "resolvedToday": resolved_today,
+            },
+            "interventions": interventions_list,
+        }
+    }
+
+
 def _management_build_generic_report_payload(report_key: str) -> dict:
     flt = _management_filters_from_request()
 
@@ -5052,6 +5546,10 @@ def _management_build_generic_report_payload(report_key: str) -> dict:
     # At-risk dashboard builds its own focused queries — skip generic marks
     if report_key == "at-risk-dashboard":
         return _management_at_risk_payload(flt)
+
+    # Early intervention dashboard uses SQLite models — no MDB needed
+    if report_key == "early-intervention":
+        return _management_early_intervention_payload(flt)
 
     marks = _management_dashboard_fetch_marks(flt)
     year = str(flt.get("year") or "").strip()
@@ -6383,6 +6881,287 @@ def api_management_report_filters():
     return jsonify({"filters": _management_report_filters_payload(_management_filters_from_request())})
 
 
+# ── Early Intervention API ────────────────────────────────────────────────
+
+
+@app.route("/api/early-intervention/list")
+@login_required
+def api_early_intervention_list():
+    """Return interventions with optional filters (status, risk_type, grade)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    st = str(request.args.get("status", "")).strip()
+    rt = str(request.args.get("risk_type", "")).strip()
+    gr = str(request.args.get("grade", "")).strip()
+    query = EarlyIntervention.query
+    if st:
+        query = query.filter(EarlyIntervention.status == st)
+    if rt:
+        query = query.filter(EarlyIntervention.risk_type == rt)
+    if gr:
+        query = query.filter(EarlyIntervention.grade == gr)
+    interventions = query.order_by(EarlyIntervention.created_at.desc()).all()
+    return jsonify({
+        "status": "success",
+        "interventions": [
+            {
+                "id": i.id,
+                "learner_id": i.learner_id,
+                "learner_name": i.learner_name,
+                "grade": i.grade,
+                "class_name": i.class_name,
+                "risk_type": i.risk_type,
+                "intervention_type": i.intervention_type,
+                "description": i.description,
+                "status": i.status,
+                "assigned_to_user_id": i.assigned_to_user_id,
+                "created_at": i.created_at.isoformat() if i.created_at else None,
+            }
+            for i in interventions
+        ],
+    })
+
+
+@app.route("/api/early-intervention/create", methods=["POST"])
+@login_required
+def api_early_intervention_create():
+    """Create a new intervention record."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    learner_id = str(data.get("learner_id") or "").strip()
+    risk_type = str(data.get("risk_type") or "").strip()
+    intervention_type = str(data.get("intervention_type") or "").strip()
+    if not learner_id or not risk_type or not intervention_type:
+        return jsonify({"error": "learner_id, risk_type, and intervention_type are required"}), 400
+    inv = EarlyIntervention(
+        learner_id=learner_id,
+        learner_name=str(data.get("learner_name") or "").strip() or None,
+        grade=str(data.get("grade") or "").strip() or None,
+        class_name=str(data.get("class_name") or "").strip() or None,
+        risk_type=risk_type,
+        intervention_type=intervention_type,
+        description=str(data.get("description") or "").strip() or None,
+        assigned_to_user_id=data.get("assigned_to_user_id") or None,
+        created_by_user_id=getattr(current_user, "id", 0) or 0,
+    )
+    db.session.add(inv)
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+        },
+    }), 201
+
+
+@app.route("/api/early-intervention/update", methods=["POST"])
+@login_required
+def api_early_intervention_update():
+    """Update intervention status, outcome_notes, or assigned_to."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    inv_id = data.get("id")
+    if not inv_id:
+        return jsonify({"error": "id required"}), 400
+    inv = db.session.get(EarlyIntervention, inv_id)
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    if "status" in data:
+        new_status = str(data["status"]).strip()
+        inv.status = new_status
+        if new_status in ("resolved", "closed") and not inv.resolved_at:
+            inv.resolved_at = datetime.utcnow()
+    if "outcome_notes" in data:
+        inv.outcome_notes = str(data["outcome_notes"]).strip() or None
+    if "assigned_to_user_id" in data:
+        inv.assigned_to_user_id = data["assigned_to_user_id"] or None
+    if "description" in data:
+        inv.description = str(data["description"]).strip() or None
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "outcome_notes": inv.outcome_notes,
+            "resolved_at": inv.resolved_at.isoformat() if inv.resolved_at else None,
+            "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
+        },
+    })
+
+
+@app.route("/api/early-intervention/detail")
+@login_required
+def api_early_intervention_detail():
+    """Return single intervention with its referrals."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    inv_id = request.args.get("id")
+    if not inv_id:
+        return jsonify({"error": "id required"}), 400
+    inv = db.session.get(EarlyIntervention, int(inv_id))
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    referrals = InterventionReferral.query.filter_by(intervention_id=inv.id).all()
+    return jsonify({
+        "intervention": {
+            "id": inv.id,
+            "learner_id": inv.learner_id,
+            "learner_name": inv.learner_name,
+            "grade": inv.grade,
+            "class_name": inv.class_name,
+            "risk_type": inv.risk_type,
+            "intervention_type": inv.intervention_type,
+            "description": inv.description,
+            "status": inv.status,
+            "assigned_to_user_id": inv.assigned_to_user_id,
+            "outcome_notes": inv.outcome_notes,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
+            "resolved_at": inv.resolved_at.isoformat() if inv.resolved_at else None,
+        },
+        "referrals": [
+            {
+                "id": r.id,
+                "referred_to": r.referred_to,
+                "referred_to_name": r.referred_to_name,
+                "reason": r.reason,
+                "notes": r.notes,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
+                "outcome": r.outcome,
+            }
+            for r in referrals
+        ],
+    })
+
+
+@app.route("/api/early-intervention/referral/create", methods=["POST"])
+@login_required
+def api_early_intervention_referral_create():
+    """Create a referral linked to an intervention."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    intervention_id = data.get("intervention_id")
+    referred_to = str(data.get("referred_to") or "").strip()
+    reason = str(data.get("reason") or "").strip()
+    if not intervention_id or not referred_to or not reason:
+        return jsonify({"error": "intervention_id, referred_to, and reason are required"}), 400
+    inv = db.session.get(EarlyIntervention, intervention_id)
+    if not inv:
+        return jsonify({"error": "Intervention not found"}), 404
+    ref = InterventionReferral(
+        intervention_id=intervention_id,
+        referred_to=referred_to,
+        referred_to_name=str(data.get("referred_to_name") or "").strip() or None,
+        reason=reason,
+        notes=str(data.get("notes") or "").strip() or None,
+        created_by_user_id=getattr(current_user, "id", 0) or 0,
+    )
+    db.session.add(ref)
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "referral": {
+            "id": ref.id,
+            "intervention_id": ref.intervention_id,
+            "referred_to": ref.referred_to,
+            "referred_to_name": ref.referred_to_name,
+            "reason": ref.reason,
+            "notes": ref.notes,
+            "status": ref.status,
+            "created_at": ref.created_at.isoformat() if ref.created_at else None,
+        },
+    }), 201
+
+
+@app.route("/api/early-intervention/referral/update", methods=["POST"])
+@login_required
+def api_early_intervention_referral_update():
+    """Update referral status and outcome."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    ref_id = data.get("id")
+    if not ref_id:
+        return jsonify({"error": "id required"}), 400
+    ref = db.session.get(InterventionReferral, ref_id)
+    if not ref:
+        return jsonify({"error": "Referral not found"}), 404
+    if "status" in data:
+        ref.status = str(data["status"]).strip()
+        if data["status"] in ("completed", "declined") and not ref.resolved_at:
+            ref.resolved_at = datetime.utcnow()
+    if "outcome" in data:
+        ref.outcome = str(data["outcome"]).strip() or None
+    if "notes" in data:
+        ref.notes = str(data["notes"]).strip() or None
+    db.session.commit()
+    return jsonify({
+        "status": "success",
+        "referral": {
+            "id": ref.id,
+            "intervention_id": ref.intervention_id,
+            "referred_to": ref.referred_to,
+            "referred_to_name": ref.referred_to_name,
+            "reason": ref.reason,
+            "notes": ref.notes,
+            "status": ref.status,
+            "outcome": ref.outcome,
+            "resolved_at": ref.resolved_at.isoformat() if ref.resolved_at else None,
+        },
+    })
+
+
+@app.route("/api/early-intervention/from-at-risk")
+@login_required
+def api_early_intervention_from_at_risk():
+    """Check which at-risk learners already have open interventions.
+
+    Returns a set of learner_ids that have open (open|in_progress) interventions.
+    """
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    learner_ids_str = str(request.args.get("learner_ids", "")).strip()
+    learner_ids = [lid.strip() for lid in learner_ids_str.split(",") if lid.strip()]
+    if not learner_ids:
+        return jsonify({"open_intervention_learner_ids": []})
+    open_ids = set()
+    for lid in learner_ids:
+        count = EarlyIntervention.query.filter(
+            EarlyIntervention.learner_id == lid,
+            EarlyIntervention.status.in_(["open", "in_progress"]),
+        ).count()
+        if count > 0:
+            open_ids.add(lid)
+    return jsonify({"open_intervention_learner_ids": sorted(open_ids)})
+
+
+# ── Result Analysis ────────────────────────────────────────────────────────
+
+
 @app.route("/api/management-result-analysis")
 @login_required
 def api_management_result_analysis():
@@ -6835,6 +7614,7 @@ MANAGEMENT_REPORT_REGISTRY = [
     {"key": "principal-overview", "title": "Principal Overview", "template": "management/principal_overview.html"},
     {"key": "attendance", "title": "Attendance", "template": "management/attendance.html"},
     {"key": "at-risk-dashboard", "title": "At-Risk Learner Dashboard", "template": "management/at_risk_dashboard.html"},
+    {"key": "early-intervention", "title": "Early Intervention", "template": "management/early_intervention.html"},
     {"key": "learner-chart-report", "title": "Learner Chart Report", "template": "management/learner_chart_report.html"},
     {"key": "school-achievement-report", "title": "School Achievement Report", "template": "management/school_achievement_report.html"},
     {"key": "learner-promotion-rate", "title": "Learner Promotion Rate", "template": "management/learner_promotion_rate.html"},
