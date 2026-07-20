@@ -4388,19 +4388,6 @@ def admin_chat_page():
     return render_template("admin/chat.html")
 
 
-class MessageTemplate(db.Model):
-    __tablename__ = 'message_template'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    category = db.Column(db.String(32), nullable=False, default='general', index=True)
-    body = db.Column(db.Text, nullable=False)
-    placeholders_json = db.Column(db.Text, nullable=True)
-    is_active = db.Column(db.Boolean, default=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
 # --- Message Templates API ---
 
 
