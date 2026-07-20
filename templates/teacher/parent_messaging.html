@@ -20,14 +20,69 @@
           <select class="form-select" id="msg-channel" name="channel"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select>
         </div>
       </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1" for="template-select">Message Template</label>
+        <select class="form-select" id="template-select">
+          <option value="">None (free text)</option>
+        </select>
+      </div>
       <label class="form-label" for="msg-message">Message</label>
       <textarea class="form-control" id="msg-message" name="message" rows="4" required minlength="5"></textarea>
+      <div id="placeholder-hint" class="small text-muted mt-1" style="min-height:1.2em;"></div>
       <button class="btn btn-primary mt-2" type="submit">Send</button>
     </form>
     <div id="msg-result" class="small mt-2"></div>
   </div>
 </div>
 <script>
+let messageTemplates = [];
+
+async function loadTemplates() {
+  try {
+    const r = await fetch('/api/teacher/message-templates');
+    const data = await r.json();
+    messageTemplates = data.templates || [];
+  } catch (e) {
+    messageTemplates = [];
+  }
+  renderTemplateSelect();
+}
+
+function renderTemplateSelect() {
+  const sel = document.getElementById('template-select');
+  sel.innerHTML = '<option value="">None (free text)</option>';
+  const categories = ['Attendance', 'Behavior', 'Academic', 'General'];
+  for (const cat of categories) {
+    const items = messageTemplates.filter(t => t.category === cat);
+    if (items.length === 0) continue;
+    const og = document.createElement('optgroup');
+    og.label = cat;
+    for (const t of items) {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name || t.title || 'Template';
+      og.appendChild(opt);
+    }
+    sel.appendChild(og);
+  }
+}
+
+document.getElementById('template-select').addEventListener('change', function () {
+  const hint = document.getElementById('placeholder-hint');
+  const tpl = messageTemplates.find(t => t.id == this.value);
+  if (tpl) {
+    document.getElementById('msg-message').value = tpl.body;
+    // Extract placeholders like {parent_name}, {learner_name}, etc.
+    const matches = tpl.body.match(/\{(\w+)\}/g) || [];
+    const placeholders = [...new Set(matches.map(m => m.replace(/\{|\}/g, '')))];
+    hint.textContent = placeholders.length > 0
+      ? 'Placeholders: ' + placeholders.map(p => '{{' + p + '}}').join(', ')
+      : '';
+  } else {
+    hint.textContent = '';
+  }
+});
+
 document.getElementById("msg-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -39,5 +94,7 @@ document.getElementById("msg-form").addEventListener("submit", async (e) => {
   }
   document.getElementById("msg-result").textContent = `Sent ${data.sent || 0}/${data.totalRecipients || 0}. Failed: ${(data.failed || []).length}`;
 });
+
+loadTemplates();
 </script>
 {% endblock %}
