@@ -84,6 +84,20 @@
                         </a>
                     </div>
                     {% endif %}
+                    {% if endpoint_available('admin_message_templates') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_message_templates') }}" class="text-decoration-none">
+                            <div class="card h-100 border-primary hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-envelope-open-text fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Message Templates</h5>
+                                    <p class="card-text small text-muted">Manage pre-written message templates for parent communication.</p>
+                                    <span class="btn btn-primary btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
                     {% if endpoint_available('admin_users') %}
                     <div class="col-md-6 col-lg-3">
                         <a href="{{ url_for('admin_users') }}" class="text-decoration-none">
