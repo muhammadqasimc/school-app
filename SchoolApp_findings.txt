@@ -1,0 +1,1 @@
+2026-07-21 — Cron intake scan: Chat API and teacher portal routes now fully implemented (all tests pass). Admin message template UI and audit log view added. 319/322 tests pass. 3 stale PG compat translation tests remain. Legacy Query.get() count increased to 32 (30 prod + 2 test). Merge conflict markers in todo file cleaned up.

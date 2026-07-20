@@ -1,3 +1,33 @@
+2026-07-20 05:00 — Cron intake scan
+====================================
+
+HEAD: 0b71a60 feat: add early intervention core tracking with referrals management
+
+State: Clean working tree. 295 tests (288 pass, 7 fail, 53 warnings).
+
+New since last scan:
+  [x] Early intervention core tracking with referrals management (0b71a60) — 16/16 tests pass
+  [x] New EarlyIntervention, EarlyInterventionReferral, EarlyInterventionNotification models
+  [x] API routes: /api/early-intervention/{list,create,update,detail,referral/*,from-at-risk}
+
+Still failing (7 tests, unchanged):
+  1. test_chat_routes_exist — chat API routes never implemented
+  2. test_chat_thread_lifecycle_smoke — POST /api/chat/threads returns 404
+  3-5. test_translate_* (3 tests) — call deleted MDBConnection._translate_access_to_postgres
+  6. test_teacher_routes_exist — expects /teacher/classes; only /teacher and /teacher/announcements exist
+  7. test_teacher_api_smoke_authenticated — teacher API endpoints return 404
+
+Regressions: None detected. No new test failures.
+
+Warnings increased: 53 (was 18). New .query.get() calls in early intervention test file (2 calls) and app.py (4 calls, was 3). The feature added legacy calls instead of replacing them.
+
+Legacy Query.get() count: 28 production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 test (test_early_intervention.py) — was 27 production + 0 test.
+
+Notable:
+  - Early intervention feature is well-tested (16 tests, all pass) and has full API routes.
+  - The `.query.get()` migration has regressed — new code re-introduces the legacy pattern.
+  - Teacher portal and chat platform are still the two biggest feature gaps (no progress since last scan).
+
 2026-07-19 22:29 — Cron intake scan
 ====================================
 
@@ -31,3 +61,34 @@ Notable:
   - The PG compat translation tests are stale — they test a private method that was removed when MDBConnection was refactored to use MDBRepository directly. Either delete/update tests or reimplement the method.
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
+  - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.
+
+2026-07-21 00:15 — Cron intake scan
+====================================
+
+HEAD: fbec4b3 feat: add AdminAuditLog model and audit trail view for admin bulk data workflows
+
+State: Clean working tree. 319 tests pass, 3 fail, 96 warnings (+24 tests, -3 failures, +43 warnings since last scan).
+
+Completed since last scan:
+  [x] Chat API routes (threads, messages, candidates, read receipts, attachments) — ALL tests now PASS
+  [x] Teacher portal routes (dashboard, classes, roster, attendance, discipline, assessments, reports) — ALL tests now PASS
+  [x] Admin message template management UI page (3b7d636)
+  [x] AdminAuditLog model + audit trail view for admin bulk data workflows (fbec4b3)
+  [x] Teacher dashboard unified API — no more tile 404s
+
+Still failing (3 tests, down from 7):
+  1-3. test_pg_compat_translation.py — calls deleted MDBConnection._translate_access_to_postgres (unchanged)
+
+Fixed regressions: All 4 previously-failing tests (chat routes, thread lifecycle, teacher routes, teacher API smoke) now pass.
+
+New during this scan:
+  - pytz missing from venv broke test_sync_service.py::TestAsUtc::test_aware_datetime_non_utc — installed pytz, test now passes
+  - Legacy Query.get() count: 30 production (app.py:6, inventory_routes.py:21, admin_routes.py:3) + 2 test = 32 total — was 28+2=30 last scan. Two new .query.get() calls in app.py from chat route code.
+  - Warnings increased from 53 to 96 — every new test file exercises legacy Query.get() codepaths, compounding the warning count.
+
+Notable:
+  - Teacher portal and chat platform are now FULLY implemented. The two biggest feature gaps from previous scans are closed.
+  - The stale merge conflict markers in SchoolApp_todo.txt (from a previous stash conflict) were cleaned up and the todo list was reorganized.
+  - Three remaining failures are all in test_pg_compat_translation.py — stale tests for a deleted method.
+  - Legacy Query.get() count keeps trending UP despite being on the todo list — new chat route code added 2 more calls.

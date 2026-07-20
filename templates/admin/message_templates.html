@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}Message Templates - Admin{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="mb-0"><i class="fas fa-envelope-open-text"></i> Message Templates</h3>
+                <button type="button" class="btn btn-primary btn-sm" id="btnCreateNew" data-bs-toggle="modal" data-bs-target="#templateModal">
+                    <i class="fas fa-plus"></i> Create Template
+                </button>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+
+                <div id="alertArea"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm" id="templatesTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Body</th>
+                                <th>Placeholders</th>
+                                <th>Status</th>
+                                <th style="width:160px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="templatesBody">
+                            <tr id="loadingRow">
+                                <td colspan="6" class="text-center text-muted py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading templates...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="modal fade" id="templateModal" tabindex="-1" aria-labelledby="templateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="templateModalLabel"><i class="fas fa-pen"></i> <span id="modalTitleText">Create Template</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm">
+                    <input type="hidden" id="editId" value="">
+                    <div class="mb-3">
+                        <label for="tplName" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="tplName" required maxlength="120" placeholder="e.g. Late Arrival Notice">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tplCategory" class="form-label">Category <span class="text-danger">*</span></label>
+                        <select class="form-select" id="tplCategory" required>
+                            <option value="">-- Select category --</option>
+                            <option value="attendance">Attendance</option>
+                            <option value="behavior">Behavior</option>
+                            <option value="academic">Academic</option>
+                            <option value="general">General</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="tplBody" class="form-label">Body <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="tplBody" rows="5" required placeholder="Dear {parent_name}, ..."></textarea>
+                        <div class="small text-muted mt-1">
+                            Use placeholders like <code>{parent_name}</code>, <code>{learner_name}</code>, <code>{grade}</code>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="tplPlaceholders" class="form-label">Placeholders</label>
+                        <input type="text" class="form-control" id="tplPlaceholders" placeholder="parent_name, learner_name, grade">
+                        <div class="small text-muted mt-1">Comma-separated list of placeholder names (used in the body wrapped in <code>{}</code>).</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btnSaveTemplate">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.category-badge { font-size: 0.8rem; }
+.body-preview { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placeholder-badge { font-size: 0.75rem; }
+.hover-shadow:hover { box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15); }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const tbody = document.getElementById('templatesBody');
+    const alertArea = document.getElementById('alertArea');
+    const modalEl = document.getElementById('templateModal');
+    let modalInstance = null;
+
+    const CATEGORY_COLORS = {
+        attendance: 'info',
+        behavior: 'warning',
+        academic: 'success',
+        general: 'secondary'
+    };
+
+    function showAlert(message, type) {
+        alertArea.innerHTML = '<div class="alert alert-' + type + ' alert-dismissible fade show">' +
+            message +
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+            '</div>';
+    }
+
+    function apiJson(url, options) {
+        return fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            ...options
+        }).then(function(r) { return r.json(); });
+    }
+
+    function renderTemplates(templates) {
+        if (!templates || templates.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No templates found. Click "Create Template" to add one.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = templates.map(function(t) {
+            var catColor = CATEGORY_COLORS[t.category] || 'secondary';
+            var placeholders = (t.placeholders || []);
+            var truncatedBody = (t.body || '').length > 100 ? (t.body || '').substring(0, 100) + '&hellip;' : (t.body || '');
+            var statusBadge = t.is_active
+                ? '<span class="badge bg-success">Active</span>'
+                : '<span class="badge bg-secondary">Inactive</span>';
+            var actions = '';
+            if (t.is_active) {
+                actions = '<button class="btn btn-outline-primary btn-sm me-1 edit-btn" data-id="' + t.id + '" title="Edit"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn btn-outline-danger btn-sm deactivate-btn" data-id="' + t.id + '" title="Deactivate"><i class="fas fa-ban"></i></button>';
+            } else {
+                actions = '<button class="btn btn-outline-secondary btn-sm me-1 edit-btn" data-id="' + t.id + '" title="Edit"><i class="fas fa-edit"></i></button>' +
+                    '<button class="btn btn-outline-success btn-sm activate-btn" data-id="' + t.id + '" title="Activate"><i class="fas fa-check-circle"></i></button>';
+            }
+            return '<tr>' +
+                '<td><strong>' + escHtml(t.name) + '</strong></td>' +
+                '<td><span class="badge category-badge bg-' + catColor + '">' + escHtml(t.category) + '</span></td>' +
+                '<td class="body-preview" title="' + escAttr(t.body || '') + '">' + escHtml(truncatedBody) + '</td>' +
+                '<td>' + (placeholders.length > 0
+                    ? placeholders.map(function(p) { return '<span class="badge bg-light text-dark placeholder-badge me-1">' + escHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted small">—</span>') +
+                '</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td>' + actions + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function escHtml(s) {
+        if (typeof s !== 'string') s = String(s || '');
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escAttr(s) {
+        if (typeof s !== 'string') s = String(s || '');
+        return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function loadTemplates() {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div> Loading templates...</td></tr>';
+        apiJson('/api/message-templates?include_inactive=1').then(function(data) {
+            renderTemplates(data.templates || []);
+        }).catch(function() {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-3">Failed to load templates.</td></tr>';
+        });
+    }
+
+    function openCreateModal() {
+        document.getElementById('modalTitleText').textContent = 'Create Template';
+        document.getElementById('editId').value = '';
+        document.getElementById('tplName').value = '';
+        document.getElementById('tplCategory').value = '';
+        document.getElementById('tplBody').value = '';
+        document.getElementById('tplPlaceholders').value = '';
+        document.getElementById('btnSaveTemplate').textContent = 'Create';
+        modalInstance && modalInstance.show();
+    }
+
+    function openEditModal(template) {
+        document.getElementById('modalTitleText').textContent = 'Edit Template';
+        document.getElementById('editId').value = template.id;
+        document.getElementById('tplName').value = template.name || '';
+        document.getElementById('tplCategory').value = template.category || '';
+        document.getElementById('tplBody').value = template.body || '';
+        document.getElementById('tplPlaceholders').value = (template.placeholders || []).join(', ');
+        document.getElementById('btnSaveTemplate').textContent = 'Update';
+        modalInstance && modalInstance.show();
+    }
+
+    function handleSave() {
+        var id = document.getElementById('editId').value;
+        var name = document.getElementById('tplName').value.trim();
+        var category = document.getElementById('tplCategory').value;
+        var body = document.getElementById('tplBody').value.trim();
+        var placeholdersStr = document.getElementById('tplPlaceholders').value.trim();
+
+        if (!name || !category || !body) {
+            showAlert('Name, category, and body are required.', 'danger');
+            return;
+        }
+
+        var placeholders = placeholdersStr ? placeholdersStr.split(',').map(function(p) { return p.trim(); }).filter(Boolean) : [];
+
+        var payload = {
+            name: name,
+            category: category,
+            body: body,
+            placeholders: placeholders
+        };
+
+        var saveBtn = document.getElementById('btnSaveTemplate');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+
+        var url, method;
+        if (id) {
+            url = '/api/message-templates/' + id;
+            method = 'PUT';
+        } else {
+            url = '/api/message-templates';
+            method = 'POST';
+        }
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> ' + (id ? 'Update' : 'Create');
+            if (data.ok) {
+                modalInstance && modalInstance.hide();
+                showAlert('Template saved successfully.', 'success');
+                loadTemplates();
+            } else {
+                showAlert(data.error || 'Failed to save template.', 'danger');
+            }
+        }).catch(function() {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> ' + (id ? 'Update' : 'Create');
+            showAlert('Network error. Please try again.', 'danger');
+        });
+    }
+
+    function handleDeactivate(id) {
+        if (!confirm('Are you sure you want to deactivate this template? It will no longer be available for teachers.')) {
+            return;
+        }
+        apiJson('/api/message-templates/' + id, { method: 'DELETE' }).then(function(data) {
+            if (data.ok) {
+                showAlert('Template deactivated.', 'success');
+                loadTemplates();
+            } else {
+                showAlert(data.error || 'Failed to deactivate.', 'danger');
+            }
+        }).catch(function() {
+            showAlert('Network error.', 'danger');
+        });
+    }
+
+    function handleActivate(id) {
+        apiJson('/api/message-templates/' + id, {
+            method: 'PUT',
+            body: JSON.stringify({ is_active: true })
+        }).then(function(data) {
+            if (data.ok) {
+                showAlert('Template activated.', 'success');
+                loadTemplates();
+            } else {
+                showAlert(data.error || 'Failed to activate.', 'danger');
+            }
+        }).catch(function() {
+            showAlert('Network error.', 'danger');
+        });
+    }
+
+    // Event delegation for table actions
+    tbody.addEventListener('click', function(e) {
+        var btn = e.target.closest('button');
+        if (!btn) return;
+        var id = btn.getAttribute('data-id');
+        if (btn.classList.contains('edit-btn')) {
+            // Fetch template data then open edit modal
+            apiJson('/api/message-templates?include_inactive=1').then(function(data) {
+                var templates = data.templates || [];
+                var tpl = templates.find(function(t) { return String(t.id) === id; });
+                if (tpl) {
+                    openEditModal(tpl);
+                } else {
+                    showAlert('Template not found.', 'danger');
+                }
+            });
+        } else if (btn.classList.contains('deactivate-btn')) {
+            handleDeactivate(parseInt(id));
+        } else if (btn.classList.contains('activate-btn')) {
+            handleActivate(parseInt(id));
+        }
+    });
+
+    document.getElementById('btnCreateNew').addEventListener('click', openCreateModal);
+    document.getElementById('btnSaveTemplate').addEventListener('click', handleSave);
+
+    // Allow Enter to submit in form fields
+    document.getElementById('templateForm').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            handleSave();
+        }
+    });
+
+    // Init modal
+    if (window.bootstrap && bootstrap.Modal) {
+        modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    }
+
+    // Load templates on page load
+    loadTemplates();
+})();
+</script>
+{% endblock %}
