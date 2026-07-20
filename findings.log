@@ -62,3 +62,46 @@ Notable:
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
   - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.
+
+2026-07-20 18:35 — Cron intake scan
+====================================
+
+HEAD: b6bef1a feat: add teacher portal routes for dashboard/classes/roster/attendance/discipline/assessments/reports/messages
+
+State: Working tree had merge conflict (stash artifacts from feat/event-calendar). Resolved: kept stash's chat API routes, fixed conflict markers.
+
+Tests: 290 passed, 20 failed, 58 warnings (was 288/7/53).
+
+Resolved since last scan (big progress):
+  [x] Chat API routes — ALL 3 tests PASS (chat_routes_exist, models_exist, thread_lifecycle_smoke)
+  [x] Teacher portal routes — ALL 3 tests PASS (routes_exist, user_fields, api_smoke)
+  [x] MessageTemplate model + CRUD API + teacher template selector (2a068e4)
+  [x] Parent/guardian notification workflows (e38bd71)
+  [x] Overdue finance reminder history + resend tracking (79da08b, fae9953)
+  [x] Teacher portal dashboard/classes/roster/attendance/discipline/assessments/reports/messages (5ab6157, b6bef1a)
+
+NEW regressions (17 tests broken):
+  1-13. EarlyIntervention tests (13 failures) — models EarlyIntervention, InterventionNotification,
+        InterventionReferral were DELETED in commit 2a068e4 (MessageTemplate merge). API routes at
+        app.py:7837+ still reference these classes, causing NameError. Feature is completely broken.
+  14-17. Finance reminder routes (4 failures) — routes /admin/communication/finance/reminders and
+         /admin/communication/finance/reminder/<batch_id> were DELETED in commit e38bd71.
+         Tests expect these routes; they return 404.
+
+Carried over failures (3 tests, unchanged):
+  - test_translate_quotes_unbracketed_ems_tables — calls deleted MDBConnection._translate_access_to_postgres
+  - test_translate_top_limit_with_quoted_tables — same
+  - test_translate_quotes_qualified_mixed_case_columns — same
+
+Root cause pattern:
+  Commit 2a068e4 (MessageTemplate merge) and e38bd71 (parent notification mark-complete) both
+  overwrote code added by earlier commits in the same lineage. This is a recurring integration
+  issue: the feat/event-calendar branch's file state differs from master, causing later commits
+  to inadvertently delete features added by earlier ones.
+
+  Specifically:
+  - e8ff80e (chat routes) → deleted by 2a068e4 → RESTORED from stash in this scan
+  - 0b71a60 (early intervention models) → deleted by 2a068e4 → STILL BROKEN
+  - 79da08b (finance reminder routes) → deleted by e38bd71 → STILL BROKEN
+
+Warnings: 58 (was 53). Legacy Query.get() calls: 28 production + 2 test (unchanged count).
