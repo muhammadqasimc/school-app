@@ -6,6 +6,7 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
+<<<<<<< Updated upstream
 
 ## Implementation
 [ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
@@ -18,14 +19,27 @@
 
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
+=======
+[ ] Fix regression: EarlyIntervention models deleted in commit c6bfd67 — restore InterventionNotification and InterventionReferral models
+[ ] Fix regression: Message template API routes deleted in commit 172c188 — restore 6 route functions
+[ ] Fix regression: Finance reminder routes deleted in commit d760b6e — restore 2 routes in admin_routes.py
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings (28 remaining)
+>>>>>>> Stashed changes
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+<<<<<<< Updated upstream
 [ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
 [ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
 [ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
 [ ] Add regression coverage for attendance notification templates and delivery tracking
 [ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
 [ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
+=======
+[ ] Fix or remove stale PG compat translation tests (test_translate_* — deleted method)
+[ ] Implement chat API routes (ChatThread model exists, no endpoints)
+[ ] Fix teacher portal smoke tests (routes exist but tests still expect 404)
+>>>>>>> Stashed changes

@@ -62,3 +62,47 @@ Notable:
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
   - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.
+
+2026-07-20 09:59 — Cron intake scan
+====================================
+
+HEAD: 2e6a2c0 chore(schoolapp): complete todo work (+ our fixes)
+
+State: Clean working tree. 310 tests (305 pass, 5 fail, 76 legacy warnings).
+
+New regressions detected and FIXED:
+  All three were accidental deletions in prior commits on this cron branch.
+
+  [FIXED] EarlyIntervention/InterventionNotification/InterventionReferral models
+          deleted in c6bfd67 when MessageTemplate was added at same location.
+          Routes still referenced them → NameError, 13 test failures.
+          → Restored the 3 model classes before MessageTemplate.
+
+  [FIXED] Message template API routes (6 functions) deleted in 172c188
+          ("remaining teacher portal routes"). Model class survived but
+          routes were removed → all 9 message template tests 404'd.
+          → Restored api_message_templates_list/create/update/delete
+          and api_teacher_message_templates.
+
+  [FIXED] Finance reminder routes (2 endpoints) deleted in d760b6e
+          ("mark parent/guardian notification workflows as complete").
+          82 lines removed from admin_routes.py → 4 test failures.
+          → Restored /admin/communication/finance/reminders and
+          /admin/communication/finance/reminder/<batch_id>.
+
+Still failing (5 tests, pre-existing, unchanged):
+  1. test_chat_routes_exist — chat API routes never implemented
+  2. test_chat_thread_lifecycle_smoke — POST /api/chat/threads returns 404
+  3-5. test_translate_* (3 tests) — call deleted MDBConnection._translate_access_to_postgres
+
+Legacy Query.get() count: 28 production + 2 test (unchanged from last scan).
+  The restored early intervention test file re-introduces 2 test calls
+  (matching the pattern before it was deleted).
+
+Todo file cleaned up:
+  - Removed merge conflict markers (<<<<<<< / ======= / >>>>>>>)
+  - Marked completed items [x]
+  - Added the 3 regression-fix items and the 3 pre-existing-gap items
+  - Merged upstream/stash revisions into clean single list
+
+SchoolApp_findings.txt updated with this scan's note.

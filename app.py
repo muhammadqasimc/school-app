@@ -893,6 +893,20 @@ class InterventionReferral(db.Model):
     outcome = db.Column(db.Text, nullable=True)
 
 
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
+    body = db.Column(db.Text, nullable=False)
+    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -3979,9 +3993,6 @@ def api_teacher_messages_send():
         "thread_id": thread.id,
         "message_id": msg.id,
     })
-
-
-# --- Message Templates API ---
 
 
 @app.route("/api/message-templates", methods=["GET"])
