@@ -13,11 +13,12 @@
                 <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
                     <i class="fas fa-arrow-left"></i> Back to Admin
                 </a>
-                <p class="text-muted">Category-based communication for Custom, Discipline, and Finance with immediate delivery and per-run report tracking.</p>
+                <p class="text-muted">Category-based communication for Custom, Discipline, Finance, and Attendance with immediate delivery and per-run report tracking.</p>
                 <ul class="nav nav-tabs mb-3" id="commTabs" role="tablist">
                     <li class="nav-item"><button class="nav-link active" data-category="custom" type="button">Custom</button></li>
                     <li class="nav-item"><button class="nav-link" data-category="discipline" type="button">Discipline</button></li>
                     <li class="nav-item"><button class="nav-link" data-category="finance" type="button">Finance</button></li>
+                    <li class="nav-item"><button class="nav-link" data-category="attendance" type="button">Attendance</button></li>
                 </ul>
 
                 <div class="row">
@@ -101,7 +102,14 @@
                                 Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{outstanding_amount}</code> <code>{school_name}</code>
                             </div>
                         </div>
-                        <div class="small text-muted mb-2" id="previewHint">Discipline and Finance messages are generated from selected records.</div>
+                        <div class="mb-2" id="attendanceTemplateWrap" style="display:none;">
+                            <label class="form-label" for="attendanceTemplateText">Attendance Message Template</label>
+                            <textarea id="attendanceTemplateText" class="form-control" rows="4">Dear {parent_name}, this is an attendance notification for {learner_name} (Grade {grade}). They have {absence_count} recorded absence(s) for {year}. Please ensure regular school attendance.</textarea>
+                            <div class="small text-muted mt-1">
+                                Placeholders: <code>{parent_name}</code> <code>{learner_name}</code> <code>{grade}</code> <code>{year}</code> <code>{absence_count}</code> <code>{school_name}</code>
+                            </div>
+                        </div>
+                        <div class="small text-muted mb-2" id="previewHint">Discipline, Finance, and Attendance messages are generated from selected records.</div>
                         <button type="button" id="btnSend" class="btn btn-success">
                             <i class="fas fa-paper-plane"></i> Send Now
                         </button>
@@ -117,6 +125,26 @@
                             <button type="button" id="btnLoadReport" class="btn btn-outline-info">Load</button>
                         </div>
                         <div id="reportResult" class="small mt-2 text-muted">No report loaded.</div>
+                    </div>
+                </div>
+
+                <div class="card border-warning mt-3">
+                    <div class="card-header bg-warning text-dark py-2"><h6 class="mb-0">5. Reminder History</h6></div>
+                    <div class="card-body">
+                        <button type="button" id="btnLoadReminders" class="btn btn-outline-warning">
+                            <i class="fas fa-history"></i> View Reminder History
+                        </button>
+                        <span class="ms-2 small text-muted">Past finance reminder batches (most recent first).</span>
+                        <div id="remindersResult" class="mt-2 small text-muted">
+                            <span id="remindersStatus">Click the button above to load past batches.</span>
+                        </div>
+                        <div id="reminderDetailArea" class="mt-2 small" style="display:none;">
+                            <hr>
+                            <button type="button" id="btnBackToReminders" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-arrow-left"></i> Back to batch list
+                            </button>
+                            <div id="reminderDetailContent"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -188,6 +216,7 @@
             category = this.getAttribute('data-category');
             document.getElementById('customMessageWrap').style.display = category === 'custom' ? 'block' : 'none';
             document.getElementById('financeTemplateWrap').style.display = category === 'finance' ? 'block' : 'none';
+            document.getElementById('attendanceTemplateWrap').style.display = category === 'attendance' ? 'block' : 'none';
             document.getElementById('targetList').innerHTML = '<span class="text-muted">Run a search first.</span>';
             currentRows = [];
         });
@@ -222,7 +251,7 @@
             if (surname) url += '&surname=' + encodeURIComponent(surname);
             if (startDate) url += '&start_date=' + encodeURIComponent(startDate);
             if (endDate) url += '&end_date=' + encodeURIComponent(endDate);
-        } else {
+        } else if (category === 'finance') {
             if (!grade) {
                 document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a grade to load outstanding finance records.</span>';
                 return;
@@ -231,6 +260,18 @@
             if (year) url += '&year=' + encodeURIComponent(year);
             if (grade) url += '&grade=' + encodeURIComponent(grade);
             if (surname) url += '&surname=' + encodeURIComponent(surname);
+        } else if (category === 'attendance') {
+            if (!grade && !learnerId && !surname && !startDate && !endDate) {
+                document.getElementById('targetList').innerHTML = '<span class="text-warning">Select a grade, learner, surname, or date range to search attendance records.</span>';
+                return;
+            }
+            url = '{{ url_for("admin_communication_attendance_learners") }}?';
+            if (year) url += '&year=' + encodeURIComponent(year);
+            if (learnerId) url += '&learner_id=' + encodeURIComponent(learnerId);
+            if (grade) url += '&grade=' + encodeURIComponent(grade);
+            if (surname) url += '&surname=' + encodeURIComponent(surname);
+            if (startDate) url += '&start_date=' + encodeURIComponent(startDate);
+            if (endDate) url += '&end_date=' + encodeURIComponent(endDate);
         }
         document.getElementById('targetList').innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         fetchJson(url).then(data => {
@@ -246,8 +287,10 @@
                     (category === 'custom'
                         ? ((r.surname || '') + ', ' + (r.name || '') + ' (Grade ' + (r.grade || '') + ')')
                         : (category === 'discipline'
-                            ? (((r.incident_date || '').toString().slice(0, 10) + ' - ' + (r.preview_message || (r.learner_name || ''))).trim().replace(/^-\s*/, ''))
-                            : (r.preview_message || (r.learner_name || ''))))
+                            ? (((r.incident_date || '').toString().slice(0, 10) + ' - ' + (r.preview_message || (r.learner_name || ''))).trim().replace(/^-\\s*/, ''))
+                            : (category === 'attendance'
+                                ? (r.learner_name || '') + ' (Grade ' + (r.grade || '') + ') - ' + (r.absence_count || 0) + ' absence(s)'
+                                : (r.preview_message || (r.learner_name || '')))))
                     + '</label></div>'
                 ).join('');
             }
@@ -293,6 +336,7 @@
         const selectedRows = selectedIndexes.map(i => currentRows[i]).filter(Boolean);
         const message = document.getElementById('messageText').value.trim();
         const financeTemplate = document.getElementById('financeTemplateText').value.trim();
+        const attendanceTemplate = document.getElementById('attendanceTemplateText').value.trim();
         const channels = Array.from(document.querySelectorAll('.channel-cb:checked')).map(cb => cb.value);
         if (selectedRows.length === 0) {
             document.getElementById('sendResult').innerHTML = '<span class="text-warning">Select at least one item.</span>';
@@ -318,7 +362,7 @@
                 const d = ((r.incident_date || '').toString().slice(0, 10));
                 previewLines.push((d ? d + ' - ' : '') + (r.preview_message || ''));
             });
-        } else {
+        } else if (category === 'finance') {
             const tpl = financeTemplate || '';
             selectedRows.slice(0, 8).forEach(r => {
                 let line = tpl
@@ -327,6 +371,18 @@
                     .replaceAll('{grade}', r.grade || '')
                     .replaceAll('{year}', String(r.year || ''))
                     .replaceAll('{outstanding_amount}', String(r.outstanding || ''))
+                    .replaceAll('{school_name}', 'School');
+                previewLines.push(line);
+            });
+        } else if (category === 'attendance') {
+            const tpl = attendanceTemplate || '';
+            selectedRows.slice(0, 8).forEach(r => {
+                let line = tpl
+                    .replaceAll('{parent_name}', 'Parent/Guardian')
+                    .replaceAll('{learner_name}', r.learner_name || '')
+                    .replaceAll('{grade}', r.grade || '')
+                    .replaceAll('{year}', String(r.year || ''))
+                    .replaceAll('{absence_count}', String(r.absence_count || '0'))
                     .replaceAll('{school_name}', 'School');
                 previewLines.push(line);
             });
@@ -376,10 +432,14 @@
         } else if (category === 'discipline') {
             url = '{{ url_for("admin_communication_discipline_send") }}';
             payload.incidents = selectedRows;
-        } else {
+        } else if (category === 'finance') {
             url = '{{ url_for("admin_communication_finance_send") }}';
             payload.learners = selectedRows;
             payload.finance_template = financeTemplate;
+        } else if (category === 'attendance') {
+            url = '{{ url_for("admin_communication_attendance_send") }}';
+            payload.learners = selectedRows;
+            payload.attendance_template = document.getElementById('attendanceTemplateText').value.trim();
         }
         postJson(url, payload).then(afterSend).catch(onSendError);
 
@@ -411,6 +471,123 @@
         }).catch(() => {
             document.getElementById('reportResult').innerHTML = '<span class="text-danger">Failed to load report.</span>';
         });
+    });
+
+    // --- Reminder History ---
+    const remindersResultEl = document.getElementById('remindersResult');
+    const remindersStatusEl = document.getElementById('remindersStatus');
+    const reminderDetailArea = document.getElementById('reminderDetailArea');
+    const reminderDetailContent = document.getElementById('reminderDetailContent');
+    let currentRemindersPage = 1;
+
+    function formatReminderDate(isoStr) {
+        if (!isoStr) return '—';
+        const d = new Date(isoStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderRemindersTable(data) {
+        const batches = data.batches || [];
+        if (batches.length === 0) {
+            remindersStatusEl.innerHTML = '<span class="text-muted">No finance reminder batches found.</span>';
+            return;
+        }
+        let html = '<table class="table table-sm table-hover mt-2"><thead><tr>' +
+            '<th>Batch ID</th><th>Date</th><th>Channels</th><th>Total</th><th>Sent</th><th>Failed</th><th></th>' +
+            '</tr></thead><tbody>';
+        batches.forEach(function(b) {
+            html += '<tr>' +
+                '<td><code title="' + b.batch_id + '">' + b.batch_id.slice(0, 12) + '&hellip;</code></td>' +
+                '<td>' + formatReminderDate(b.last_sent) + '</td>' +
+                '<td>' + (b.channels || []).join(', ') + '</td>' +
+                '<td>' + b.total + '</td>' +
+                '<td class="text-success">' + b.sent + '</td>' +
+                '<td class="' + (b.failed > 0 ? 'text-danger' : 'text-muted') + '">' + b.failed + '</td>' +
+                '<td><button type="button" class="btn btn-outline-info btn-sm view-reminder-detail" data-batch-id="' + b.batch_id + '"><i class="fas fa-list"></i> Details</button></td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        // Pagination
+        if (data.total_pages > 1) {
+            html += '<nav><ul class="pagination pagination-sm">';
+            if (data.page > 1) {
+                html += '<li class="page-item"><button class="page-link reminder-page-btn" data-page="' + (data.page - 1) + '">&laquo; Prev</button></li>';
+            }
+            html += '<li class="page-item disabled"><span class="page-link">Page ' + data.page + ' of ' + data.total_pages + '</span></li>';
+            if (data.page < data.total_pages) {
+                html += '<li class="page-item"><button class="page-link reminder-page-btn" data-page="' + (data.page + 1) + '">Next &raquo;</button></li>';
+            }
+            html += '</ul></nav>';
+        }
+        remindersStatusEl.innerHTML = html;
+        remindersStatusEl.querySelectorAll('.view-reminder-detail').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                loadReminderDetail(this.getAttribute('data-batch-id'));
+            });
+        });
+        remindersStatusEl.querySelectorAll('.reminder-page-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                currentRemindersPage = parseInt(this.getAttribute('data-page'));
+                loadReminders(currentRemindersPage);
+            });
+        });
+    }
+
+    function loadReminders(page) {
+        page = page || 1;
+        remindersStatusEl.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</span>';
+        reminderDetailArea.style.display = 'none';
+        fetchJson('{{ url_for("admin_communication_finance_reminders") }}?page=' + page).then(function(data) {
+            renderRemindersTable(data);
+        }).catch(function() {
+            remindersStatusEl.innerHTML = '<span class="text-danger">Failed to load reminder history.</span>';
+        });
+    }
+
+    function loadReminderDetail(batchId) {
+        remindersResultEl.style.display = 'none';
+        reminderDetailArea.style.display = 'block';
+        reminderDetailContent.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading details...</span>';
+        fetchJson('/admin/communication/finance/reminder/' + encodeURIComponent(batchId)).then(function(data) {
+            const deliveries = data.deliveries || [];
+            if (deliveries.length === 0) {
+                reminderDetailContent.innerHTML = '<span class="text-muted">No deliveries in this batch.</span>';
+                return;
+            }
+            let html = '<p class="mt-2"><strong>Batch:</strong> <code>' + data.batch_id + '</code> | <strong>Total deliveries:</strong> ' + data.total + '</p>';
+            html += '<table class="table table-sm"><thead><tr>' +
+                '<th>Recipient</th><th>Phone</th><th>Channel</th><th>Status</th><th>Date</th><th>Ref ID</th>' +
+                '</tr></thead><tbody>';
+            deliveries.forEach(function(d) {
+                const statusClass = d.status === 'sent' ? 'text-success' : 'text-danger';
+                html += '<tr>' +
+                    '<td>' + (d.recipient_name || '—') + '</td>' +
+                    '<td>' + (d.recipient_phone || '—') + '</td>' +
+                    '<td>' + (d.channel || '—') + '</td>' +
+                    '<td class="' + statusClass + '">' + (d.status || '—') + '</td>' +
+                    '<td>' + formatReminderDate(d.sent_at) + '</td>' +
+                    '<td>' + (d.reference_id || '—') + '</td>' +
+                    '</tr>';
+                if (d.error_message) {
+                    html += '<tr><td colspan="6" class="text-danger small">Error: ' + d.error_message + '</td></tr>';
+                }
+            });
+            html += '</tbody></table>';
+            reminderDetailContent.innerHTML = html;
+        }).catch(function() {
+            reminderDetailContent.innerHTML = '<span class="text-danger">Failed to load batch details.</span>';
+        });
+    }
+
+    document.getElementById('btnLoadReminders').addEventListener('click', function() {
+        currentRemindersPage = 1;
+        remindersResultEl.style.display = '';
+        loadReminders(1);
+    });
+
+    document.getElementById('btnBackToReminders').addEventListener('click', function() {
+        reminderDetailArea.style.display = 'none';
+        remindersResultEl.style.display = '';
     });
 })();
 </script>
