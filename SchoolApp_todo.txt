@@ -6,40 +6,29 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-<<<<<<< Updated upstream
+
+## Recently Completed
+[x] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — added in ababb69
+[x] Add delivery/read receipt tracking via ChatMessageReceipt (ababb69)
+[x] Add auto-mark receipt verification tests (23b10a6) — 166 new test lines
+[x] Fix teacher portal smoke tests — routes exist and tests now pass (8/8 passing)
 
 ## Implementation
-[ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
-[ ] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — ChatThread model exists at app.py:588 but no /api/chat/* routes exist
-[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
-
-## Fixes
-[ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 28 calls in production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED by +1 app.py +2 test since last scan; also fix new test file to not introduce fresh legacy calls
-
-## Future / Enhancements
-[ ] Add templated parent/teacher messaging with delivery tracking and read history
-=======
-[ ] Fix regression: EarlyIntervention models deleted in commit c6bfd67 — restore InterventionNotification and InterventionReferral models
-[ ] Fix regression: Message template API routes deleted in commit 172c188 — restore 6 route functions
-[ ] Fix regression: Finance reminder routes deleted in commit d760b6e — restore 2 routes in admin_routes.py
-[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings (28 remaining)
->>>>>>> Stashed changes
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-<<<<<<< Updated upstream
-[ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
+
+## Fixes
+[ ] Fix or remove stale PG compat translation tests (test_translate_* — deleted MDBConnection._translate_access_to_postgres)
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 33 calls remaining (inventory_routes.py:21, app.py:7, admin_routes.py:3, tests/test_early_intervention.py:2) — INCREASED by +3 since last scan, new code reintroduced the pattern
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+
+## Smoke Tests / Verification
+[ ] Smoke-test admin communication tabs and send/report endpoints after route/template changes
 [ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
 [ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
 [ ] Add regression coverage for attendance notification templates and delivery tracking
 [ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
 [ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
-=======
-[ ] Fix or remove stale PG compat translation tests (test_translate_* — deleted method)
-[ ] Implement chat API routes (ChatThread model exists, no endpoints)
-[ ] Fix teacher portal smoke tests (routes exist but tests still expect 404)
->>>>>>> Stashed changes

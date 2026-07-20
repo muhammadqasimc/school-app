@@ -1,1 +1,1 @@
-2026-07-20 — Cron intake scan: Found 3 regressions (accidental deletions in prior commits). Fixed all: restored EarlyIntervention models, message template routes, and finance reminder routes. 305/310 tests passing. See findings.log for details.
+2026-07-20 14:23 — Cron intake scan: Chat receipt tracking added (ababb69). 4 previously-failing tests now pass (chat routes, teacher portal). 309/312 passing. 3 stale PG compat tests remain. Legacy Query.get() count INCREASED to 33 (+3). See findings.log for details.
