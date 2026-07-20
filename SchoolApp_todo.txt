@@ -10,9 +10,13 @@
 [ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 
+<<<<<<< Updated upstream
 ## Fixes
 [ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 28 calls in production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED by +1 app.py +2 test since last scan; also fix new test file to not introduce fresh legacy calls
+=======
+## Recently Completed
+>>>>>>> Stashed changes
 
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
