@@ -8,12 +8,10 @@
 # [x] Fix login redirect
 
 ## Implementation
-[ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
-[ ] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — ChatThread model exists at app.py:588 but no /api/chat/* routes exist
-[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 
 ## Fixes
 [ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
+<<<<<<< Updated upstream
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 28 calls in production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED by +1 app.py +2 test since last scan; also fix new test file to not introduce fresh legacy calls
 
 ## Future / Enhancements
@@ -28,3 +26,25 @@
 [ ] Fix EarlyIntervention regression — models deleted in 2a068e4, 13 tests broken, API routes still reference deleted classes
 [ ] Fix finance reminder routes regression — routes deleted in e38bd71, 4 tests broken (routes /admin/communication/finance/reminders missing)
 [ ] Fix PG compat translation tests — 3 tests fail due to deleted MDBConnection._translate_access_to_postgres method
+=======
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 30 calls in production (app.py:6, inventory_routes.py:21, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED to 32 total; new code keeps adding fresh legacy calls
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
+[ ] Add a function notice board where admins can set new notices
+
+## Verification & Test Coverage
+[ ] Smoke-test admin communication tabs and send/report endpoints after the current route/template changes
+[ ] Verify finance, attendance, and discipline communication payloads stay aligned with the updated UI
+[ ] Smoke-test the new attendance communication tab, learner search, and send endpoint
+[ ] Add regression coverage for attendance notification templates and delivery tracking
+[ ] Verify attendance notifications handle learners with no guardian phone numbers without reporting false success
+[ ] Add regression coverage for attendance learner lookup and send endpoints, including multi-guardian phone de-duplication
+
+## Future / Enhancements
+[ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
+[ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
+[ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+[ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+[ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
+[ ] Add report scheduling/subscriptions for saved management filters and automated delivery
+>>>>>>> Stashed changes
