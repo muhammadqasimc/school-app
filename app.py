@@ -844,53 +844,18 @@ class SchoolAssetRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
-class EarlyIntervention(db.Model):
-    __tablename__ = 'early_intervention'
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
     id = db.Column(db.Integer, primary_key=True)
-    learner_id = db.Column(db.String(50), nullable=False, index=True)
-    learner_name = db.Column(db.String(200), nullable=True)
-    grade = db.Column(db.String(20), nullable=True)
-    class_name = db.Column(db.String(50), nullable=True)
-    risk_type = db.Column(db.String(32), nullable=False)  # attendance|grade|discipline|general
-    intervention_type = db.Column(db.String(64), nullable=False)  # parent_meeting|academic_support|counseling|tutoring|mentoring|other
-    description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(24), nullable=False, default='open', index=True)  # open|in_progress|resolved|closed
-    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
+    body = db.Column(db.Text, nullable=False)
+    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    outcome_notes = db.Column(db.Text, nullable=True)
-
-
-class InterventionNotification(db.Model):
-    __tablename__ = 'intervention_notification'
-    id = db.Column(db.Integer, primary_key=True)
-    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
-    learner_id = db.Column(db.String(50), nullable=False, index=True)
-    recipient_name = db.Column(db.String(160), nullable=True)
-    recipient_phone = db.Column(db.String(32), nullable=False)
-    channel = db.Column(db.String(16), nullable=False, default='sms')  # sms|whatsapp
-    message_snapshot = db.Column(db.Text, nullable=False)
-    communication_log_id = db.Column(db.Integer, db.ForeignKey('communication_delivery_log.id'), nullable=True)
-    sent_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(24), nullable=False, default='sent')
-
-
-class InterventionReferral(db.Model):
-    __tablename__ = 'intervention_referral'
-    id = db.Column(db.Integer, primary_key=True)
-    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
-    referred_to = db.Column(db.String(64), nullable=False)  # counselor|academic_head|principal|support_staff|other
-    referred_to_name = db.Column(db.String(200), nullable=True)
-    reason = db.Column(db.Text, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(24), nullable=False, default='pending', index=True)  # pending|accepted|completed|declined
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    outcome = db.Column(db.Text, nullable=True)
 
 
 @login_manager.user_loader
@@ -3978,6 +3943,121 @@ def api_teacher_messages_send():
         "message": "Message sent.",
         "thread_id": thread.id,
         "message_id": msg.id,
+    })
+
+
+# --- Message Templates API ---
+
+
+@app.route("/api/message-templates", methods=["GET"])
+@login_required
+def api_message_templates_list():
+    """List active message templates, optionally filtered by category."""
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
+    })
+
+
+@app.route("/api/message-templates", methods=["POST"])
+@login_required
+def api_message_templates_create():
+    """Create a new message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    category = (data.get("category") or "general").strip()
+    body = (data.get("body") or "").strip()
+    placeholders = data.get("placeholders") or []
+    if not name or not body:
+        return jsonify({"error": "Name and body are required."}), 400
+    valid_categories = {"attendance", "behavior", "academic", "general"}
+    if category not in valid_categories:
+        return jsonify({"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"}), 400
+    tpl = MessageTemplate(
+        name=name,
+        category=category,
+        body=body,
+        placeholders_json=json.dumps(placeholders) if placeholders else None,
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(tpl)
+    db.session.commit()
+    return jsonify({"ok": True, "template": {"id": tpl.id, "name": tpl.name, "category": tpl.category}}), 201
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["PUT"])
+@login_required
+def api_message_templates_update(template_id):
+    """Update a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    data = request.get_json(force=True)
+    if "name" in data:
+        tpl.name = (data["name"] or "").strip()
+    if "category" in data:
+        cat = (data["category"] or "").strip()
+        valid_categories = {"attendance", "behavior", "academic", "general"}
+        if cat not in valid_categories:
+            return jsonify({"error": f"Invalid category."}), 400
+        tpl.category = cat
+    if "body" in data:
+        tpl.body = (data["body"] or "").strip()
+    if "placeholders" in data:
+        tpl.placeholders_json = json.dumps(data["placeholders"]) if data["placeholders"] else None
+    if "is_active" in data:
+        tpl.is_active = bool(data["is_active"])
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["DELETE"])
+@login_required
+def api_message_templates_delete(template_id):
+    """Soft-delete (deactivate) a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    tpl.is_active = False
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/teacher/message-templates", methods=["GET"])
+@login_required
+def api_teacher_message_templates():
+    """Teacher-facing list of message templates with placeholders info."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
     })
 
 
