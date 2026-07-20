@@ -11,6 +11,13 @@ def _auth_client(app_mod, user):
     return client
 
 
+def _login(client, user):
+    """Helper to log a test client in as the given user."""
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user.id)
+        sess["_fresh"] = True
+
+
 def test_chat_routes_exist():
     app_mod = importlib.import_module("app")
     rules = {r.rule for r in app_mod.app.url_map.iter_rules()}
@@ -79,3 +86,41 @@ def test_chat_thread_lifecycle_smoke():
         assert list_resp.status_code == 200
         rows = (list_resp.get_json() or {}).get("threads") or []
         assert any(int(r.get("id") or 0) == thread_id for r in rows)
+
+        # --- Read receipt test ---
+        # Create a second message from the manager directly via DB
+        msg2 = app_mod.ChatMessage(
+            thread_id=thread_id,
+            sender_user_id=u2.id,
+            body="Response from manager — read receipt test.",
+            message_type="text",
+        )
+        app_mod.db.session.add(msg2)
+        app_mod.db.session.commit()
+
+        # Parent reads the thread (marks messages as delivered/read)
+        read_resp = client.post(f"/api/chat/threads/{thread_id}/read")
+        assert read_resp.status_code == 200, read_resp.get_data(as_text=True)
+        read_data = read_resp.get_json() or {}
+        assert read_data.get("ok") is True
+        assert isinstance(read_data.get("receipts_created"), int)
+        assert read_data["receipts_created"] >= 1
+
+        # Verify ChatMessageReceipt records exist
+        receipts = app_mod.ChatMessageReceipt.query.filter_by(user_id=u1.id).all()
+        assert len(receipts) >= 1
+        for r in receipts:
+            assert r.delivered_at is not None
+            assert r.read_at is not None
+
+        # Verify participant last_read_message_id is set
+        part = app_mod.ChatParticipant.query.filter_by(
+            thread_id=thread_id, user_id=u1.id,
+        ).first()
+        assert part is not None
+        assert part.last_read_message_id is not None
+
+        # Second read should report 0 new receipts (already read)
+        read_resp2 = client.post(f"/api/chat/threads/{thread_id}/read")
+        assert read_resp2.status_code == 200
+        assert read_resp2.get_json().get("receipts_created") == 0
