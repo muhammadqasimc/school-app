@@ -6,18 +6,18 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-[x] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
-[x] Add a unified teacher dashboard API so portal tiles load instead of 404s
-[x] Add saved filter presets for management report pages
-[x] Add parent/guardian notification workflows for attendance, discipline, and finance events
-[x] Add overdue finance reminders with channel selection and resend tracking
-[x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
-[x] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
-[x] Add templated parent/teacher messaging with delivery tracking and read history
-[x] Add chat API routes with delivery/read receipt display
-[x] Add MessageTemplate model, CRUD API, and teacher template selector
-[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+
+## Implementation
+[ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
+[ ] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — ChatThread model exists at app.py:588 but no /api/chat/* routes exist
+[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
+
+## Fixes
+[ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 28 calls in production (inventory_routes.py:21, app.py:4, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED by +1 app.py +2 test since last scan; also fix new test file to not introduce fresh legacy calls
+
+## Future / Enhancements
+[ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
