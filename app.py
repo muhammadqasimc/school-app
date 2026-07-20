@@ -547,6 +547,21 @@ class TeacherAuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class AdminAuditLog(db.Model):
+    __tablename__ = 'admin_audit_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    operation = db.Column(db.String(64), nullable=False, index=True)  # e.g. csv_import, csv_export, bulk_update, bulk_delete
+    module = db.Column(db.String(64), nullable=False, index=True)  # e.g. students, attendance, grades, discipline
+    record_count = db.Column(db.Integer, nullable=True)  # number of records affected
+    filename = db.Column(db.String(256), nullable=True)  # for file operations like CSV imports
+    summary = db.Column(db.Text, nullable=True)  # human-readable summary
+    details_json = db.Column(db.Text, nullable=True)  # JSON payload with full details
+    status = db.Column(db.String(16), nullable=False, default='success', index=True)  # success, partial, failure
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    user = db.relationship('User', backref=db.backref('admin_audit_logs', lazy='dynamic'))
+
+
 class TeacherTermLock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     academic_year = db.Column(db.String(8), nullable=False, index=True)

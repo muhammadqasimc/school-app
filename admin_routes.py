@@ -947,6 +947,22 @@ def register_admin_routes(flask_app: Flask) -> None:
         r.db.session.add(row)
         r.db.session.commit()
 
+    def _log_admin_action(*, operation, module, record_count=None, filename=None, summary=None, details=None, status='success'):
+        """Log an admin bulk data action to AdminAuditLog."""
+        row = r.AdminAuditLog(
+            user_id=current_user.id,
+            operation=operation,
+            module=module,
+            record_count=record_count,
+            filename=filename,
+            summary=summary,
+            details_json=json.dumps(details) if details else None,
+            status=status,
+        )
+        r.db.session.add(row)
+        r.db.session.commit()
+        return row
+
     # --- Communication page & APIs -------------------------------------------------
 
     @flask_app.route("/admin/communication")
@@ -2287,3 +2303,112 @@ def register_admin_routes(flask_app: Flask) -> None:
 
         threading.Thread(target=job, daemon=True).start()
         return jsonify({"ok": True})
+
+    @flask_app.route("/admin/message-templates")
+    @login_required
+    def admin_message_templates():
+        require_admin()
+        return render_template("admin/message_templates.html")
+
+    # --- Admin Audit Log -----------------------------------------------------------
+
+    @flask_app.route("/admin/audit-log")
+    @login_required
+    def admin_audit_log():
+        require_admin()
+        page = request.args.get("page", 1, type=int)
+        per_page = 20
+        operation = request.args.get("operation", "").strip()
+        module = request.args.get("module", "").strip()
+        status_filter = request.args.get("status", "").strip()
+
+        query = r.AdminAuditLog.query.order_by(r.AdminAuditLog.created_at.desc())
+
+        if operation:
+            query = query.filter(r.AdminAuditLog.operation == operation)
+        if module:
+            query = query.filter(r.AdminAuditLog.module == module)
+        if status_filter:
+            query = query.filter(r.AdminAuditLog.status == status_filter)
+
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        entries = pagination.items
+
+        # Collect distinct values for filter dropdowns
+        distinct_ops = (
+            r.db.session.query(r.AdminAuditLog.operation)
+            .distinct()
+            .order_by(r.AdminAuditLog.operation)
+            .all()
+        )
+        distinct_modules = (
+            r.db.session.query(r.AdminAuditLog.module)
+            .distinct()
+            .order_by(r.AdminAuditLog.module)
+            .all()
+        )
+        distinct_statuses = ["success", "partial", "failure"]
+
+        return render_template(
+            "admin/audit_log.html",
+            entries=entries,
+            pagination=pagination,
+            current_filters={
+                "operation": operation,
+                "module": module,
+                "status": status_filter,
+            },
+            operations=[op[0] for op in distinct_ops],
+            modules=[m[0] for m in distinct_modules],
+            statuses=distinct_statuses,
+        )
+
+    @flask_app.route("/admin/audit-log/data")
+    @login_required
+    def admin_audit_log_data():
+        require_admin()
+        page = request.args.get("page", 1, type=int)
+        per_page = 20
+        operation = request.args.get("operation", "").strip()
+        module = request.args.get("module", "").strip()
+        status_filter = request.args.get("status", "").strip()
+
+        query = r.AdminAuditLog.query.order_by(r.AdminAuditLog.created_at.desc())
+
+        if operation:
+            query = query.filter(r.AdminAuditLog.operation == operation)
+        if module:
+            query = query.filter(r.AdminAuditLog.module == module)
+        if status_filter:
+            query = query.filter(r.AdminAuditLog.status == status_filter)
+
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        entries = pagination.items
+
+        data = []
+        for entry in entries:
+            data.append(
+                {
+                    "id": entry.id,
+                    "user_id": entry.user_id,
+                    "username": entry.user.username if entry.user else None,
+                    "operation": entry.operation,
+                    "module": entry.module,
+                    "record_count": entry.record_count,
+                    "filename": entry.filename,
+                    "summary": entry.summary,
+                    "status": entry.status,
+                    "created_at": entry.created_at.isoformat() if entry.created_at else None,
+                }
+            )
+
+        return jsonify(
+            {
+                "entries": data,
+                "page": pagination.page,
+                "pages": pagination.pages,
+                "total": pagination.total,
+                "has_prev": pagination.has_prev,
+                "has_next": pagination.has_next,
+            }
+        )
