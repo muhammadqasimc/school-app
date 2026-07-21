@@ -9,7 +9,6 @@
 
 ## Implementation
 [ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
-[x] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — completed in 2cdd9a7 (389 lines added, 3 chat tests all pass)
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 
 ## Fixes
@@ -19,7 +18,6 @@
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
-[ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
