@@ -9,7 +9,6 @@
 
 ## Implementation
 [ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
-[x] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — completed in 2cdd9a7 (389 lines added, 3 chat tests all pass)
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 
 ## Fixes
