@@ -56,6 +56,11 @@
         <a class="kismet-nav-item {% if request.endpoint == 'teacher_dashboard' %}active{% endif %}" href="{{ url_for('teacher_dashboard') }}">
             <i class="fas fa-chalkboard-teacher"></i> Teacher
         </a>
+        {% if endpoint_available('student_360_view') %}
+        <a class="kismet-nav-item {% if request.endpoint == 'student_360_view' %}active{% endif %}" href="{{ url_for('student_360_view', learner_id='') }}">
+            <i class="fas fa-user-graduate"></i> Student 360
+        </a>
+        {% endif %}
         <a class="kismet-nav-item {% if request.endpoint == 'teacher_announcements_page' %}active{% endif %}" href="{{ url_for('teacher_announcements_page') }}">
             <i class="fas fa-megaphone"></i> Announcements
         </a>

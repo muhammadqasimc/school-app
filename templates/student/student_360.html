@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+{% block title %}Student Profile 360 — {{ learner_info.name ~ ' ' ~ learner_info.surname if learner_info else learner_id }}{% endblock %}
+
+{% block content %}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <!-- Header Card -->
+        <div class="card border">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <div class="profile-photo-container">
+                            <img src="{{ url_for('static', filename='images/default-avatar.png') }}"
+                                 alt="Learner photo"
+                                 class="profile-photo rounded-circle border"
+                                 style="width: 96px; height: 96px; object-fit: cover;"
+                                 onerror="this.onerror=null;">
+                        </div>
+                    </div>
+                    <div class="col">
+                        <h3 class="mb-1">
+                            <i class="fas fa-user-graduate text-primary"></i>
+                            {% if learner_info %}
+                                {{ learner_info.name }} {{ learner_info.surname }}
+                            {% else %}
+                                Learner #{{ learner_id }}
+                            {% endif %}
+                        </h3>
+                        <div class="d-flex flex-wrap gap-3 text-muted small">
+                            {% if learner_info %}
+                            <span><i class="fas fa-id-card"></i> <strong>ID:</strong> {{ learner_info.learner_id or '' }}</span>
+                            <span><i class="fas fa-graduation-cap"></i> <strong>Grade:</strong> {{ learner_info.grade or 'N/A' }}</span>
+                            {% if profile_row %}
+                            <span><i class="fas fa-chalkboard"></i> <strong>Class:</strong> {{ profile_row.get('ClassID', '') or '' }}</span>
+                            <span>
+                                <i class="fas fa-circle"></i> <strong>Status:</strong>
+                                <span class="badge {% if profile_row.get('Status','')|upper in ('ACTIVE','') %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ profile_row.get('Status', 'Active') or 'Active' }}
+                                </span>
+                            </span>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                        <!-- Parent / Guardian Info -->
+                        <div class="mt-2 small">
+                            {% if parent_info and parent_info.get('ParentName') %}
+                                <i class="fas fa-users text-muted"></i>
+                                <strong>Parent/Guardian:</strong>
+                                {{ parent_info.get('ParentName', '') }}
+                                {% if parent_info.get('Tel1') %} &middot; Tel: {{ parent_info.get('Tel1') }}{% endif %}
+                                {% if parent_info.get('Tel2') %} &middot; Alt: {{ parent_info.get('Tel2') }}{% endif %}
+                                {% if parent_info.get('Email') %} &middot; Email: {{ parent_info.get('Email') }}{% endif %}
+                            {% else %}
+                                <span class="text-muted"><i class="fas fa-users"></i> No parent/guardian info on file.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs mb-4" id="student360Tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab">
+            <i class="fas fa-id-card"></i> Profile
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="academics-tab" data-bs-toggle="tab" data-bs-target="#academics" type="button" role="tab">
+            <i class="fas fa-book"></i> Academics / Grades
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button" role="tab">
+            <i class="fas fa-calendar-check"></i> Attendance
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="discipline-tab" data-bs-toggle="tab" data-bs-target="#discipline" type="button" role="tab">
+            <i class="fas fa-exclamation-triangle"></i> Discipline
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button" role="tab">
+            <i class="fas fa-file-alt"></i> Documents
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="messages-tab" data-bs-toggle="tab" data-bs-target="#messages" type="button" role="tab">
+            <i class="fas fa-comments"></i> Messages
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="student360TabContent">
+
+    <!-- Profile Tab (server-side rendered) -->
+    <div class="tab-pane fade show active" id="profile" role="tabpanel">
+        <div class="card border">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-id-card"></i> Learner Profile</h5>
+            </div>
+            <div class="card-body">
+                {% if learner_info %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <tbody>
+                            <tr>
+                                <th style="width: 200px;" class="text-muted">Internal ID</th>
+                                <td>{{ learner_info.id or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Learner ID</th>
+                                <td>{{ learner_info.learner_id or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">First Name</th>
+                                <td>{{ learner_info.name or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Surname</th>
+                                <td>{{ learner_info.surname or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Grade</th>
+                                <td>{{ learner_info.grade or 'N/A' }}</td>
+                            </tr>
+                            {% if profile_row %}
+                            <tr>
+                                <th class="text-muted">Class</th>
+                                <td>{{ profile_row.get('ClassID', '') or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Gender</th>
+                                <td>{{ profile_row.get('Gender', '') or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Date of Birth</th>
+                                <td>{{ profile_row.get('BirthDate', '') or profile_row.get('DOB', '') or '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Status</th>
+                                <td>
+                                    <span class="badge {% if profile_row.get('Status','')|upper in ('ACTIVE','') %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ profile_row.get('Status', 'Active') or 'Active' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted">Accession No</th>
+                                <td>{{ profile_row.get('AccessionNo', '') or '' }}</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-muted">
+                    <i class="fas fa-exclamation-circle"></i>
+                    No learner profile data available for <strong>{{ learner_id }}</strong>.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if parent_info and parent_info.get('ParentName') %}
+        <div class="card border mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-users"></i> Parent / Guardian</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <tbody>
+                            <tr>
+                                <th style="width: 200px;" class="text-muted">Name</th>
+                                <td>{{ parent_info.get('ParentName', '') }}</td>
+                            </tr>
+                            {% if parent_info.get('Tel1') %}
+                            <tr>
+                                <th class="text-muted">Telephone 1</th>
+                                <td>{{ parent_info.get('Tel1') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('Tel2') %}
+                            <tr>
+                                <th class="text-muted">Telephone 2</th>
+                                <td>{{ parent_info.get('Tel2') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('Tel3') %}
+                            <tr>
+                                <th class="text-muted">Telephone 3</th>
+                                <td>{{ parent_info.get('Tel3') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('SpouseCell') %}
+                            <tr>
+                                <th class="text-muted">Spouse Cell</th>
+                                <td>{{ parent_info.get('SpouseCell') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('Email') %}
+                            <tr>
+                                <th class="text-muted">Email</th>
+                                <td>{{ parent_info.get('Email') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('WorkTel') %}
+                            <tr>
+                                <th class="text-muted">Work Tel</th>
+                                <td>{{ parent_info.get('WorkTel') }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if parent_info.get('PostalAddr') %}
+                            <tr>
+                                <th class="text-muted">Postal Address</th>
+                                <td>{{ parent_info.get('PostalAddr') }}</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Academics Tab (client-side loaded) -->
+    <div class="tab-pane fade" id="academics" role="tabpanel">
+        <div class="card border">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-book"></i> Academics / Grades</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover" id="academicsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Subject</th>
+                                <th>Mark</th>
+                                <th>Total</th>
+                                <th>Percentage</th>
+                                <th>Term</th>
+                                <th>Year</th>
+                            </tr>
+                        </thead>
+                        <tbody id="academicsTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading academics data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">Academics data loads when this tab is activated.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Tab (client-side loaded) -->
+    <div class="tab-pane fade" id="attendance" role="tabpanel">
+        <div class="card border">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-calendar-check"></i> Attendance Records</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover" id="attendanceTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date Absent</th>
+                                <th>Grade</th>
+                                <th>Reason</th>
+                                <th>Year</th>
+                                <th>Month</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceTableBody">
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading attendance data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">Attendance data loads when this tab is activated.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Discipline Tab (client-side loaded) -->
+    <div class="tab-pane fade" id="discipline" role="tabpanel">
+        <div class="card border mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Disciplinary Records</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover" id="disciplineTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Points</th>
+                                <th>Incident Type</th>
+                                <th>Description</th>
+                                <th>Severity</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="disciplineTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading discipline data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">Discipline data loads when this tab is activated.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Tab (server-side rendered) -->
+    <div class="tab-pane fade" id="documents" role="tabpanel">
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card border h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-gavel"></i> Disciplinary Documents</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if disciplinary_docs %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Document</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for doc in disciplinary_docs %}
+                                    <tr>
+                                        <td class="small">{{ doc.created_at.strftime('%Y-%m-%d') if doc.created_at else '—' }}</td>
+                                        <td class="small">
+                                            <a href="{{ url_for('static', filename=doc.pdf_relpath) if doc.pdf_relpath else '#' }}"
+                                               target="_blank" rel="noopener"
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-file-pdf"></i> View
+                                            </a>
+                                        </td>
+                                        <td class="small">{{ doc.notes or '' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="card-body">
+                            <div class="text-muted small">
+                                <i class="fas fa-info-circle"></i> No disciplinary documents on file.
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card border h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-notes-medical"></i> Sick Notes</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if sick_notes %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Submitted</th>
+                                        <th>File</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sn in sick_notes %}
+                                    <tr>
+                                        <td class="small">{{ sn.submitted_at.strftime('%Y-%m-%d %H:%M') if sn.submitted_at else '—' }}</td>
+                                        <td class="small">
+                                            <a href="{{ url_for('static', filename=sn.storage_relpath) if sn.storage_relpath else '#' }}"
+                                               target="_blank" rel="noopener"
+                                               class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-file-medical"></i> {{ sn.original_filename or 'View' }}
+                                            </a>
+                                        </td>
+                                        <td class="small">{{ sn.parent_note or '' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="card-body">
+                            <div class="text-muted small">
+                                <i class="fas fa-info-circle"></i> No sick notes on file.
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Tab (placeholder) -->
+    <div class="tab-pane fade" id="messages" role="tabpanel">
+        <div class="card border">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-comments"></i> Messages</h5>
+            </div>
+            <div class="card-body text-center py-5">
+                <i class="fas fa-comments text-muted mb-3" style="font-size: 3rem;"></i>
+                <h5 class="text-muted">Coming Soon</h5>
+                <p class="text-muted small">Direct messaging for this student will be available in a future update.</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const learnerId = '{{ learner_info.learner_id if learner_info else learner_id }}';
+
+    // Load data when a tab is shown (Bootstrap 5 tab event)
+    function setupTabLoad(tabId, apiEndpoint, tableBodyId, renderFn) {
+        const tabEl = document.getElementById(tabId);
+        if (!tabEl) return;
+        let loaded = false;
+
+        tabEl.addEventListener('shown.bs.tab', function () {
+            if (loaded) return;
+            loaded = true;
+            const tbody = document.getElementById(tableBodyId);
+            if (!tbody) return;
+
+            fetch(`/api/${apiEndpoint}?learner_id=${encodeURIComponent(learnerId)}`)
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                })
+                .then(function (data) {
+                    tbody.innerHTML = renderFn(data);
+                })
+                .catch(function (err) {
+                    tbody.innerHTML = '<tr><td colspan="99" class="text-center text-danger small">Could not load data: ' + err.message + '</td></tr>';
+                });
+        });
+    }
+
+    // --- Academics ---
+    setupTabLoad('academics-tab', 'academics', 'academicsTableBody', function (data) {
+        const rows = data.rows || data.results || data.marks || data.data || [];
+        if (!rows.length) {
+            return '<tr><td colspan="6" class="text-center text-muted small">No academics data available.</td></tr>';
+        }
+        return rows.map(function (r) {
+            return '<tr>' +
+                '<td>' + (r.subject || r.Subject || '') + '</td>' +
+                '<td>' + (r.mark || r.Mark ?? '') + '</td>' +
+                '<td>' + (r.totalMark || r.TotalMark ?? '') + '</td>' +
+                '<td>' + (r.percentage || r.Percentage ?? '') + '</td>' +
+                '<td>' + (r.term || r.Term || '') + '</td>' +
+                '<td>' + (r.year || r.Year || r.Datayear || '') + '</td>' +
+                '</tr>';
+        }).join('');
+    });
+
+    // --- Attendance ---
+    setupTabLoad('attendance-tab', 'attendance', 'attendanceTableBody', function (data) {
+        const rows = data.records || data.rows || data.data || [];
+        if (!rows.length) {
+            return '<tr><td colspan="5" class="text-center text-muted small">No attendance records available.</td></tr>';
+        }
+        return rows.map(function (r) {
+            return '<tr>' +
+                '<td>' + (r.dateAbsent || r.DateAbsent || r.date || r.Date || '') + '</td>' +
+                '<td>' + (r.grade || r.Grade || '') + '</td>' +
+                '<td>' + (r.reason || r.Reason || '') + '</td>' +
+                '<td>' + (r.year || r.Year || '') + '</td>' +
+                '<td>' + (r.month || r.Month || '') + '</td>' +
+                '</tr>';
+        }).join('');
+    });
+
+    // --- Discipline ---
+    setupTabLoad('discipline-tab', 'disciplinary', 'disciplineTableBody', function (data) {
+        const rows = data.records || data.rows || data.data || [];
+        if (!rows.length) {
+            return '<tr><td colspan="7" class="text-center text-muted small">No disciplinary records available.</td></tr>';
+        }
+        return rows.map(function (r) {
+            return '<tr>' +
+                '<td>' + (r.date || r.Date || r.incidentDate || r.IncidentDate || '') + '</td>' +
+                '<td>' + (r.type || r.Type || r.incidentType || r.IncidentType || '') + '</td>' +
+                '<td>' + (r.points || r.Points || r.demerit || r.Demerit ?? '') + '</td>' +
+                '<td>' + (r.incidentType || r.IncidentType || r.nature || r.Nature || '') + '</td>' +
+                '<td>' + (r.description || r.Description || r.comment || r.Comment || '') + '</td>' +
+                '<td>' + (r.severity || r.Severity || '') + '</td>' +
+                '<td>' + (r.status || r.Status || '') + '</td>' +
+                '</tr>';
+        }).join('');
+    });
+});
+</script>
+{% endblock %}

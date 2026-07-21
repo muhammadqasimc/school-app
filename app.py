@@ -4592,6 +4592,63 @@ def api_disciplinary_documents():
 
 
 # ---------------------------------------------------------------------------
+# Student Profile 360
+# ---------------------------------------------------------------------------
+@app.route("/student/360/<learner_id>")
+@login_required
+def student_360_view(learner_id):
+    """Full 360-degree view of a student for teachers, admins, and managers."""
+    # Only teachers, admins, and managers (in management mode) allowed
+    if not (
+        is_teacher_user(current_user)
+        or is_admin_user(current_user)
+        or (is_manager_user(current_user) and session.get("portal_mode") == "management")
+    ):
+        if is_guardian_parent_account(current_user):
+            flash("This view is for staff only.", "error")
+            return redirect(url_for("dashboard"))
+        abort(403)
+
+    # Fetch learner info
+    learner_info = fetch_learner_info_by_id(learner_id)
+    if not learner_info:
+        flash(f"Learner with ID '{learner_id}' not found.", "error")
+        return render_template("student/student_360.html",
+                               learner_info=None,
+                               parent_info={},
+                               disciplinary_docs=[],
+                               sick_notes=[])
+
+    # Get parent info
+    parent_info = _mdb_get_parent_profile_row(learner_id)
+
+    # Fetch documents (DisciplinaryDocument + SickNoteSubmission)
+    disciplinary_docs = (
+        DisciplinaryDocument.query.filter_by(learner_id=str(learner_id))
+        .order_by(DisciplinaryDocument.created_at.desc())
+        .all()
+    ) if hasattr(DisciplinaryDocument, "query") else []
+
+    sick_notes = (
+        SickNoteSubmission.query.filter_by(learner_id=str(learner_id))
+        .order_by(SickNoteSubmission.submitted_at.desc())
+        .all()
+    ) if hasattr(SickNoteSubmission, "query") else []
+
+    # Also try the MDB-level profile row for extra fields
+    profile_row = _mdb_get_learner_profile_row(learner_id)
+
+    return render_template(
+        "student/student_360.html",
+        learner_info=learner_info,
+        parent_info=parent_info,
+        profile_row=profile_row,
+        disciplinary_docs=disciplinary_docs,
+        sick_notes=sick_notes,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Teacher + School-wide Announcements
 # ---------------------------------------------------------------------------
 @app.route("/api/teacher/announcements")
