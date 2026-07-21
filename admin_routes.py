@@ -5,6 +5,8 @@ Registered from app.py after the Flask app is created.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -26,6 +28,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import func
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -917,6 +920,27 @@ def register_admin_routes(flask_app: Flask) -> None:
     def _comm_batch_id() -> str:
         return uuid.uuid4().hex
 
+    def _log_admin_action(*, operation, module, record_count=None, filename=None, summary=None, details=None, status='success'):
+        """Log an admin bulk data action to AdminAuditLog (no-op if model not available)."""
+        if not hasattr(r, 'AdminAuditLog'):
+            return None
+        try:
+            row = r.AdminAuditLog(
+                user_id=current_user.id,
+                operation=operation,
+                module=module,
+                record_count=record_count,
+                filename=filename,
+                summary=summary,
+                details_json=json.dumps(details) if details else None,
+                status=status,
+            )
+            r.db.session.add(row)
+            r.db.session.commit()
+            return row
+        except Exception:
+            return None
+
     def _log_delivery(
         *,
         batch_id: str,
@@ -1384,6 +1408,251 @@ def register_admin_routes(flask_app: Flask) -> None:
                                 sent += 1
                     except Exception as exc:
                         failed.append({"learner_id": lid, "error": str(exc)})
+        return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
+
+    @flask_app.route("/admin/communication/finance/reminders")
+    @login_required
+    def admin_communication_finance_reminders():
+        """List past finance reminder batches grouped by batch_id."""
+        require_admin()
+        page = max(1, int(request.args.get("page", "1")))
+        per_page = 20
+
+        # Get unique batch_ids for finance category with aggregate stats
+        batches_q = r.db.session.query(
+            r.CommunicationDeliveryLog.batch_id,
+            func.count(r.CommunicationDeliveryLog.id).label("total"),
+            func.max(r.CommunicationDeliveryLog.sent_at).label("last_sent"),
+        ).filter(
+            r.CommunicationDeliveryLog.category == "finance"
+        ).group_by(
+            r.CommunicationDeliveryLog.batch_id
+        ).order_by(
+            func.max(r.CommunicationDeliveryLog.sent_at).desc()
+        )
+
+        # Manual pagination
+        total = batches_q.count()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        offset = (page - 1) * per_page
+        rows = batches_q.offset(offset).limit(per_page).all()
+
+        batches = []
+        for row in rows:
+            # Count sent vs failed for this batch
+            sent_count = r.CommunicationDeliveryLog.query.filter_by(
+                batch_id=row.batch_id, category="finance", status="sent"
+            ).count()
+            # Get channels used in this batch
+            ch_rows = r.db.session.query(r.CommunicationDeliveryLog.channel).filter(
+                r.CommunicationDeliveryLog.batch_id == row.batch_id,
+                r.CommunicationDeliveryLog.category == "finance",
+            ).distinct().all()
+            channels = [c[0] for c in ch_rows]
+            batches.append({
+                "batch_id": row.batch_id,
+                "total": row.total,
+                "sent": sent_count,
+                "failed": row.total - sent_count,
+                "last_sent": row.last_sent.isoformat() if row.last_sent else None,
+                "channels": channels,
+            })
+
+        return jsonify({
+            "batches": batches,
+            "page": page,
+            "total_pages": total_pages,
+            "total_batches": total,
+        })
+
+    @flask_app.route("/admin/communication/finance/reminder/<batch_id>")
+    @login_required
+    def admin_communication_finance_reminder_detail(batch_id: str):
+        """Get delivery details for a specific finance batch."""
+        require_admin()
+        deliveries = r.CommunicationDeliveryLog.query.filter_by(
+            batch_id=str(batch_id), category="finance"
+        ).order_by(r.CommunicationDeliveryLog.sent_at.desc()).all()
+
+        return jsonify({
+            "deliveries": [
+                {
+                    "id": d.id,
+                    "recipient_name": d.recipient_name,
+                    "recipient_phone": d.recipient_phone,
+                    "channel": d.channel,
+                    "status": d.status,
+                    "sent_at": d.sent_at.isoformat() if d.sent_at else None,
+                    "reference_id": d.reference_id,
+                    "error_message": d.error_message,
+                }
+                for d in deliveries
+            ],
+            "batch_id": batch_id,
+            "total": len(deliveries),
+        })
+
+    # --- Attendance notification workflow -------------------------------------------
+
+    @flask_app.route("/admin/communication/attendance/learners")
+    @login_required
+    def admin_communication_attendance_learners():
+        """Return learners with attendance (absence) records for notification."""
+        require_admin()
+        year_s = str(request.args.get("year", "") or datetime.utcnow().year).strip()
+        grade = str(request.args.get("grade", "")).strip()
+        surname = str(request.args.get("surname", "")).strip()
+        learner_id = str(request.args.get("learner_id", "")).strip()
+        start_date = str(request.args.get("start_date", "")).strip()
+        end_date = str(request.args.get("end_date", "")).strip()
+        try:
+            limit = min(int(request.args.get("limit", "500")), 2000)
+        except ValueError:
+            limit = 500
+        try:
+            y_int = int(year_s)
+        except ValueError:
+            y_int = datetime.utcnow().year
+
+        # Build query: absence count per learner from Absentees, joined with Learner_Info for name
+        joins = ["FROM [Absentees] a INNER JOIN [Learner_Info] li ON CSTR(a.[Learnerid]) = CSTR(li.[ID])"]
+        wh = ["li.[Status] = 'C'"]
+        params: list = []
+
+        if year_s:
+            wh.append("CSTR(a.[Datayear]) = ?")
+            params.append(year_s)
+        if grade:
+            wh.append("CSTR(li.[Grade]) = ?")
+            params.append(grade)
+        if surname:
+            wh.append("li.[SName] LIKE ?")
+            params.append(f"%{surname}%")
+        if learner_id:
+            wh.append("(CSTR(li.[ID]) = ? OR CSTR(li.[LearnerID]) = ?)")
+            params.extend([learner_id, learner_id])
+        if start_date:
+            wh.append("a.[DateAbsent] >= ?")
+            params.append(start_date)
+        if end_date:
+            wh.append("a.[DateAbsent] <= ?")
+            params.append(end_date + " 23:59:59")
+
+        where_sql = " AND ".join(wh) if wh else "1=1"
+        sql = (
+            f"SELECT TOP {limit} li.[ID], li.[FName], li.[SName], li.[Grade], "
+            f"COUNT(a.[Learnerid]) AS AbsenceCount "
+            f"{' '.join(joins)} WHERE {where_sql} "
+            f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+            f"ORDER BY li.[SName], li.[FName]"
+        )
+        try:
+            rows = r.mdb_conn.execute_query(sql, tuple(params)) or []
+        except Exception:
+            # Fallback: try without TOP
+            alt_sql = (
+                f"SELECT li.[ID], li.[FName], li.[SName], li.[Grade], "
+                f"COUNT(a.[Learnerid]) AS AbsenceCount "
+                f"{' '.join(joins)} WHERE {where_sql} "
+                f"GROUP BY li.[ID], li.[FName], li.[SName], li.[Grade] "
+                f"ORDER BY li.[SName], li.[FName]"
+            )
+            try:
+                rows = r.mdb_conn.execute_query(alt_sql, tuple(params)) or []
+                rows = rows[:limit]
+            except Exception:
+                rows = []
+
+        out = []
+        for row in rows:
+            lid = str(row.get("ID") or "").strip()
+            if not lid:
+                continue
+            nm = (str(row.get("SName") or "").strip() + ", " + str(row.get("FName") or "").strip()).strip(", ")
+            absence_count = int(row.get("AbsenceCount") or 0)
+            out.append({
+                "id": lid,
+                "learner_name": nm,
+                "learner_id": lid,
+                "grade": str(row.get("Grade") or ""),
+                "year": y_int,
+                "absence_count": absence_count,
+                "preview_message": f"{nm} (Gr {row.get('Grade')}) — {absence_count} absence(s)",
+            })
+        return jsonify({"learners": out})
+
+    @flask_app.route("/admin/communication/attendance/send", methods=["POST"])
+    @login_required
+    def admin_communication_attendance_send():
+        """Send attendance notifications to parents/guardians."""
+        require_admin()
+        body = request.get_json(force=True, silent=True) or {}
+        channels = [str(c).lower() for c in (body.get("channels") or [])]
+        learners = body.get("learners") or []
+        tpl = str(body.get("attendance_template") or "").strip()
+        school = (os.environ.get("SCHOOL_DISPLAY_NAME") or "School").strip()
+        if not learners:
+            return jsonify({"ok": False, "error": "No learners."}), 400
+        batch_id = _comm_batch_id()
+        sent = 0
+        failed: list[dict] = []
+        for L in learners:
+            lid = str(L.get("learner_id") or L.get("id") or "").strip()
+            if not lid:
+                continue
+            nm = str(L.get("learner_name") or "")
+            gr = str(L.get("grade") or "")
+            yr = str(L.get("year") or datetime.utcnow().year)
+            ac = str(L.get("absence_count") or "0")
+            msg = (
+                tpl.replace("{parent_name}", "Parent/Guardian")
+                .replace("{learner_name}", nm)
+                .replace("{grade}", gr)
+                .replace("{year}", yr)
+                .replace("{absence_count}", ac)
+                .replace("{school_name}", school)
+            )
+            seen_phones: set[str] = set()
+            for ph, pname in r._get_parent_phones_from_mdb([lid]):
+                ph_key = str(ph or "").strip()
+                if not ph_key or ph_key in seen_phones:
+                    continue
+                seen_phones.add(ph_key)
+                msg_f = msg.replace("{parent_name}", pname or "Parent/Guardian")
+                for ch in channels:
+                    try:
+                        if ch == "sms":
+                            r.send_sms_message(ph, msg_f)
+                            _log_delivery(
+                                batch_id=batch_id,
+                                category="attendance",
+                                channel="sms",
+                                phone=ph,
+                                message=msg_f,
+                                status="sent",
+                                recipient_name=pname,
+                                reference_type="learner",
+                                reference_id=lid,
+                            )
+                            sent += 1
+                        elif ch == "whatsapp":
+                            if r.send_whatsapp_message(ph, msg_f):
+                                _log_delivery(
+                                    batch_id=batch_id,
+                                    category="attendance",
+                                    channel="whatsapp",
+                                    phone=ph,
+                                    message=msg_f,
+                                    status="sent",
+                                    recipient_name=pname,
+                                    reference_type="learner",
+                                    reference_id=lid,
+                                )
+                                sent += 1
+                            else:
+                                failed.append({"learner_id": lid, "phone": ph, "channel": "whatsapp"})
+                    except Exception as exc:
+                        failed.append({"learner_id": lid, "phone": ph, "channel": ch, "error": str(exc)})
         return jsonify({"ok": True, "sent": sent, "failed": failed, "batch_id": batch_id})
 
     @flask_app.route("/admin/communication/delivery-report/<batch_id>")
@@ -2287,3 +2556,182 @@ def register_admin_routes(flask_app: Flask) -> None:
 
         threading.Thread(target=job, daemon=True).start()
         return jsonify({"ok": True})
+
+    # --- CSV Bulk Import Preview ----------------------------------------------------
+
+    _BULK_IMPORT_ENTITY_FIELDS: dict[str, list[str]] = {
+        "students": ["learner_id", "accession_no", "name", "surname", "grade", "class",
+                     "gender", "dob", "parent_phone", "parent_email", "address"],
+        "attendance": ["learner_id", "date", "status", "period", "reason", "notes"],
+        "grades": ["learner_id", "subject", "term", "score", "grade", "remarks"],
+        "discipline": ["learner_id", "date", "incident_type", "severity",
+                       "description", "action_taken"],
+        "users": ["username", "password", "role", "email", "phone"],
+    }
+
+    def _auto_map_columns(headers: list[str]) -> dict[str, str]:
+        """Auto-detect column → field mappings by case-insensitive header match."""
+        # Build a lookup: lowercased field name → (entity, original field name)
+        field_lookup: dict[str, str] = {}
+        for entity, fields in _BULK_IMPORT_ENTITY_FIELDS.items():
+            for f in fields:
+                field_lookup.setdefault(f.lower(), f)
+
+        mapping: dict[str, str] = {}
+        for h in headers:
+            hl = h.strip().lower().replace(" ", "_").replace("-", "_")
+            if hl in field_lookup:
+                mapping[h] = field_lookup[hl]
+            else:
+                mapping[h] = ""
+        return mapping
+
+    def _parse_csv_from_text(csv_text: str) -> tuple[list[str], list[dict[str, str]], int]:
+        """Parse CSV text into headers, up to 20 sample rows, and total row count."""
+        reader = csv.DictReader(io.StringIO(csv_text))
+        headers = reader.fieldnames or []
+        rows: list[dict[str, str]] = []
+        total = 0
+        for row in reader:
+            total += 1
+            if len(rows) < 20:
+                # Ensure all header keys exist
+                cleaned = {h: row.get(h, "") for h in headers}
+                rows.append(cleaned)
+        if not headers and total > 0:
+            # Fallback: try plain csv.reader for headerless
+            reader2 = csv.reader(io.StringIO(csv_text))
+            raw_rows = list(reader2)
+            if raw_rows:
+                # Treat first row as header
+                headers = list(raw_rows[0])
+                total = max(0, len(raw_rows) - 1)
+                rows = []
+                for raw in raw_rows[1:]:
+                    if len(rows) >= 20:
+                        break
+                    row = {}
+                    for i, h in enumerate(headers):
+                        row[h] = raw[i] if i < len(raw) else ""
+                    rows.append(row)
+                total = len(raw_rows) - 1
+        return headers, rows, total
+
+    @flask_app.route("/admin/bulk-import", methods=["GET", "POST"])
+    @login_required
+    def admin_bulk_import():
+        require_admin()
+        preview_data = {
+            "columns": [],
+            "rows": [],
+            "mappings": {},
+            "total_rows": 0,
+            "csv_raw": "",
+        }
+
+        if request.method == "POST":
+            csv_raw = ""
+
+            # Check for uploaded file
+            if "file" in request.files:
+                f = request.files["file"]
+                if f and f.filename:
+                    csv_raw = f.read().decode("utf-8", errors="replace")
+
+            # Fall back to pasted text
+            if not csv_raw:
+                csv_raw = str(request.form.get("csv_data", "")).strip()
+
+            if not csv_raw:
+                flash("No CSV data provided. Upload a file or paste CSV text.", "error")
+                return render_template(
+                    "admin/bulk_import.html",
+                    preview=preview_data,
+                    all_fields=sorted({
+                        f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+                        for f in fields
+                    }),
+                )
+
+            headers, rows, total_rows = _parse_csv_from_text(csv_raw)
+            if not headers:
+                flash("Could not parse CSV headers. Check the file format.", "error")
+                return render_template(
+                    "admin/bulk_import.html",
+                    preview=preview_data,
+                    all_fields=sorted({
+                        f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+                        for f in fields
+                    }),
+                )
+
+            mappings = _auto_map_columns(headers)
+            preview_data = {
+                "columns": headers,
+                "rows": rows,
+                "mappings": mappings,
+                "total_rows": total_rows,
+                "csv_raw": csv_raw,
+            }
+
+        all_fields = sorted({
+            f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+            for f in fields
+        })
+
+        return render_template(
+            "admin/bulk_import.html",
+            preview=preview_data,
+            all_fields=all_fields,
+        )
+
+    @flask_app.route("/admin/bulk-import/confirm", methods=["POST"])
+    @login_required
+    def admin_bulk_import_confirm():
+        require_admin()
+        csv_raw = str(request.form.get("csv_raw", "")).strip()
+        if not csv_raw:
+            flash("No CSV data to import. Please upload a file first.", "error")
+            return redirect(url_for("admin_bulk_import"))
+
+        # Collect column mappings from form
+        columns_raw = str(request.form.get("columns", "")).strip()
+        column_names = [c.strip() for c in columns_raw.split(",") if c.strip()]
+        mappings: dict[str, str] = {}
+        for col in column_names:
+            mapped = str(request.form.get(f"map_{col}", "")).strip()
+            if mapped:
+                mappings[col] = mapped
+
+        # Re-parse CSV to count rows and build a summary
+        headers, rows, total_rows = _parse_csv_from_text(csv_raw)
+        mapped_fields = [v for v in mappings.values() if v]
+        entities = sorted(set(
+            entity for entity, fields in _BULK_IMPORT_ENTITY_FIELDS.items()
+            for f in mapped_fields if f in fields
+        ))
+        entity_label = ", ".join(entities) if entities else "unknown"
+        filename = str(request.form.get("filename", "pasted_data.csv")).strip() or "pasted_data.csv"
+
+        # Log the import attempt
+        _log_admin_action(
+            operation="csv_import",
+            module=entity_label,
+            record_count=total_rows,
+            filename=filename,
+            summary=f"Preview confirmed: {total_rows} rows, {len(mapped_fields)} mapped columns for {entity_label}",
+            details={
+                "columns": headers,
+                "mappings": mappings,
+                "total_rows": total_rows,
+                "entities": entities,
+            },
+            status="success",
+        )
+
+        flash(
+            f"Import preview confirmed. Ready to import {total_rows} record(s) "
+            f"into {entity_label} with {len(mapped_fields)} mapped field(s).",
+            "success",
+        )
+        return redirect(url_for("admin_bulk_import"))
