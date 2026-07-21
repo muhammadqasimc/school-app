@@ -1,1 +1,42 @@
 2026-07-18 — Observed uncommitted changes in admin_routes.py and templates/admin/communication.html on branch feat/event-calendar. Attendance communication workflow was added; verify learner lookup, send/report tracking, and the no-guardian-phone case before merging.
+2026-07-21 06:38 — Cron intake scan
+=====================================
+
+HEAD: c4306f8 chore(schoolapp): complete todo work
+Branch: cron/schoolapp-todo-20260721-060738
+
+State: Clean working tree. 321 tests (290 pass, 31 fail, 52 warnings).
+
+Changes since last scan (2026-07-20):
+  The cron branch merged feat/event-calendar changes on top of master, adding:
+  [x] Teacher portal routes (dashboard, classes, roster, attendance, discipline, assessments, reports, messages pages + API)
+  [x] Chat API routes (delivery/read receipt display, chat UI)
+  [x] MessageTemplate model, CRUD API (model only — routes never registered!)
+  [x] CSV import preview with column mapping
+  [x] Parent/guardian notification workflows
+  [x] Overdue finance reminder history + resend tracking
+
+NEW REGRESSIONS (24 new failures since last scan):
+  1. EarlyIntervention models DELETED (13 failures) — The feat/event-calendar merge replaced EarlyIntervention/InterventionNotification/InterventionReferral model classes with MessageTemplate in app.py. The early intervention API routes (/api/early-intervention/*) still reference `EarlyIntervention` and crash with NameError. Last scan these were 16/16 passing.
+  2. MessageTemplate API routes MISSING (9 failures) — Model class exists but no POST/GET/PUT/DELETE routes were registered for /api/message-templates or /api/teacher/message-templates. Tests return 404.
+  3. Admin finance reminder routes MISSING (4 failures) — Routes /admin/communication/finance/reminders and /admin/communication/finance/reminder/<batch_id> were never implemented in admin_routes.py.
+
+PERSISTING FAILURES (unchanged from last scan, 5 failures):
+  - Chat platform (2): test_chat_routes_exist, test_chat_thread_lifecycle_smoke — routes never implemented
+  - PG compat translation (3): Tests reference deleted MDBConnection._translate_access_to_postgres
+
+RESOLVED (2 fewer failures than last scan):
+  - Teacher portal tests now pass (test_teacher_portal_smoke.py: 3/3) — routes were added
+
+NOTABLE:
+  - SchoolApp_todo.txt had merge conflict markers from the previous cron run — cleaned up.
+  - The feat/event-calendar merge was destructive: it replaced the early intervention model code without preserving it. The model classes need to be re-added to app.py to fix the regression.
+  - MessageTemplate model was added but the API routes to CRUD it were never written — either they were omitted from the merge or never created.
+  - Warning count steady at 52 (mostly LegacyAPIWarning from .query.get() calls).
+  - .query.get() count not re-audited this scan but likely still ~28 production calls.
+
+RECOMMENDED PRIORITY FIXES:
+  1. Re-add EarlyIntervention, InterventionNotification, InterventionReferral model classes to app.py (near the other models around line 844-900)
+  2. Register MessageTemplate API routes (POST/GET/PUT/DELETE for /api/message-templates, GET for /api/teacher/message-templates)
+  3. Implement finance reminder history routes in admin_routes.py register_admin_routes()
+
