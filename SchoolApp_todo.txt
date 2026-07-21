@@ -13,7 +13,8 @@
 
 ## Fixes
 [ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 34 calls in production (inventory_routes.py:21, app.py:10, admin_routes.py:3) + 2 in tests/test_early_intervention.py — count INCREASED by +6 app.py since last scan (new chat routes added fresh legacy calls)
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 34 calls in production (inventory_routes.py:21, app.py:10, admin_routes.py:3) + 5 in tests (test_early_intervention.py:2, test_attendance_exceptions.py:3) = 39 total — count INCREASED by +3 test calls since last scan (new attendance exception test file added fresh legacy calls)
+[ ] Add static/uploads/attendance_exceptions/ to .gitignore — test artifacts (5 files) accumulate in the upload directory
 
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
