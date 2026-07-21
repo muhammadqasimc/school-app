@@ -9,18 +9,11 @@
 [x] Add parent/guardian notification workflows for attendance, discipline, and finance events
 [x] Add overdue finance reminders with channel selection and resend tracking
 [x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
-[x] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
-[x] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
-[x] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
-[x] Add at-risk learner risk computation engine and management report view
-[x] Add early intervention workflows with notification and referral tracking
-[x] Add templated parent/teacher messaging — MessageTemplate model, CRUD API, and teacher template selector
-[x] Add delivery/read receipt tracking — auto-mark messages as delivered/read via ChatMessageReceipt when parent opens thread
-[x] Show delivery status and read receipts in chat thread UI for teachers
-[x] Add admin message template management UI page
-[x] Add admin audit log for bulk data workflows (AdminAuditLog model + view page)
-[x] Add CSV import preview with column mapping and data display
-[ ] Add CSV row validation with error reporting for admin bulk imports
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+[ ] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
+[ ] Add templated parent/teacher messaging with delivery tracking and read history
+[x] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add saved filter presets for management report pages
