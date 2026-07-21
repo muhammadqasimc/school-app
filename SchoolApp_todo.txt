@@ -18,7 +18,7 @@
 
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
-[ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
+[x] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add saved filter presets for management report pages
