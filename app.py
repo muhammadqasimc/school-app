@@ -65,6 +65,7 @@ app.config['DISCIPLINARY_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads',
 app.config['DETENTION_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'detention')
 app.config['CHAT_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'chat')
 app.config['SICK_NOTE_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'sick_notes')
+app.config['ATTENDANCE_EXCEPTION_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'attendance_exceptions')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -77,6 +78,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 CHAT_ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
 SICK_NOTE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf'}
 SICK_NOTE_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
+ATTENDANCE_EXCEPTION_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf', 'docx'}
+ATTENDANCE_EXCEPTION_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
 CHAT_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 # Lightweight in-process cache for expensive management endpoints.
@@ -893,6 +896,34 @@ class InterventionReferral(db.Model):
     outcome = db.Column(db.Text, nullable=True)
 
 
+class AttendanceExceptionCode(db.Model):
+    __tablename__ = 'attendance_exception_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AttendanceException(db.Model):
+    __tablename__ = 'attendance_exception'
+    id = db.Column(db.Integer, primary_key=True)
+    exception_code_id = db.Column(db.Integer, db.ForeignKey('attendance_exception_code.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    absentee_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    original_filename = db.Column(db.String(255), nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True, unique=True)
+    storage_relpath = db.Column(db.String(512), nullable=True)
+    mime_type = db.Column(db.String(128), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -908,6 +939,7 @@ def ensure_app_schema():
         ensure_announcement_columns()
         ensure_pg_compat_views()
         _sync_postgres_id_sequences()
+        _seed_attendance_exception_codes()
         db.session.commit()
         return True
     except Exception as e:
@@ -1117,6 +1149,22 @@ def _sync_postgres_id_sequences():
                 """
             )
         )
+
+
+def _seed_attendance_exception_codes() -> None:
+    """Seed default attendance exception codes if the table is empty."""
+    if AttendanceExceptionCode.query.first() is not None:
+        return
+    defaults = [
+        ("LATE", "Late Arrival", "Student arrived after the start of the school day.", "#FFC107", True),
+        ("EXCUSED", "Excused Absence", "Absence approved by the school or parent.", "#2196F3", True),
+        ("MEDICAL", "Medical Absence", "Absence due to illness or medical appointment.", "#4CAF50", True),
+        ("UNEXCUSED", "Unexcused Absence", "Absence without a valid reason.", "#F44336", True),
+        ("OTHER", "Other", "Other attendance-related exception.", "#9E9E9E", True),
+    ]
+    for code, name, desc, color, active in defaults:
+        db.session.add(AttendanceExceptionCode(code=code, name=name, description=desc, color=color, is_active=active))
+    db.session.commit()
 
 
 # MDB Database Connection
