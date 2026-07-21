@@ -6,6 +6,7 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
+<<<<<<< Updated upstream
 
 ## Implementation
 [ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
@@ -19,12 +20,32 @@
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
+=======
+[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
+[ ] Add saved filter presets for management report pages
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+>>>>>>> Stashed changes
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+<<<<<<< Updated upstream
 [ ] Add /api/teacher/dashboard and /api/teacher/messages/send endpoints to match the teacher portal smoke contract
 [ ] Add a teacher home screen with quick actions for attendance, class roster, messaging, and exports
 [ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
 [ ] Add a function notice board where admins can set new notices
 [ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+=======
+[ ] Merge cron branch back to master after fixing EarlyIntervention regression
+
+# --- Regressions found 2026-07-21 (UNFIXED) ---
+[ ] CRITICAL: EarlyIntervention/InterventionNotification/InterventionReferral SQLAlchemy model classes were deleted from app.py during feat/event-calendar merge — API routes reference them and 13 tests fail with NameError. Re-add the model classes.
+[ ] HIGH: MessageTemplate API routes (/api/message-templates, /api/teacher/message-templates) were never registered — 9 tests fail with 404. Add POST/GET/PUT/DELETE endpoints in admin_routes.py or app.py.
+[ ] MEDIUM: Admin communication finance reminder routes (/admin/communication/finance/reminders, /admin/communication/finance/reminder/<batch_id>) don't exist — 4 tests fail. Implement the routes in admin_routes.py.
+[ ] PERSISTING: Chat API routes never implemented (2 tests fail — test_chat_routes_exist, test_chat_thread_lifecycle_smoke)
+[ ] PERSISTING: PG compat translation tests reference deleted MDBConnection._translate_access_to_postgres (3 tests fail — update or delete)
+
+# --- Technical debt ---
+[ ] Legacy API warnings: 59 warnings from ~30 production .query.get() calls — address in batches
+>>>>>>> Stashed changes

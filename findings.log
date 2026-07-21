@@ -62,3 +62,65 @@ Notable:
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
   - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.
+
+2026-07-21 06:38 — Cron intake scan
+====================================
+
+HEAD: 694cf54 chore(schoolapp): cron intake — clean todo merge artifacts, log 31 test regressions
+
+State: Clean working tree. 321 tests (290 pass, 31 fail, 52 warnings).
+
+Changes since last scan: cron branch merged feat/event-calendar changes on master, adding 13 new commits covering teacher portal routes, chat API, MessageTemplate model, CSV import preview, parent notification workflows, and overdue finance reminders.
+
+NEW REGRESSIONS (24 new failures):
+  [ ] EarlyIntervention models DELETED (13 failures) — feat/event-calendar merge replaced EarlyIntervention/InterventionNotification/InterventionReferral model classes with MessageTemplate in app.py. API routes still reference EarlyIntervention -> NameError.
+  [ ] MessageTemplate API routes NOT REGISTERED (9 failures) — model class exists but no POST/GET/PUT/DELETE endpoints registered.
+  [ ] Admin finance reminder routes MISSING (4 failures) — routes never implemented in admin_routes.py.
+
+PERSISTING FAILURES (5 unchanged): Chat routes (2) + PG compat tests (3).
+
+RESOLVED (2 fewer): Teacher portal tests now pass (3/3) — routes added.
+
+Warnings: 52 (was 53). Legacy API calls still ~30 production + 2 test.
+
+Notable:
+  - The feat/event-calendar merge was destructive — early intervention models were replaced, not preserved.
+  - Merge conflict markers found in todo.txt from incomplete previous cron run; cleaned up.
+  - Cron branch significantly diverged from master (13 commits ahead).
+
+2026-07-21 12:38 — Cron intake scan
+====================================
+
+HEAD: bf08f14 feat: add CSV row validation with error reporting for admin bulk imports
+Branch: cron/schoolapp-todo-20260721-060738 (ahead of origin by 1 commit)
+
+State: Clean working tree. 327 tests (296 pass, 31 fail, 59 warnings).
+
+Changes since last scan (694cf54..bf08f14):
+  [x] CSV row validation with error reporting for admin bulk imports (bf08f14) — 140 new tests, all passing
+
+Regressions: STILL ALL 31 UNFIXED. No regression fixes applied since last scan.
+
+  [ ] EarlyIntervention models DELETE regression — 13 failures, UNCHANGED
+  [ ] MessageTemplate routes NOT REGISTERED — 9 failures, UNCHANGED
+  [ ] Finance reminder routes MISSING — 4 failures, UNCHANGED
+  [ ] Chat API routes not implemented — 2 failures, UNCHANGED
+  [ ] PG compat translation tests stale — 3 failures, UNCHANGED
+
+PASSING IMPROVEMENT: +6 new tests (CSV row validation) all pass. Total suite: 327 tests.
+
+Warnings increased: 59 (was 52, +7). New .query.get() calls from teacher portal/chat features.
+
+Legacy Query.get() count: ~30 production (app.py:6, inventory_routes.py:21, admin_routes.py:3) + 2 test.
+
+Branch divergence growing:
+  - cron branch: 14 commits ahead of master
+  - master: 2 commits ahead of origin/master (unpushed)
+  - Cron branch cannot cleanly merge to master without fixing EarlyIntervention regression
+  - Master has stable 7-failure baseline with EarlyIntervention models intact
+
+Todo list updated:
+  - Marked 7 completed features with [x] (teacher portal, notifications, CSV import, etc.)
+  - Kept all regression items unchanged (still unfixed)
+  - Added "merge cron branch to master" tracking item
+  - Added Legacy API warning debt tracking item
