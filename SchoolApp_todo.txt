@@ -24,3 +24,4 @@
 [ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment

@@ -4649,6 +4649,395 @@ def student_360_view(learner_id):
 
 
 # ---------------------------------------------------------------------------
+# Chat Platform API
+# ---------------------------------------------------------------------------
+@app.route("/api/chat/threads", methods=["POST"])
+@login_required
+def api_chat_create_thread():
+    """Create a new chat thread."""
+    thread_type = request.form.get("thread_type", "direct").strip()
+    participant_ids_str = request.form.get("participant_ids", "").strip()
+    learner_id = request.form.get("learner_id", "").strip() or None
+    title = request.form.get("title", "").strip() or None
+
+    if not participant_ids_str:
+        return jsonify({"error": "participant_ids is required"}), 400
+
+    participant_ids = []
+    for pid in participant_ids_str.split(","):
+        pid = pid.strip()
+        if pid:
+            try:
+                participant_ids.append(int(pid))
+            except ValueError:
+                return jsonify({"error": f"Invalid participant ID: {pid}"}), 400
+
+    thread = ChatThread(
+        thread_type=thread_type,
+        learner_id=learner_id,
+        title=title,
+        status="active",
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(thread)
+    db.session.flush()  # get thread.id
+
+    # Add creator as participant
+    creator_participant = ChatParticipant(
+        thread_id=thread.id,
+        user_id=current_user.id,
+        role_in_thread="owner",
+        can_post=True,
+    )
+    db.session.add(creator_participant)
+
+    # Add other participants
+    for uid in participant_ids:
+        if uid == current_user.id:
+            continue  # already added
+        participant = ChatParticipant(
+            thread_id=thread.id,
+            user_id=uid,
+            role_in_thread="member",
+            can_post=True,
+        )
+        db.session.add(participant)
+
+    db.session.commit()
+
+    return jsonify({"thread": {"id": thread.id}})
+
+
+@app.route("/api/chat/threads", methods=["GET"])
+@login_required
+def api_chat_list_threads():
+    """List chat threads for the current user."""
+    participant_rows = ChatParticipant.query.filter_by(user_id=current_user.id).all()
+    thread_ids = [p.thread_id for p in participant_rows]
+
+    threads = (
+        ChatThread.query.filter(ChatThread.id.in_(thread_ids))
+        .order_by(ChatThread.updated_at.desc())
+        .all()
+    )
+
+    result = []
+    for t in threads:
+        last_msg = (
+            ChatMessage.query.filter_by(thread_id=t.id, moderation_status="visible")
+            .order_by(ChatMessage.created_at.desc())
+            .first()
+        )
+        result.append({
+            "id": t.id,
+            "thread_type": t.thread_type,
+            "learner_id": t.learner_id,
+            "title": t.title,
+            "status": t.status,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        })
+
+    return jsonify({"threads": result})
+
+
+@app.route("/api/chat/candidates", methods=["GET"])
+@login_required
+def api_chat_candidates():
+    """Get candidate users for starting new chat threads."""
+    search = request.args.get("q", "").strip().lower()
+
+    query = User.query.filter(User.id != current_user.id)
+    if search:
+        query = query.filter(User.username.ilike(f"%{search}%"))
+
+    users = query.order_by(User.username).all()
+
+    rows = []
+    for u in users:
+        role = (
+            "teacher"
+            if u.is_teacher
+            else "manager" if u.is_manager else "parent" if u.is_parent else "staff"
+        )
+        rows.append({
+            "userId": u.id,
+            "username": u.username,
+            "role": role,
+        })
+
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["POST"])
+@login_required
+def api_chat_send_message(thread_id):
+    """Send a message in a thread."""
+    participant = ChatParticipant.query.filter_by(
+        thread_id=thread_id, user_id=current_user.id
+    ).first()
+    if not participant:
+        return jsonify({"error": "You are not a participant in this thread"}), 403
+
+    body = request.form.get("body", "").strip()
+    if not body:
+        return jsonify({"error": "Message body is required"}), 400
+
+    msg = ChatMessage(
+        thread_id=thread_id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+        moderation_status="visible",
+    )
+    db.session.add(msg)
+    db.session.flush()
+
+    thread = ChatThread.query.get(thread_id)
+    if thread:
+        thread.updated_at = datetime.utcnow()
+
+    # Create delivery receipts for other participants
+    other_participants = ChatParticipant.query.filter(
+        ChatParticipant.thread_id == thread_id,
+        ChatParticipant.user_id != current_user.id,
+    ).all()
+    for p in other_participants:
+        receipt = ChatMessageReceipt(
+            message_id=msg.id,
+            user_id=p.user_id,
+            delivered_at=datetime.utcnow(),
+        )
+        db.session.add(receipt)
+
+    db.session.commit()
+
+    return jsonify({
+        "message": {
+            "id": msg.id,
+            "body": msg.body,
+            "sender_user_id": msg.sender_user_id,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        }
+    })
+
+
+@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["GET"])
+@login_required
+def api_chat_get_messages(thread_id):
+    """Get messages in a thread."""
+    participant = ChatParticipant.query.filter_by(
+        thread_id=thread_id, user_id=current_user.id
+    ).first()
+    if not participant:
+        return jsonify({"error": "You are not a participant in this thread"}), 403
+
+    limit = request.args.get("limit", 50, type=int)
+
+    messages = (
+        ChatMessage.query.filter_by(thread_id=thread_id, moderation_status="visible")
+        .order_by(ChatMessage.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+
+    rows = []
+    for m in messages:
+        sender = User.query.get(m.sender_user_id)
+        rows.append({
+            "id": m.id,
+            "sender_user_id": m.sender_user_id,
+            "sender_name": sender.username if sender else "Unknown",
+            "body": m.body,
+            "message_type": m.message_type,
+            "moderation_status": m.moderation_status,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "attachments": [],
+        })
+
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/chat/threads/<int:thread_id>/read", methods=["POST"])
+@login_required
+def api_chat_mark_read(thread_id):
+    """Mark thread as read by the current user."""
+    participant = ChatParticipant.query.filter_by(
+        thread_id=thread_id, user_id=current_user.id
+    ).first()
+    if not participant:
+        return jsonify({"error": "You are not a participant in this thread"}), 403
+
+    last_msg = (
+        ChatMessage.query.filter_by(thread_id=thread_id, moderation_status="visible")
+        .order_by(ChatMessage.created_at.desc())
+        .first()
+    )
+
+    if last_msg:
+        participant.last_read_message_id = last_msg.id
+
+        receipt = ChatMessageReceipt.query.filter_by(
+            message_id=last_msg.id, user_id=current_user.id
+        ).first()
+        if not receipt:
+            receipt = ChatMessageReceipt(
+                message_id=last_msg.id,
+                user_id=current_user.id,
+                delivered_at=datetime.utcnow(),
+            )
+            db.session.add(receipt)
+        receipt.read_at = datetime.utcnow()
+
+        db.session.commit()
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/chat/messages/<int:message_id>/moderate", methods=["POST"])
+@login_required
+def api_chat_moderate_message(message_id):
+    """Moderate a message (hide/show/delete/restore)."""
+    if not (
+        is_teacher_user(current_user)
+        or is_admin_user(current_user)
+        or is_manager_user(current_user)
+    ):
+        return jsonify({"error": "Not authorized to moderate"}), 403
+
+    action = request.form.get("action", "").strip()
+    if action not in ("hide", "show", "delete", "restore"):
+        return jsonify({"error": "Invalid action. Use hide, show, delete, or restore."}), 400
+
+    msg = ChatMessage.query.get(message_id)
+    if not msg:
+        return jsonify({"error": "Message not found"}), 404
+
+    if action == "hide":
+        msg.moderation_status = "hidden"
+    elif action in ("show", "restore"):
+        msg.moderation_status = "visible"
+    elif action == "delete":
+        msg.deleted_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "message_id": msg.id,
+        "moderation_status": msg.moderation_status,
+    })
+
+
+@app.route("/api/chat/attachments/<int:attachment_id>", methods=["GET"])
+@login_required
+def api_chat_get_attachment(attachment_id):
+    """Get attachment metadata."""
+    attachment = ChatAttachment.query.get(attachment_id)
+    if not attachment:
+        return jsonify({"error": "Attachment not found"}), 404
+
+    return jsonify({
+        "id": attachment.id,
+        "message_id": attachment.message_id,
+        "original_name": attachment.original_name,
+        "stored_name": attachment.stored_name,
+        "mime_type": attachment.mime_type,
+        "size_bytes": attachment.size_bytes,
+        "storage_relpath": attachment.storage_relpath,
+        "scan_status": attachment.scan_status,
+        "uploaded_at": attachment.uploaded_at.isoformat() if attachment.uploaded_at else None,
+    })
+
+
+@app.route("/api/chat/learner-messages", methods=["GET"])
+@login_required
+def api_chat_learner_messages():
+    """Get chat threads and recent messages for a learner."""
+    learner_id = request.args.get("learner_id", "").strip()
+    if not learner_id:
+        return jsonify({"error": "learner_id is required"}), 400
+
+    threads = (
+        ChatThread.query.filter_by(learner_id=learner_id)
+        .order_by(ChatThread.updated_at.desc())
+        .all()
+    )
+
+    result = []
+    for t in threads:
+        # Get participants with user info
+        participant_rows = ChatParticipant.query.filter_by(thread_id=t.id).all()
+        participants = []
+        for p in participant_rows:
+            user = User.query.get(p.user_id)
+            if user:
+                participants.append({
+                    "id": user.id,
+                    "username": user.username,
+                    "name": user.username,
+                })
+
+        # Get last visible message
+        last_msg = (
+            ChatMessage.query.filter_by(thread_id=t.id, moderation_status="visible")
+            .order_by(ChatMessage.created_at.desc())
+            .first()
+        )
+        last_message = None
+        if last_msg:
+            sender = User.query.get(last_msg.sender_user_id)
+            last_message = {
+                "body": last_msg.body,
+                "sender_name": sender.username if sender else "Unknown",
+                "created_at": last_msg.created_at.isoformat() if last_msg.created_at else None,
+            }
+
+        # Count visible messages
+        message_count = ChatMessage.query.filter_by(
+            thread_id=t.id, moderation_status="visible"
+        ).count()
+
+        result.append({
+            "id": t.id,
+            "thread_type": t.thread_type,
+            "title": t.title,
+            "participants": participants,
+            "last_message": last_message,
+            "message_count": message_count,
+        })
+
+    return jsonify({"threads": result})
+
+
+@app.route("/parent/messages")
+@login_required
+def parent_messages():
+    """Parent chat messages page."""
+    if not is_guardian_parent_account(current_user):
+        abort(403)
+    return render_template("parent/messages.html")
+
+
+@app.route("/management/chat")
+@login_required
+def management_chat():
+    """Management chat page."""
+    if not (is_manager_user(current_user) or is_admin_user(current_user)):
+        abort(403)
+    return render_template("management_chat.html")
+
+
+@app.route("/admin/chat")
+@login_required
+def admin_chat():
+    """Admin chat page."""
+    if not is_admin_user(current_user):
+        abort(403)
+    return render_template("admin/chat.html")
+
+
+# ---------------------------------------------------------------------------
 # Teacher + School-wide Announcements
 # ---------------------------------------------------------------------------
 @app.route("/api/teacher/announcements")
