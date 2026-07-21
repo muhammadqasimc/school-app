@@ -924,18 +924,6 @@ class AttendanceException(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
-class ReportFilterPreset(db.Model):
-    __tablename__ = 'report_filter_preset'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
-    name = db.Column(db.String(120), nullable=False)
-    report_key = db.Column(db.String(80), nullable=False, index=True)
-    filters_json = db.Column(db.Text, nullable=False, default='{}')
-    is_default = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
