@@ -5,6 +5,8 @@ Registered from app.py after the Flask app is created.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -916,6 +918,27 @@ def register_admin_routes(flask_app: Flask) -> None:
 
     def _comm_batch_id() -> str:
         return uuid.uuid4().hex
+
+    def _log_admin_action(*, operation, module, record_count=None, filename=None, summary=None, details=None, status='success'):
+        """Log an admin bulk data action to AdminAuditLog (no-op if model not available)."""
+        if not hasattr(r, 'AdminAuditLog'):
+            return None
+        try:
+            row = r.AdminAuditLog(
+                user_id=current_user.id,
+                operation=operation,
+                module=module,
+                record_count=record_count,
+                filename=filename,
+                summary=summary,
+                details_json=json.dumps(details) if details else None,
+                status=status,
+            )
+            r.db.session.add(row)
+            r.db.session.commit()
+            return row
+        except Exception:
+            return None
 
     def _log_delivery(
         *,
@@ -2850,83 +2873,3 @@ def register_admin_routes(flask_app: Flask) -> None:
             "success",
         )
         return redirect(url_for("admin_bulk_import"))
-
-    # --- Admin Audit Log View -------------------------------------------------------
-
-    @flask_app.route("/admin/audit-log")
-    @login_required
-    def admin_audit_log():
-        """Searchable admin audit log page with filters and pagination."""
-        require_admin()
-
-        page = request.args.get("page", 1, type=int)
-        per_page = 50
-        search = request.args.get("search", "").strip()
-        module_filter = request.args.get("module", "").strip()
-        date_from = request.args.get("date_from", "").strip()
-        date_to = request.args.get("date_to", "").strip()
-
-        q = r.AdminAuditLog.query
-
-        # Search across summary, target_type, target_id, module
-        if search:
-            like = f"%{search}%"
-            q = q.filter(
-                r.db.or_(
-                    r.AdminAuditLog.summary.ilike(like),
-                    r.AdminAuditLog.target_type.ilike(like),
-                    r.AdminAuditLog.target_id.ilike(like),
-                    r.AdminAuditLog.module.ilike(like),
-                    r.AdminAuditLog.action.ilike(like),
-                )
-            )
-
-        # Filter by module
-        if module_filter:
-            q = q.filter(r.AdminAuditLog.module == module_filter)
-
-        # Filter by date range
-        if date_from:
-            try:
-                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-                q = q.filter(r.AdminAuditLog.created_at >= dt_from)
-            except (ValueError, TypeError):
-                pass
-
-        if date_to:
-            try:
-                dt_to = datetime.strptime(date_to, "%Y-%m-%d")
-                dt_to = dt_to.replace(hour=23, minute=59, second=59)
-                q = q.filter(r.AdminAuditLog.created_at <= dt_to)
-            except (ValueError, TypeError):
-                pass
-
-        # Order by most recent first
-        q = q.order_by(r.AdminAuditLog.created_at.desc())
-
-        # Paginate
-        total = q.count()
-        paginated = q.offset((page - 1) * per_page).limit(per_page).all()
-        total_pages = max(1, (total + per_page - 1) // per_page)
-
-        # Build module options for filter dropdown
-        module_options = [
-            "grades",
-            "attendance",
-            "permissions",
-            "announcements",
-        ]
-
-        return render_template(
-            "admin/audit_log.html",
-            logs=paginated,
-            page=page,
-            total_pages=total_pages,
-            total=total,
-            per_page=per_page,
-            search=search,
-            module_filter=module_filter,
-            date_from=date_from,
-            date_to=date_to,
-            module_options=module_options,
-        )
