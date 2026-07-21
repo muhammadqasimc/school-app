@@ -924,6 +924,18 @@ class AttendanceException(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class ReportFilterPreset(db.Model):
+    __tablename__ = 'report_filter_preset'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    report_key = db.Column(db.String(80), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False, default='{}')
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -7730,6 +7742,160 @@ def api_management_mark_schedules_pdf():
         download_name=f"mark_schedules_{fn_year}.pdf",
         mimetype="application/pdf",
     )
+
+
+# ---------------------------------------------------------------------------
+# ReportFilterPreset API — save / load / delete named filter presets
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-filters/presets", methods=["GET"])
+@login_required
+def api_report_filter_presets_list():
+    """List saved presets for a given report_key."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    report_key = (request.args.get("report_key") or "").strip()
+    if not report_key:
+        return jsonify({"error": "report_key required"}), 400
+    try:
+        presets = ReportFilterPreset.query.filter_by(
+            user_id=current_user.id, report_key=report_key
+        ).order_by(ReportFilterPreset.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": p.id,
+                "name": p.name,
+                "report_key": p.report_key,
+                "filters": json.loads(p.filters_json or "{}"),
+                "is_default": p.is_default,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in presets
+        ])
+    except Exception:
+        app.logger.exception("list report filter presets failed")
+        return jsonify({"error": "Could not list presets."}), 500
+
+
+@app.route("/api/report-filters/presets", methods=["POST"])
+@login_required
+def api_report_filter_presets_save():
+    """Save current filters as a named preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    report_key = (data.get("report_key") or "").strip()
+    filters = data.get("filters") or {}
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if not report_key:
+        return jsonify({"error": "report_key is required"}), 400
+    try:
+        preset = ReportFilterPreset(
+            user_id=current_user.id,
+            name=name,
+            report_key=report_key,
+            filters_json=json.dumps(filters),
+        )
+        db.session.add(preset)
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("save report filter preset failed")
+        return jsonify({"error": "Could not save preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["GET"])
+@login_required
+def api_report_filter_presets_get(preset_id):
+    """Get a single preset by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report filter preset failed")
+        return jsonify({"error": "Could not get preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["PUT"])
+@login_required
+def api_report_filter_presets_update(preset_id):
+    """Update a preset (rename or change filters)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if name:
+            preset.name = name
+        if "filters" in data:
+            preset.filters_json = json.dumps(data["filters"])
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report filter preset failed")
+        return jsonify({"error": "Could not update preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["DELETE"])
+@login_required
+def api_report_filter_presets_delete(preset_id):
+    """Delete a preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(preset)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Preset deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report filter preset failed")
+        return jsonify({"error": "Could not delete preset."}), 500
 
 
 MANAGEMENT_REPORT_REGISTRY = [
