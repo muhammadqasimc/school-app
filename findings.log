@@ -1,3 +1,38 @@
+2026-07-21 12:00 — Cron intake scan
+====================================
+
+HEAD: 2cdd9a7 feat: implement chat platform API routes and integrate messages into student profile 360 view
+
+State: Clean working tree. 301 tests (296 pass, 5 fail, 39 warnings).
+
+Completed since last scan:
+  [x] Chat platform API routes (2cdd9a7) — 11 routes: thread CRUD, messaging, read receipts, moderation, attachments, learner-messages. 3 chat tests all pass.
+  [x] Student profile 360 messages tab — 'Coming Soon' replaced with functional messages in student_360.html
+
+Still failing (5 tests, -2 from last scan):
+  1. test_translate_quotes_unbracketed_ems_tables — calls deleted MDBConnection._translate_access_to_postgres
+  2. test_translate_top_limit_with_quoted_tables — same root cause
+  3. test_translate_quotes_qualified_mixed_case_columns — same root cause
+  4. test_teacher_routes_exist — expects /teacher/classes; only /teacher and /teacher/announcements exist
+  5. test_teacher_api_smoke_authenticated — teacher API endpoints return 404
+
+Resolved since last scan:
+  [x] test_chat_routes_exist — now PASS (routes implemented)
+  [x] test_chat_thread_lifecycle_smoke — now PASS (lifecycle smoke test passes)
+
+Regressions: Legacy Query.get() count increased from 30 to 36 (+6 in app.py from new chat routes). New code in app.py uses ChatThread.query.get(thread_id) and User.query.get(...) instead of Session.get().
+
+Legacy Query.get() count: 34 production (inventory_routes.py:21, app.py:10, admin_routes.py:3) + 2 test (test_early_intervention.py) = 36 total. The +6 in app.py is a regression — the migration is moving backwards.
+
+Warnings decreased: 39 (was 53). Chat test resolution reduced some warning sources.
+
+Notable:
+  - Big milestone: chat platform is now functional (11 API routes + frontend integration).
+  - Teacher portal is the #1 remaining feature gap (5 of 5 failing tests are teacher + PG compat).
+  - PG compat translation tests remain stale; they test a deleted private method. Either delete/rewrite tests or reimplement MDBConnection._translate_access_to_postgres.
+  - Student profile 360 view is now feature-complete (attendance, grades, discipline, documents, messages).
+  - The `.query.get()` → `Session.get()` migration has regressed by +6 calls; consider blocking new legacy calls at PR level.
+
 2026-07-20 05:00 — Cron intake scan
 ====================================
 
