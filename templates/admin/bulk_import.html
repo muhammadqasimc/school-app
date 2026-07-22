@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk CSV Import - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-upload"></i> Bulk CSV Import</h3>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mb-3">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">Home</a>
+
+                {% if preview and preview.columns %}
+                {# --- Preview Phase: Show mapping + data preview --- #}
+                <div class="alert alert-info">
+                    <i class="fas fa-file-csv"></i>
+                    <strong>{{ preview.total_rows }} row(s)</strong> detected in CSV.
+                    <span class="text-muted">Showing up to {{ preview.rows|length }} row(s) below.</span>
+                </div>
+
+                <form method="POST" action="{{ url_for('admin_bulk_import_confirm') }}" id="confirmForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="csv_raw" value="{{ preview.csv_raw|e }}"/>
+                    <input type="hidden" name="columns" value="{{ preview.columns|join(',') }}"/>
+                    <input type="hidden" name="filename" value="uploaded.csv"/>
+
+                    {# Column Mapping Section #}
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-map-signs"></i> Column Mapping</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">Map each CSV column to a known field, or choose "— Skip —" to ignore it.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>CSV Column</th>
+                                            <th>Sample Value</th>
+                                            <th>Map to Field</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for col in preview.columns %}
+                                        <tr>
+                                            <td><code>{{ col }}</code></td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    {% if preview.rows and preview.rows[0] %}
+                                                        {{ preview.rows[0].get(col, '')|truncate(40) }}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <select name="map_{{ col }}" class="form-select form-select-sm">
+                                                    <option value="">— Skip —</option>
+                                                    {% for field in all_fields %}
+                                                    <option value="{{ field }}"
+                                                        {%- if preview.mappings.get(col) == field %} selected{% endif %}>
+                                                        {{ field }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Data Preview Section #}
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="fas fa-table"></i> Data Preview</h5>
+                            <span class="badge bg-info">{{ preview.rows|length }} of {{ preview.total_rows }} rows</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-striped table-hover table-sm">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>#</th>
+                                            {% for col in preview.columns %}
+                                            <th>{{ col }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in preview.rows %}
+                                        <tr>
+                                            <td>{{ loop.index }}</td>
+                                            {% for col in preview.columns %}
+                                            <td>
+                                                <small>{{ row.get(col, '')|truncate(50) }}</small>
+                                            </td>
+                                            {% endfor %}
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Action Buttons #}
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('admin_bulk_import') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-undo"></i> Back (re-upload)
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-check"></i> Confirm Import
+                        </button>
+                    </div>
+                </form>
+
+                {% else %}
+                {# --- Upload Phase: No CSV loaded yet --- #}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    Upload a CSV file or paste CSV text below. We'll help you map columns to known fields.
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('admin_bulk_import') }}" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Upload CSV File</label>
+                                <input type="file" name="file" id="file" class="form-control" accept=".csv,text/csv">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="csv_data" class="form-label">Or Paste CSV Data</label>
+                                <textarea name="csv_data" id="csv_data" rows="8" class="form-control font-monospace" placeholder="column1,column2,column3&#10;value1,value2,value3&#10;..."></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+</style>
+{% endblock %}

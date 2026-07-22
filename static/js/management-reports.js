@@ -116,4 +116,73 @@ function mgtBindFilters(ids, handler) {
   });
 }
 
+/**
+ * Save current filters as a named preset via the API.
+ * @param {string} name - Preset name
+ * @param {string} reportKey - Report key
+ * @param {object} filters - Filter values {year, term, phase, grade, subject}
+ * @returns {Promise<object>} The saved preset object
+ */
+async function mgtSavePreset(name, reportKey, filters) {
+  const r = await fetch("/api/report-filters/presets", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name, report_key: reportKey, filters})
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+/**
+ * Load saved presets for a report and return them as an array.
+ * @param {string} reportKey - Report key
+ * @returns {Promise<object[]>} Array of preset objects
+ */
+async function mgtLoadPresets(reportKey) {
+  const r = await fetch(`/api/report-filters/presets?report_key=${encodeURIComponent(reportKey)}`);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+/**
+ * Apply a saved preset by populating filter selects and loading the report.
+ * @param {number} presetId - Preset ID
+ */
+async function mgtApplyPreset(presetId) {
+  const r = await fetch(`/api/report-filters/presets/${presetId}`);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${r.status}`);
+  }
+  const preset = await r.json();
+  const filters = preset.filters || {};
+  Object.keys(filters).forEach(k => {
+    const el = document.getElementById(`f-${k}`);
+    if (el && filters[k]) el.value = filters[k];
+  });
+  // Trigger the apply button click if present
+  const applyBtn = document.getElementById("apply-filters");
+  if (applyBtn) applyBtn.click();
+}
+
+/**
+ * Delete a saved preset.
+ * @param {number} presetId - Preset ID
+ * @returns {Promise<object>}
+ */
+async function mgtDeletePreset(presetId) {
+  const r = await fetch(`/api/report-filters/presets/${presetId}`, {method: "DELETE"});
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
 const MGT_DEFAULT_PALETTE = ["#0d6efd","#6610f2","#d63384","#fd7e14","#ffc107","#198754","#20c997","#0dcaf0"];

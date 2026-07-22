@@ -15,7 +15,96 @@
       <div class="col-md-2"><select id="f-phase" class="form-select"><option value="">All Phases</option></select></div>
       <div class="col-md-2"><select id="f-grade" class="form-select"><option value="">All Grades</option></select></div>
       <div class="col-md-2"><select id="f-subject" class="form-select" {% if disable_subject_filter %}disabled{% endif %}><option value="">All Subjects</option></select></div>
-      <div class="col-md-2"><button id="apply-filters" class="kismet-btn kismet-btn-primary w-100"><i class="fas fa-search me-1"></i> Apply</button></div>
+      <div class="col-md-2 d-flex gap-1">
+        <button id="apply-filters" class="kismet-btn kismet-btn-primary flex-fill"><i class="fas fa-search me-1"></i> Apply</button>
+        <button id="mgt-save-preset-btn" class="kismet-btn kismet-btn-secondary" title="Save current filters"><i class="fas fa-save"></i></button>
+      </div>
+    </div>
+    <div class="row g-2 mt-2 align-items-center" id="mgt-presets-row" style="display:none;">
+      <div class="col-md-4">
+        <select id="mgt-presets-select" class="form-select form-select-sm">
+          <option value="">-- Saved Filters --</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-1">
+        <button id="mgt-apply-preset-btn" class="kismet-btn kismet-btn-sm kismet-btn-primary"><i class="fas fa-check"></i> Apply</button>
+        <button id="mgt-delete-preset-btn" class="kismet-btn kismet-btn-sm kismet-btn-danger" title="Delete selected preset"><i class="fas fa-trash"></i></button>
+      </div>
     </div>
   </div>
 </div>
+
+<script src="{{ url_for('static', filename='js/management-reports.js') }}"></script>
+<script>
+(function() {
+  const reportKey = "{{ report.key }}";
+  const saveBtn = document.getElementById("mgt-save-preset-btn");
+  const presetsRow = document.getElementById("mgt-presets-row");
+  const presetsSelect = document.getElementById("mgt-presets-select");
+  const applyPresetBtn = document.getElementById("mgt-apply-preset-btn");
+  const deletePresetBtn = document.getElementById("mgt-delete-preset-btn");
+
+  async function refreshPresets() {
+    try {
+      const presets = await mgtLoadPresets(reportKey);
+      while (presetsSelect.options.length > 1) presetsSelect.remove(1);
+      presets.forEach(p => {
+        const o = document.createElement("option");
+        o.value = p.id;
+        o.textContent = p.name;
+        presetsSelect.appendChild(o);
+      });
+      presetsRow.style.display = presets.length ? "flex" : "none";
+    } catch (e) {
+      console.error("Failed to load presets:", e);
+    }
+  }
+
+  function getCurrentFilters() {
+    return {
+      year: (document.getElementById("f-year").value || "").trim(),
+      term: (document.getElementById("f-term").value || "").trim(),
+      phase: (document.getElementById("f-phase").value || "").trim(),
+      grade: (document.getElementById("f-grade").value || "").trim(),
+      subject: (document.getElementById("f-subject").value || "").trim()
+    };
+  }
+
+  saveBtn.addEventListener("click", function() {
+    const name = prompt("Enter a name for this filter preset:");
+    if (!name || !name.trim()) return;
+    const filters = getCurrentFilters();
+    mgtSavePreset(name.trim(), reportKey, filters).then(function() {
+      refreshPresets();
+    }).catch(function(e) {
+      alert("Failed to save preset: " + (e.message || "Unknown error"));
+    });
+  });
+
+  applyPresetBtn.addEventListener("click", async function() {
+    const val = presetsSelect.value;
+    if (!val) return;
+    try {
+      await mgtApplyPreset(parseInt(val));
+    } catch (e) {
+      console.error("Failed to apply preset:", e);
+    }
+  });
+
+  deletePresetBtn.addEventListener("click", async function() {
+    const val = presetsSelect.value;
+    if (!val) return;
+    if (!confirm("Delete this saved filter preset?")) return;
+    try {
+      await mgtDeletePreset(parseInt(val));
+      presetsSelect.value = "";
+      refreshPresets();
+    } catch (e) {
+      alert("Failed to delete preset: " + (e.message || "Unknown error"));
+    }
+  });
+
+  // Load presets on page load
+  refreshPresets();
+})();
+</script>
