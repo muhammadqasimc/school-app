@@ -20,7 +20,7 @@
       <div class="col">
         <a class="text-decoration-none" href="{{ url_for('management_report', report_key=report.key) }}">
           <div class="mgt-tile">
-            <i class="fas fa-chart-line tile-icon"></i>
+            <i class="fas {{ report.icon }} tile-icon"></i>
             <h6 class="mb-0 text-dark">{{ report.title }}</h6>
           </div>
         </a>
