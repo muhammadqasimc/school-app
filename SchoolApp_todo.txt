@@ -1,12 +1,13 @@
 # SchoolApp todo list
 #
 # Mark a task as completed by prefixing the line with [x].
-# The Hermes cron job will remove completed lines automatically.
+# The Hermes cron job will remove completed lines automatically every 30 minutes.
 #
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
 
+<<<<<<< Updated upstream
 ## Implementation
 [ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
 [x] Implement chat platform API routes (threads, messages, candidates, read receipts, attachments) — completed in 2cdd9a7 (389 lines added, 3 chat tests all pass)
@@ -19,8 +20,33 @@
 ## Future / Enhancements
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
-[ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
+[x] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
-[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
+[ ] Add /api/teacher/dashboard and /api/teacher/messages/send endpoints to match the teacher portal smoke contract
+[ ] Add a teacher home screen with quick actions for attendance, class roster, messaging, and exports
+[ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
+[ ] Add a function notice board where admins can set new notices
+[ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+=======
+# --- REGRESSION (CRITICAL): Models removed from app.py ---
+# Commit 3788029 removed 7 model classes but created NO replacement files.
+# ALL tests against these models fail (76 total failures).
+[ ] Re-add removed model classes: EarlyIntervention, InterventionNotification, InterventionReferral, AttendanceExceptionCode, AttendanceException, ReportFilterPreset, ReportSubscription
+[ ] Fix _seed_attendance_exception_codes() in app.py:1108 references undefined AttendanceExceptionCode
+[ ] Fix admin_routes.py references to r.AttendanceExceptionCode (model removed)
+[ ] Fix /api/message-templates routes not registered in app (test_message_templates all fail)
+[ ] Fix app startup — NameError at app.py:1110 when seed function triggers
+[ ] Address 76 failing tests across 7 test files
+
+# --- REMAINING WORK ---
+[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
+[ ] Add saved filter presets for management report pages
+[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get (82 calls across codebase, up from 36)
+[ ] Fix PG compat translation tests (3 tests call deleted MDBConnection._translate_access_to_postgres)
+[ ] Clean up merge conflict artifacts in SchoolApp_todo.txt
+
+# --- COMPLETED SINCE LAST SCAN ---
+>>>>>>> Stashed changes

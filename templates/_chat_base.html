@@ -1,4 +1,5 @@
 <input type="hidden" id="chat-csrf" value="{{ csrf_token() }}">
+<input type="hidden" id="chat-current-user-id" value="{{ current_user.id }}">
 <div class="row g-3">
   <div class="col-lg-4">
     {% block chat_sidebar_top %}{% endblock %}
@@ -26,6 +27,7 @@
 <script>
 const chatState = { threads: [], activeThreadId: null, socket: null };
 const csrf = document.getElementById("chat-csrf").value;
+const currentUserId = Number(document.getElementById("chat-current-user-id")?.value || 0);
 const threadListEl = document.getElementById("thread-list");
 const messageBoxEl = document.getElementById("message-box");
 const statusEl = document.getElementById("chat-status");
@@ -48,8 +50,16 @@ function renderThreads() {
 function renderMessages(rows) {
   messageBoxEl.innerHTML = (rows || []).map(m => {
     const files = (m.attachments || []).map(a => `<a class="d-block small" href="${a.downloadUrl}" target="_blank">${a.name}</a>`).join("");
+    let receiptIcon = "";
+    if (m.readAt) {
+      receiptIcon = `<span class="text-primary ms-1" title="Read">✓✓</span>`;
+    } else if (m.deliveredAt) {
+      receiptIcon = `<span class="text-muted ms-1" title="Delivered">✓</span>`;
+    } else if (m.senderId === chatState.currentUserId) {
+      receiptIcon = `<span class="text-muted ms-1" title="Sending">🕐</span>`;
+    }
     return `<div class="mb-2">
-      <div><strong>${m.senderName || "User"}</strong> <span class="text-muted small">${m.createdAt || ""}</span></div>
+      <div><strong>${m.senderName || "User"}</strong> <span class="text-muted small">${m.createdAt || ""}</span>${receiptIcon}</div>
       <div>${m.body || ""}</div>
       <div>${files}</div>
     </div>`;
@@ -153,6 +163,7 @@ function initSocket() {
 }
 
 async function boot() {
+  chatState.currentUserId = currentUserId;
   await loadCandidates();
   await loadThreads();
   initSocket();
