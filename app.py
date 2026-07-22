@@ -65,6 +65,7 @@ app.config['DISCIPLINARY_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads',
 app.config['DETENTION_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'detention')
 app.config['CHAT_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'chat')
 app.config['SICK_NOTE_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'sick_notes')
+app.config['ATTENDANCE_EXCEPTION_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'attendance_exceptions')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -77,6 +78,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 CHAT_ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
 SICK_NOTE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf'}
 SICK_NOTE_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
+ATTENDANCE_EXCEPTION_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf', 'docx'}
+ATTENDANCE_EXCEPTION_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
 CHAT_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 # Lightweight in-process cache for expensive management endpoints.
@@ -893,6 +896,34 @@ class InterventionReferral(db.Model):
     outcome = db.Column(db.Text, nullable=True)
 
 
+class AttendanceExceptionCode(db.Model):
+    __tablename__ = 'attendance_exception_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AttendanceException(db.Model):
+    __tablename__ = 'attendance_exception'
+    id = db.Column(db.Integer, primary_key=True)
+    exception_code_id = db.Column(db.Integer, db.ForeignKey('attendance_exception_code.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    absentee_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    original_filename = db.Column(db.String(255), nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True, unique=True)
+    storage_relpath = db.Column(db.String(512), nullable=True)
+    mime_type = db.Column(db.String(128), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -908,6 +939,7 @@ def ensure_app_schema():
         ensure_announcement_columns()
         ensure_pg_compat_views()
         _sync_postgres_id_sequences()
+        _seed_attendance_exception_codes()
         db.session.commit()
         return True
     except Exception as e:
@@ -1117,6 +1149,22 @@ def _sync_postgres_id_sequences():
                 """
             )
         )
+
+
+def _seed_attendance_exception_codes() -> None:
+    """Seed default attendance exception codes if the table is empty."""
+    if AttendanceExceptionCode.query.first() is not None:
+        return
+    defaults = [
+        ("LATE", "Late Arrival", "Student arrived after the start of the school day.", "#FFC107", True),
+        ("EXCUSED", "Excused Absence", "Absence approved by the school or parent.", "#2196F3", True),
+        ("MEDICAL", "Medical Absence", "Absence due to illness or medical appointment.", "#4CAF50", True),
+        ("UNEXCUSED", "Unexcused Absence", "Absence without a valid reason.", "#F44336", True),
+        ("OTHER", "Other", "Other attendance-related exception.", "#9E9E9E", True),
+    ]
+    for code, name, desc, color, active in defaults:
+        db.session.add(AttendanceExceptionCode(code=code, name=name, description=desc, color=color, is_active=active))
+    db.session.commit()
 
 
 # MDB Database Connection
@@ -7682,6 +7730,160 @@ def api_management_mark_schedules_pdf():
         download_name=f"mark_schedules_{fn_year}.pdf",
         mimetype="application/pdf",
     )
+
+
+# ---------------------------------------------------------------------------
+# ReportFilterPreset API — save / load / delete named filter presets
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-filters/presets", methods=["GET"])
+@login_required
+def api_report_filter_presets_list():
+    """List saved presets for a given report_key."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    report_key = (request.args.get("report_key") or "").strip()
+    if not report_key:
+        return jsonify({"error": "report_key required"}), 400
+    try:
+        presets = ReportFilterPreset.query.filter_by(
+            user_id=current_user.id, report_key=report_key
+        ).order_by(ReportFilterPreset.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": p.id,
+                "name": p.name,
+                "report_key": p.report_key,
+                "filters": json.loads(p.filters_json or "{}"),
+                "is_default": p.is_default,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in presets
+        ])
+    except Exception:
+        app.logger.exception("list report filter presets failed")
+        return jsonify({"error": "Could not list presets."}), 500
+
+
+@app.route("/api/report-filters/presets", methods=["POST"])
+@login_required
+def api_report_filter_presets_save():
+    """Save current filters as a named preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    report_key = (data.get("report_key") or "").strip()
+    filters = data.get("filters") or {}
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if not report_key:
+        return jsonify({"error": "report_key is required"}), 400
+    try:
+        preset = ReportFilterPreset(
+            user_id=current_user.id,
+            name=name,
+            report_key=report_key,
+            filters_json=json.dumps(filters),
+        )
+        db.session.add(preset)
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("save report filter preset failed")
+        return jsonify({"error": "Could not save preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["GET"])
+@login_required
+def api_report_filter_presets_get(preset_id):
+    """Get a single preset by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report filter preset failed")
+        return jsonify({"error": "Could not get preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["PUT"])
+@login_required
+def api_report_filter_presets_update(preset_id):
+    """Update a preset (rename or change filters)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if name:
+            preset.name = name
+        if "filters" in data:
+            preset.filters_json = json.dumps(data["filters"])
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report filter preset failed")
+        return jsonify({"error": "Could not update preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["DELETE"])
+@login_required
+def api_report_filter_presets_delete(preset_id):
+    """Delete a preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(preset)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Preset deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report filter preset failed")
+        return jsonify({"error": "Could not delete preset."}), 500
 
 
 MANAGEMENT_REPORT_REGISTRY = [
