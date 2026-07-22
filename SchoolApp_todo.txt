@@ -13,13 +13,13 @@
 
 ## Fixes
 [ ] Remove or update PG compat translation tests — MDBConnection._translate_access_to_postgres was removed during refactor; tests at test_pg_compat_translation.py reference a deleted method
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 34 calls in production (inventory_routes.py:21, app.py:10, admin_routes.py:3) + 5 in tests (test_early_intervention.py:2, test_attendance_exceptions.py:3) = 39 total — count INCREASED by +3 test calls since last scan (new attendance exception test file added fresh legacy calls)
-[ ] Add static/uploads/attendance_exceptions/ to .gitignore — test artifacts (5 files) accumulate in the upload directory
+[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get — 37 calls in production (inventory_routes.py:21, app.py:13, admin_routes.py:3) + 6 in tests (test_report_filter_presets.py:1, test_early_intervention.py:2, test_attendance_exceptions.py:3) = 43 total — count INCREASED by +4 since last scan (filter presets code added 3 in app.py + 1 in tests)
+[ ] Add static/uploads/attendance_exceptions/ to .gitignore — test artifacts (10 files) accumulate in the upload directory
 
 ## Future / Enhancements
+[x] Add saved filter presets for management report pages — implemented in 2f23f47 (ReportFilterPreset model, API, save/load UI, 352-line test suite)
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
-[ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
 [ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
