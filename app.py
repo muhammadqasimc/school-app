@@ -550,6 +550,23 @@ class TeacherAuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class AdminAuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    operation = db.Column(db.String(64), nullable=True, index=True)  # Used by _log_admin_action
+    action = db.Column(db.String(64), nullable=True, index=True)  # e.g. grade_update, attendance_record, permission_change, announcement_create
+    module = db.Column(db.String(64), nullable=False, index=True)  # e.g. grades, attendance, permissions, announcements
+    target_type = db.Column(db.String(64), nullable=True)  # e.g. learner, user, announcement
+    target_id = db.Column(db.String(64), nullable=True)  # ID of the affected entity
+    summary = db.Column(db.Text, nullable=True)  # Human-readable description
+    details_json = db.Column(db.Text, nullable=True)  # JSON with change details
+    ip_address = db.Column(db.String(64), nullable=True)  # request.remote_addr
+    record_count = db.Column(db.Integer, nullable=True)  # Used by _log_admin_action
+    filename = db.Column(db.String(255), nullable=True)  # Used by _log_admin_action
+    status = db.Column(db.String(32), default='success')  # Used by _log_admin_action
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class TeacherTermLock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     academic_year = db.Column(db.String(8), nullable=False, index=True)
@@ -3614,17 +3631,6 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
-@app.route("/teacher/assignments")
-@login_required
-def teacher_assignments_page():
-    """Teacher assignment posting page."""
-    if not is_teacher_user(current_user):
-        flash("Teacher portal is only for educator accounts.", "error")
-        return redirect(url_for("dashboard"))
-    session["portal_mode"] = "teacher"
-    return render_template("teacher/assignments.html")
-
-
 # ---------------------------------------------------------------------------
 # Teacher Portal — Page routes
 # ---------------------------------------------------------------------------
@@ -4028,6 +4034,398 @@ def api_teacher_messages_send():
     })
 
 
+# --- Chat API Routes ---
+
+
+@app.route("/api/chat/candidates", methods=["GET"])
+@login_required
+def api_chat_candidates():
+    """Search for users who can participate in chat."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"rows": []})
+    query = User.query.filter(
+        db.or_(
+            User.username.ilike(f"%{q}%"),
+            User.email.ilike(f"%{q}%") if hasattr(User, 'email') else db.text("0"),
+        )
+    ).limit(20)
+    users = query.all()
+    rows = []
+    for u in users:
+        role = "unknown"
+        if is_admin_user(u):
+            role = "admin"
+        elif is_manager_user(u):
+            role = "manager"
+        elif is_teacher_user(u):
+            role = "teacher"
+        elif getattr(u, "is_parent", False):
+            role = "parent"
+        rows.append({"userId": u.id, "username": u.username, "role": role})
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/chat/threads", methods=["GET"])
+@login_required
+def api_chat_threads_list():
+    """List threads for the current user."""
+    participant_rows = ChatParticipant.query.filter_by(user_id=current_user.id).all()
+    thread_ids = [p.thread_id for p in participant_rows]
+    if not thread_ids:
+        return jsonify({"threads": []})
+    threads = ChatThread.query.filter(ChatThread.id.in_(thread_ids)).order_by(ChatThread.updated_at.desc()).all()
+    result = []
+    for t in threads:
+        participants = ChatParticipant.query.filter_by(thread_id=t.id).all()
+        p_list = []
+        for p in participants:
+            u = db.session.get(User, p.user_id)
+            if u:
+                p_list.append({"userId": u.id, "username": u.username})
+        # Latest message
+        latest = ChatMessage.query.filter_by(thread_id=t.id).order_by(ChatMessage.created_at.desc()).first()
+        latest_body = latest.body[:100] if latest else ""
+        # Unread count for current user
+        my_participant = next((p for p in participants if p.user_id == current_user.id), None)
+        unread = 0
+        if my_participant and my_participant.last_read_message_id:
+            unread = ChatMessage.query.filter(
+                ChatMessage.thread_id == t.id,
+                ChatMessage.id > my_participant.last_read_message_id,
+                ChatMessage.deleted_at.is_(None),
+            ).count()
+        elif my_participant:
+            unread = ChatMessage.query.filter(
+                ChatMessage.thread_id == t.id,
+                ChatMessage.deleted_at.is_(None),
+            ).count()
+        result.append({
+            "id": t.id,
+            "title": t.title,
+            "threadType": t.thread_type,
+            "learnerId": t.learner_id,
+            "status": t.status,
+            "participants": p_list,
+            "unreadCount": unread,
+            "latestMessage": latest_body,
+            "createdAt": t.created_at.isoformat() if t.created_at else None,
+            "updatedAt": t.updated_at.isoformat() if t.updated_at else None,
+        })
+    return jsonify({"threads": result})
+
+
+@app.route("/api/chat/threads", methods=["POST"])
+@login_required
+def api_chat_threads_create():
+    """Create a new chat thread."""
+    thread_type = request.form.get("thread_type", "direct").strip()
+    learner_id = request.form.get("learner_id", "").strip() or None
+    title = request.form.get("title", "").strip() or None
+    participant_ids_raw = request.form.get("participant_ids", "").strip()
+
+    if not participant_ids_raw:
+        return jsonify({"error": "At least one participant is required."}), 400
+
+    participant_ids = [int(pid.strip()) for pid in participant_ids_raw.split(",") if pid.strip()]
+    if current_user.id not in participant_ids:
+        participant_ids.insert(0, current_user.id)
+
+    # For direct threads between two users + same learner, reuse active thread
+    if thread_type == "direct" and len(participant_ids) == 2:
+        other_id = [pid for pid in participant_ids if pid != current_user.id][0]
+        my_threads = [p.thread_id for p in ChatParticipant.query.filter_by(user_id=current_user.id).all()]
+        other_threads = [p.thread_id for p in ChatParticipant.query.filter_by(user_id=other_id).all()]
+        common = set(my_threads) & set(other_threads)
+        for tid in common:
+            t = db.session.get(ChatThread, tid)
+            if t and t.thread_type == "direct" and t.status == "active" and t.learner_id == learner_id:
+                return jsonify({"thread": {"id": t.id}})
+
+    thread = ChatThread(
+        thread_type=thread_type,
+        learner_id=learner_id,
+        title=title,
+        status="active",
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(thread)
+    db.session.flush()
+
+    for uid in participant_ids:
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=uid,
+            can_post=True,
+        ))
+
+    db.session.commit()
+    return jsonify({"thread": {"id": thread.id}})
+
+
+@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["GET"])
+@login_required
+def api_chat_thread_messages(thread_id):
+    """Get messages for a thread, creating delivery receipts for non-sender messages."""
+    thread = db.session.get(ChatThread, thread_id)
+    if not thread:
+        return jsonify({"error": "Thread not found."}), 404
+
+    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
+    if not participant:
+        abort(403)
+
+    limit = request.args.get("limit", 80, type=int)
+    messages = ChatMessage.query.filter_by(thread_id=thread_id).order_by(ChatMessage.created_at.desc()).limit(limit).all()
+    messages.reverse()
+
+    rows = []
+    for msg in messages:
+        # Create delivery receipt for messages not sent by current user
+        if msg.sender_user_id != current_user.id:
+            existing = ChatMessageReceipt.query.filter_by(message_id=msg.id, user_id=current_user.id).first()
+            if not existing:
+                receipt = ChatMessageReceipt(
+                    message_id=msg.id,
+                    user_id=current_user.id,
+                    delivered_at=datetime.utcnow(),
+                )
+                db.session.add(receipt)
+
+        sender = db.session.get(User, msg.sender_user_id)
+        sender_name = sender.username if sender else "Unknown"
+
+        attachments = ChatAttachment.query.filter_by(message_id=msg.id).all()
+        att_list = [{
+            "id": a.id,
+            "name": a.original_name,
+            "downloadUrl": url_for("api_chat_attachment_download", attachment_id=a.id),
+        } for a in attachments]
+
+        # Receipt info for all users
+        receipts = ChatMessageReceipt.query.filter_by(message_id=msg.id).all()
+        receipt_info = []
+        for r in receipts:
+            receipt_info.append({
+                "userId": r.user_id,
+                "deliveredAt": r.delivered_at.isoformat() if r.delivered_at else None,
+                "readAt": r.read_at.isoformat() if r.read_at else None,
+            })
+
+        # Current user's receipt status
+        my_receipt = next((r for r in receipts if r.user_id == current_user.id), None)
+        delivered_at = my_receipt.delivered_at.isoformat() if my_receipt and my_receipt.delivered_at else None
+        read_at = my_receipt.read_at.isoformat() if my_receipt and my_receipt.read_at else None
+
+        rows.append({
+            "id": msg.id,
+            "senderId": msg.sender_user_id,
+            "senderName": sender_name,
+            "body": msg.body or "",
+            "messageType": msg.message_type,
+            "moderationStatus": msg.moderation_status,
+            "createdAt": msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else "",
+            "editedAt": msg.edited_at.isoformat() if msg.edited_at else None,
+            "attachments": att_list,
+            "receipts": receipt_info,
+            "deliveredAt": delivered_at,
+            "readAt": read_at,
+        })
+
+    db.session.commit()
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/chat/threads/<int:thread_id>/read", methods=["POST"])
+@login_required
+def api_chat_thread_read(thread_id):
+    """Mark all messages in a thread as read for the current user."""
+    thread = db.session.get(ChatThread, thread_id)
+    if not thread:
+        return jsonify({"error": "Thread not found."}), 404
+
+    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
+    if not participant:
+        abort(403)
+
+    # Update receipts for all messages by current user in this thread
+    messages = ChatMessage.query.filter_by(thread_id=thread_id).all()
+    msg_ids = [m.id for m in messages]
+    now = datetime.utcnow()
+    if msg_ids:
+        receipts = ChatMessageReceipt.query.filter(
+            ChatMessageReceipt.message_id.in_(msg_ids),
+            ChatMessageReceipt.user_id == current_user.id,
+            ChatMessageReceipt.read_at.is_(None),
+        ).all()
+        for r in receipts:
+            r.read_at = now
+
+        # Ensure delivery receipts exist for messages from others
+        for m in messages:
+            if m.sender_user_id != current_user.id:
+                existing = ChatMessageReceipt.query.filter_by(message_id=m.id, user_id=current_user.id).first()
+                if not existing:
+                    db.session.add(ChatMessageReceipt(
+                        message_id=m.id,
+                        user_id=current_user.id,
+                        delivered_at=now,
+                        read_at=now,
+                    ))
+
+    # Update last_read_message_id
+    latest_msg = ChatMessage.query.filter_by(thread_id=thread_id).order_by(ChatMessage.created_at.desc()).first()
+    if latest_msg:
+        participant.last_read_message_id = latest_msg.id
+
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["POST"])
+@login_required
+def api_chat_thread_messages_send(thread_id):
+    """Send a message in a thread."""
+    thread = db.session.get(ChatThread, thread_id)
+    if not thread:
+        return jsonify({"error": "Thread not found."}), 404
+
+    participant = ChatParticipant.query.filter_by(thread_id=thread_id, user_id=current_user.id).first()
+    if not participant:
+        abort(403)
+
+    body = request.form.get("body", "").strip()
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    msg = ChatMessage(
+        thread_id=thread_id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+    db.session.flush()
+
+    # Handle file attachments
+    files = request.files.getlist("attachments")
+    for f in files:
+        if f and f.filename:
+            safe_name = secure_filename(f.filename) or f.filename
+            ext = os.path.splitext(safe_name)[1] if "." in safe_name else ""
+            stored_name = f"{secrets.token_hex(16)}{ext}"
+            upload_dir = os.path.join(app.root_path, "uploads", "chat")
+            os.makedirs(upload_dir, exist_ok=True)
+            f.save(os.path.join(upload_dir, stored_name))
+            attachment = ChatAttachment(
+                message_id=msg.id,
+                original_name=f.filename,
+                stored_name=stored_name,
+                mime_type=f.content_type,
+                size_bytes=os.path.getsize(os.path.join(upload_dir, stored_name)),
+                storage_relpath=os.path.join("uploads", "chat", stored_name),
+            )
+            db.session.add(attachment)
+
+    thread.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    # Emit socket event for real-time updates
+    try:
+        socketio.emit("chat_new_message", {"threadId": thread_id, "messageId": msg.id})
+    except Exception:
+        pass
+
+    return jsonify({"message_id": msg.id, "thread_id": thread_id})
+
+
+@app.route("/api/chat/messages/<int:message_id>/moderate", methods=["POST"])
+@login_required
+def api_chat_message_moderate(message_id):
+    """Moderate a message (hide/delete/restore)."""
+    if not (is_teacher_user(current_user) or is_manager_user(current_user) or is_admin_user(current_user)):
+        abort(403)
+
+    msg = db.session.get(ChatMessage, message_id)
+    if not msg:
+        return jsonify({"error": "Message not found."}), 404
+
+    action = request.form.get("action", "").strip()
+    if action == "hide":
+        msg.moderation_status = "hidden"
+    elif action == "delete":
+        msg.deleted_at = datetime.utcnow()
+    elif action == "restore":
+        msg.moderation_status = "visible"
+        msg.deleted_at = None
+    else:
+        return jsonify({"error": f"Unknown action: {action}"}), 400
+
+    db.session.commit()
+    return jsonify({"ok": True, "message_id": msg.id, "action": action})
+
+
+@app.route("/api/chat/attachments/<int:attachment_id>", methods=["GET"])
+@login_required
+def api_chat_attachment_download(attachment_id):
+    """Download a chat attachment. User must be a participant in the thread."""
+    attachment = db.session.get(ChatAttachment, attachment_id)
+    if not attachment:
+        abort(404)
+
+    msg = db.session.get(ChatMessage, attachment.message_id)
+    if not msg:
+        abort(404)
+
+    participant = ChatParticipant.query.filter_by(thread_id=msg.thread_id, user_id=current_user.id).first()
+    if not participant:
+        abort(403)
+
+    filepath = os.path.join(app.root_path, attachment.storage_relpath)
+    if not os.path.exists(filepath):
+        abort(404)
+
+    return send_file(
+        filepath,
+        mimetype=attachment.mime_type or "application/octet-stream",
+        as_attachment=True,
+        download_name=attachment.original_name,
+    )
+
+
+# --- Chat Page Routes ---
+
+
+@app.route("/parent/messages")
+@login_required
+def parent_messages_page():
+    """Parent chat/messages page."""
+    if not is_guardian_parent_account(current_user) and not is_admin_user(current_user):
+        abort(403)
+    session["portal_mode"] = "parent"
+    return render_template("parent/messages.html")
+
+
+@app.route("/management/chat")
+@login_required
+def management_chat_page():
+    """Management chat & moderation page."""
+    if not _management_user_can_access_reports(current_user):
+        abort(403)
+    session["portal_mode"] = "management"
+    return render_template("management_chat.html")
+
+
+@app.route("/admin/chat")
+@login_required
+def admin_chat_page():
+    """Admin chat page."""
+    if not is_admin_user(current_user):
+        abort(403)
+    session["portal_mode"] = "admin"
+    return render_template("admin/chat.html")
+
+
 # --- Message Templates API ---
 
 
@@ -4184,6 +4582,26 @@ def api_teacher_attendance_save():
     )
     db.session.add(audit)
 
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="attendance_record",
+            module="attendance",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} recorded attendance for learner {learner_id} on {date_absent}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "date_absent": date_absent,
+                "academic_year": academic_year, "term": term,
+                "reason_id": reason_id, "reason_other": reason_other,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
     if idempotency_key:
         db.session.add(TeacherWriteEvent(
             user_id=current_user.id, module="attendance_save",
@@ -4289,6 +4707,26 @@ def api_teacher_assessments_save():
             idempotency_key=idempotency_key,
             response_json=json.dumps({"learner_id": learner_id}),
         ))
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="grade_update",
+            module="grades",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} saved assessment mark {mark}/{total_mark} for learner {learner_id} in {subject_id}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "subject_id": subject_id,
+                "mark": mark, "total_mark": total_mark,
+                "academic_year": academic_year, "term": term,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
 
     db.session.commit()
     return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
@@ -6397,6 +6835,33 @@ def api_teacher_announcements_save():
     ann.expires_at = expires_at
     db.session.add(ann)
     db.session.commit()
+
+    # Log to admin audit log
+    action_type = "announcement_update" if ann_id else "announcement_create"
+    target_id_str = str(ann.id)
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action=action_type,
+            module="announcements",
+            target_type="announcement",
+            target_id=target_id_str,
+            summary=f"Teacher {current_user.username} {'updated' if ann_id else 'created'} announcement '{title}'",
+            details_json=json.dumps({
+                "announcement_id": ann.id,
+                "title": title,
+                "scope": scope,
+                "priority": priority,
+                "target_grade": target_grade,
+                "target_class": target_class,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+        db.session.commit()
+    except Exception:
+        db.session.commit()
+
     return jsonify({"success": True, "id": ann.id})
 
 
@@ -6409,7 +6874,25 @@ def api_teacher_announcements_delete(ann_id):
     ann = TeacherAnnouncement.query.get_or_404(ann_id)
     if ann.user_id != current_user.id:
         abort(403)
+    title = ann.title
     db.session.delete(ann)
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="announcement_delete",
+            module="announcements",
+            target_type="announcement",
+            target_id=str(ann_id),
+            summary=f"Teacher {current_user.username} deleted announcement '{title}'",
+            details_json=json.dumps({"announcement_id": ann_id, "title": title}),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
     db.session.commit()
     return jsonify({"success": True})
 

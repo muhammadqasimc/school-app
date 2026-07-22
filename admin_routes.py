@@ -2438,11 +2438,40 @@ def register_admin_routes(flask_app: Flask) -> None:
     def admin_users_set_mgmt_permissions():
         require_admin()
         u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        old_academics = u.mgmt_can_view_academics
+        old_disciplinary = u.mgmt_can_view_disciplinary
+        old_attendance = u.mgmt_can_view_attendance
+        old_finance = u.mgmt_can_view_finance
         u.mgmt_can_view_academics = bool(request.form.get("can_academics"))
         u.mgmt_can_view_disciplinary = bool(request.form.get("can_disciplinary"))
         u.mgmt_can_view_attendance = bool(request.form.get("can_attendance"))
         u.mgmt_can_view_finance = bool(request.form.get("can_finance"))
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            audit = r.AdminAuditLog(
+                user_id=current_user.id,
+                action="permission_change",
+                module="permissions",
+                target_type="user",
+                target_id=str(u.id),
+                summary=f"Admin updated management permissions for user {u.username}",
+                details_json=json.dumps({
+                    "user_id": u.id,
+                    "username": u.username,
+                    "changes": {
+                        "mgmt_can_view_academics": {"old": old_academics, "new": u.mgmt_can_view_academics},
+                        "mgmt_can_view_disciplinary": {"old": old_disciplinary, "new": u.mgmt_can_view_disciplinary},
+                        "mgmt_can_view_attendance": {"old": old_attendance, "new": u.mgmt_can_view_attendance},
+                        "mgmt_can_view_finance": {"old": old_finance, "new": u.mgmt_can_view_finance},
+                    },
+                }),
+                ip_address=request.remote_addr,
+            )
+            r.db.session.add(audit)
+            r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Management permissions saved.", "success")
         return redirect(url_for("admin_users"))
 
@@ -2455,9 +2484,34 @@ def register_admin_routes(flask_app: Flask) -> None:
             flash("Cannot change admin.", "error")
             return redirect(url_for("admin_users"))
         grant = str(request.form.get("is_teacher", "1")) == "1"
+        old_is_teacher = u.is_teacher
+        old_teacher_role = u.teacher_role
         u.is_teacher = grant
         u.teacher_role = str(request.form.get("teacher_role") or "Teacher")
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            audit = r.AdminAuditLog(
+                user_id=current_user.id,
+                action="permission_change",
+                module="permissions",
+                target_type="user",
+                target_id=str(u.id),
+                summary=f"Admin {'granted' if grant else 'revoked'} teacher role for user {u.username} (role: {u.teacher_role})",
+                details_json=json.dumps({
+                    "user_id": u.id,
+                    "username": u.username,
+                    "changes": {
+                        "is_teacher": {"old": old_is_teacher, "new": u.is_teacher},
+                        "teacher_role": {"old": old_teacher_role, "new": u.teacher_role},
+                    },
+                }),
+                ip_address=request.remote_addr,
+            )
+            r.db.session.add(audit)
+            r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Teacher role updated.", "success")
         return redirect(url_for("admin_users"))
 
@@ -2466,6 +2520,14 @@ def register_admin_routes(flask_app: Flask) -> None:
     def admin_users_set_teacher_permissions():
         require_admin()
         u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        old_perms = {
+            "can_teacher_attendance": u.can_teacher_attendance,
+            "can_teacher_discipline": u.can_teacher_discipline,
+            "can_teacher_assessments": u.can_teacher_assessments,
+            "can_teacher_reports": u.can_teacher_reports,
+            "can_teacher_message_parents": u.can_teacher_message_parents,
+            "can_teacher_announcements": u.can_teacher_announcements,
+        }
         u.can_teacher_attendance = bool(request.form.get("can_teacher_attendance"))
         u.can_teacher_discipline = bool(request.form.get("can_teacher_discipline"))
         u.can_teacher_assessments = bool(request.form.get("can_teacher_assessments"))
@@ -2473,6 +2535,39 @@ def register_admin_routes(flask_app: Flask) -> None:
         u.can_teacher_message_parents = bool(request.form.get("can_teacher_message_parents"))
         u.can_teacher_announcements = bool(request.form.get("can_teacher_announcements"))
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            new_perms = {
+                "can_teacher_attendance": u.can_teacher_attendance,
+                "can_teacher_discipline": u.can_teacher_discipline,
+                "can_teacher_assessments": u.can_teacher_assessments,
+                "can_teacher_reports": u.can_teacher_reports,
+                "can_teacher_message_parents": u.can_teacher_message_parents,
+                "can_teacher_announcements": u.can_teacher_announcements,
+            }
+            changes = {}
+            for k in old_perms:
+                if old_perms[k] != new_perms[k]:
+                    changes[k] = {"old": old_perms[k], "new": new_perms[k]}
+            if changes:
+                audit = r.AdminAuditLog(
+                    user_id=current_user.id,
+                    action="permission_change",
+                    module="permissions",
+                    target_type="user",
+                    target_id=str(u.id),
+                    summary=f"Admin updated teacher permissions for user {u.username}",
+                    details_json=json.dumps({
+                        "user_id": u.id,
+                        "username": u.username,
+                        "changes": changes,
+                    }),
+                    ip_address=request.remote_addr,
+                )
+                r.db.session.add(audit)
+                r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Teacher permissions saved.", "success")
         return redirect(url_for("admin_users"))
 
@@ -3024,3 +3119,83 @@ def register_admin_routes(flask_app: Flask) -> None:
             "success",
         )
         return redirect(url_for("admin_bulk_import"))
+
+    # --- Admin Audit Log View -------------------------------------------------------
+
+    @flask_app.route("/admin/audit-log")
+    @login_required
+    def admin_audit_log():
+        """Searchable admin audit log page with filters and pagination."""
+        require_admin()
+
+        page = request.args.get("page", 1, type=int)
+        per_page = 50
+        search = request.args.get("search", "").strip()
+        module_filter = request.args.get("module", "").strip()
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
+
+        q = r.AdminAuditLog.query
+
+        # Search across summary, target_type, target_id, module
+        if search:
+            like = f"%{search}%"
+            q = q.filter(
+                r.db.or_(
+                    r.AdminAuditLog.summary.ilike(like),
+                    r.AdminAuditLog.target_type.ilike(like),
+                    r.AdminAuditLog.target_id.ilike(like),
+                    r.AdminAuditLog.module.ilike(like),
+                    r.AdminAuditLog.action.ilike(like),
+                )
+            )
+
+        # Filter by module
+        if module_filter:
+            q = q.filter(r.AdminAuditLog.module == module_filter)
+
+        # Filter by date range
+        if date_from:
+            try:
+                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                q = q.filter(r.AdminAuditLog.created_at >= dt_from)
+            except (ValueError, TypeError):
+                pass
+
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+                dt_to = dt_to.replace(hour=23, minute=59, second=59)
+                q = q.filter(r.AdminAuditLog.created_at <= dt_to)
+            except (ValueError, TypeError):
+                pass
+
+        # Order by most recent first
+        q = q.order_by(r.AdminAuditLog.created_at.desc())
+
+        # Paginate
+        total = q.count()
+        paginated = q.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+
+        # Build module options for filter dropdown
+        module_options = [
+            "grades",
+            "attendance",
+            "permissions",
+            "announcements",
+        ]
+
+        return render_template(
+            "admin/audit_log.html",
+            logs=paginated,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            per_page=per_page,
+            search=search,
+            module_filter=module_filter,
+            date_from=date_from,
+            date_to=date_to,
+            module_options=module_options,
+        )
