@@ -2066,11 +2066,40 @@ def register_admin_routes(flask_app: Flask) -> None:
     def admin_users_set_mgmt_permissions():
         require_admin()
         u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        old_academics = u.mgmt_can_view_academics
+        old_disciplinary = u.mgmt_can_view_disciplinary
+        old_attendance = u.mgmt_can_view_attendance
+        old_finance = u.mgmt_can_view_finance
         u.mgmt_can_view_academics = bool(request.form.get("can_academics"))
         u.mgmt_can_view_disciplinary = bool(request.form.get("can_disciplinary"))
         u.mgmt_can_view_attendance = bool(request.form.get("can_attendance"))
         u.mgmt_can_view_finance = bool(request.form.get("can_finance"))
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            audit = r.AdminAuditLog(
+                user_id=current_user.id,
+                action="permission_change",
+                module="permissions",
+                target_type="user",
+                target_id=str(u.id),
+                summary=f"Admin updated management permissions for user {u.username}",
+                details_json=json.dumps({
+                    "user_id": u.id,
+                    "username": u.username,
+                    "changes": {
+                        "mgmt_can_view_academics": {"old": old_academics, "new": u.mgmt_can_view_academics},
+                        "mgmt_can_view_disciplinary": {"old": old_disciplinary, "new": u.mgmt_can_view_disciplinary},
+                        "mgmt_can_view_attendance": {"old": old_attendance, "new": u.mgmt_can_view_attendance},
+                        "mgmt_can_view_finance": {"old": old_finance, "new": u.mgmt_can_view_finance},
+                    },
+                }),
+                ip_address=request.remote_addr,
+            )
+            r.db.session.add(audit)
+            r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Management permissions saved.", "success")
         return redirect(url_for("admin_users"))
 
@@ -2083,9 +2112,34 @@ def register_admin_routes(flask_app: Flask) -> None:
             flash("Cannot change admin.", "error")
             return redirect(url_for("admin_users"))
         grant = str(request.form.get("is_teacher", "1")) == "1"
+        old_is_teacher = u.is_teacher
+        old_teacher_role = u.teacher_role
         u.is_teacher = grant
         u.teacher_role = str(request.form.get("teacher_role") or "Teacher")
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            audit = r.AdminAuditLog(
+                user_id=current_user.id,
+                action="permission_change",
+                module="permissions",
+                target_type="user",
+                target_id=str(u.id),
+                summary=f"Admin {'granted' if grant else 'revoked'} teacher role for user {u.username} (role: {u.teacher_role})",
+                details_json=json.dumps({
+                    "user_id": u.id,
+                    "username": u.username,
+                    "changes": {
+                        "is_teacher": {"old": old_is_teacher, "new": u.is_teacher},
+                        "teacher_role": {"old": old_teacher_role, "new": u.teacher_role},
+                    },
+                }),
+                ip_address=request.remote_addr,
+            )
+            r.db.session.add(audit)
+            r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Teacher role updated.", "success")
         return redirect(url_for("admin_users"))
 
@@ -2094,6 +2148,14 @@ def register_admin_routes(flask_app: Flask) -> None:
     def admin_users_set_teacher_permissions():
         require_admin()
         u = r.User.query.get_or_404(int(request.form.get("user_id", 0)))
+        old_perms = {
+            "can_teacher_attendance": u.can_teacher_attendance,
+            "can_teacher_discipline": u.can_teacher_discipline,
+            "can_teacher_assessments": u.can_teacher_assessments,
+            "can_teacher_reports": u.can_teacher_reports,
+            "can_teacher_message_parents": u.can_teacher_message_parents,
+            "can_teacher_announcements": u.can_teacher_announcements,
+        }
         u.can_teacher_attendance = bool(request.form.get("can_teacher_attendance"))
         u.can_teacher_discipline = bool(request.form.get("can_teacher_discipline"))
         u.can_teacher_assessments = bool(request.form.get("can_teacher_assessments"))
@@ -2101,6 +2163,39 @@ def register_admin_routes(flask_app: Flask) -> None:
         u.can_teacher_message_parents = bool(request.form.get("can_teacher_message_parents"))
         u.can_teacher_announcements = bool(request.form.get("can_teacher_announcements"))
         r.db.session.commit()
+        # Log to admin audit log
+        try:
+            new_perms = {
+                "can_teacher_attendance": u.can_teacher_attendance,
+                "can_teacher_discipline": u.can_teacher_discipline,
+                "can_teacher_assessments": u.can_teacher_assessments,
+                "can_teacher_reports": u.can_teacher_reports,
+                "can_teacher_message_parents": u.can_teacher_message_parents,
+                "can_teacher_announcements": u.can_teacher_announcements,
+            }
+            changes = {}
+            for k in old_perms:
+                if old_perms[k] != new_perms[k]:
+                    changes[k] = {"old": old_perms[k], "new": new_perms[k]}
+            if changes:
+                audit = r.AdminAuditLog(
+                    user_id=current_user.id,
+                    action="permission_change",
+                    module="permissions",
+                    target_type="user",
+                    target_id=str(u.id),
+                    summary=f"Admin updated teacher permissions for user {u.username}",
+                    details_json=json.dumps({
+                        "user_id": u.id,
+                        "username": u.username,
+                        "changes": changes,
+                    }),
+                    ip_address=request.remote_addr,
+                )
+                r.db.session.add(audit)
+                r.db.session.commit()
+        except Exception:
+            r.db.session.rollback()
         flash("Teacher permissions saved.", "success")
         return redirect(url_for("admin_users"))
 
@@ -2473,3 +2568,262 @@ def register_admin_routes(flask_app: Flask) -> None:
 
         threading.Thread(target=job, daemon=True).start()
         return jsonify({"ok": True})
+
+    # --- CSV Bulk Import Preview ----------------------------------------------------
+
+    _BULK_IMPORT_ENTITY_FIELDS: dict[str, list[str]] = {
+        "students": ["learner_id", "accession_no", "name", "surname", "grade", "class",
+                     "gender", "dob", "parent_phone", "parent_email", "address"],
+        "attendance": ["learner_id", "date", "status", "period", "reason", "notes"],
+        "grades": ["learner_id", "subject", "term", "score", "grade", "remarks"],
+        "discipline": ["learner_id", "date", "incident_type", "severity",
+                       "description", "action_taken"],
+        "users": ["username", "password", "role", "email", "phone"],
+    }
+
+    def _auto_map_columns(headers: list[str]) -> dict[str, str]:
+        """Auto-detect column → field mappings by case-insensitive header match."""
+        # Build a lookup: lowercased field name → (entity, original field name)
+        field_lookup: dict[str, str] = {}
+        for entity, fields in _BULK_IMPORT_ENTITY_FIELDS.items():
+            for f in fields:
+                field_lookup.setdefault(f.lower(), f)
+
+        mapping: dict[str, str] = {}
+        for h in headers:
+            hl = h.strip().lower().replace(" ", "_").replace("-", "_")
+            if hl in field_lookup:
+                mapping[h] = field_lookup[hl]
+            else:
+                mapping[h] = ""
+        return mapping
+
+    def _parse_csv_from_text(csv_text: str) -> tuple[list[str], list[dict[str, str]], int]:
+        """Parse CSV text into headers, up to 20 sample rows, and total row count."""
+        reader = csv.DictReader(io.StringIO(csv_text))
+        headers = reader.fieldnames or []
+        rows: list[dict[str, str]] = []
+        total = 0
+        for row in reader:
+            total += 1
+            if len(rows) < 20:
+                # Ensure all header keys exist
+                cleaned = {h: row.get(h, "") for h in headers}
+                rows.append(cleaned)
+        if not headers and total > 0:
+            # Fallback: try plain csv.reader for headerless
+            reader2 = csv.reader(io.StringIO(csv_text))
+            raw_rows = list(reader2)
+            if raw_rows:
+                # Treat first row as header
+                headers = list(raw_rows[0])
+                total = max(0, len(raw_rows) - 1)
+                rows = []
+                for raw in raw_rows[1:]:
+                    if len(rows) >= 20:
+                        break
+                    row = {}
+                    for i, h in enumerate(headers):
+                        row[h] = raw[i] if i < len(raw) else ""
+                    rows.append(row)
+                total = len(raw_rows) - 1
+        return headers, rows, total
+
+    @flask_app.route("/admin/bulk-import", methods=["GET", "POST"])
+    @login_required
+    def admin_bulk_import():
+        require_admin()
+        preview_data = {
+            "columns": [],
+            "rows": [],
+            "mappings": {},
+            "total_rows": 0,
+            "csv_raw": "",
+        }
+
+        if request.method == "POST":
+            csv_raw = ""
+
+            # Check for uploaded file
+            if "file" in request.files:
+                f = request.files["file"]
+                if f and f.filename:
+                    csv_raw = f.read().decode("utf-8", errors="replace")
+
+            # Fall back to pasted text
+            if not csv_raw:
+                csv_raw = str(request.form.get("csv_data", "")).strip()
+
+            if not csv_raw:
+                flash("No CSV data provided. Upload a file or paste CSV text.", "error")
+                return render_template(
+                    "admin/bulk_import.html",
+                    preview=preview_data,
+                    all_fields=sorted({
+                        f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+                        for f in fields
+                    }),
+                )
+
+            headers, rows, total_rows = _parse_csv_from_text(csv_raw)
+            if not headers:
+                flash("Could not parse CSV headers. Check the file format.", "error")
+                return render_template(
+                    "admin/bulk_import.html",
+                    preview=preview_data,
+                    all_fields=sorted({
+                        f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+                        for f in fields
+                    }),
+                )
+
+            mappings = _auto_map_columns(headers)
+            preview_data = {
+                "columns": headers,
+                "rows": rows,
+                "mappings": mappings,
+                "total_rows": total_rows,
+                "csv_raw": csv_raw,
+            }
+
+        all_fields = sorted({
+            f for fields in _BULK_IMPORT_ENTITY_FIELDS.values()
+            for f in fields
+        })
+
+        return render_template(
+            "admin/bulk_import.html",
+            preview=preview_data,
+            all_fields=all_fields,
+        )
+
+    @flask_app.route("/admin/bulk-import/confirm", methods=["POST"])
+    @login_required
+    def admin_bulk_import_confirm():
+        require_admin()
+        csv_raw = str(request.form.get("csv_raw", "")).strip()
+        if not csv_raw:
+            flash("No CSV data to import. Please upload a file first.", "error")
+            return redirect(url_for("admin_bulk_import"))
+
+        # Collect column mappings from form
+        columns_raw = str(request.form.get("columns", "")).strip()
+        column_names = [c.strip() for c in columns_raw.split(",") if c.strip()]
+        mappings: dict[str, str] = {}
+        for col in column_names:
+            mapped = str(request.form.get(f"map_{col}", "")).strip()
+            if mapped:
+                mappings[col] = mapped
+
+        # Re-parse CSV to count rows and build a summary
+        headers, rows, total_rows = _parse_csv_from_text(csv_raw)
+        mapped_fields = [v for v in mappings.values() if v]
+        entities = sorted(set(
+            entity for entity, fields in _BULK_IMPORT_ENTITY_FIELDS.items()
+            for f in mapped_fields if f in fields
+        ))
+        entity_label = ", ".join(entities) if entities else "unknown"
+        filename = str(request.form.get("filename", "pasted_data.csv")).strip() or "pasted_data.csv"
+
+        # Log the import attempt
+        _log_admin_action(
+            operation="csv_import",
+            module=entity_label,
+            record_count=total_rows,
+            filename=filename,
+            summary=f"Preview confirmed: {total_rows} rows, {len(mapped_fields)} mapped columns for {entity_label}",
+            details={
+                "columns": headers,
+                "mappings": mappings,
+                "total_rows": total_rows,
+                "entities": entities,
+            },
+            status="success",
+        )
+
+        flash(
+            f"Import preview confirmed. Ready to import {total_rows} record(s) "
+            f"into {entity_label} with {len(mapped_fields)} mapped field(s).",
+            "success",
+        )
+        return redirect(url_for("admin_bulk_import"))
+
+    # --- Admin Audit Log View -------------------------------------------------------
+
+    @flask_app.route("/admin/audit-log")
+    @login_required
+    def admin_audit_log():
+        """Searchable admin audit log page with filters and pagination."""
+        require_admin()
+
+        page = request.args.get("page", 1, type=int)
+        per_page = 50
+        search = request.args.get("search", "").strip()
+        module_filter = request.args.get("module", "").strip()
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
+
+        q = r.AdminAuditLog.query
+
+        # Search across summary, target_type, target_id, module
+        if search:
+            like = f"%{search}%"
+            q = q.filter(
+                r.db.or_(
+                    r.AdminAuditLog.summary.ilike(like),
+                    r.AdminAuditLog.target_type.ilike(like),
+                    r.AdminAuditLog.target_id.ilike(like),
+                    r.AdminAuditLog.module.ilike(like),
+                    r.AdminAuditLog.action.ilike(like),
+                )
+            )
+
+        # Filter by module
+        if module_filter:
+            q = q.filter(r.AdminAuditLog.module == module_filter)
+
+        # Filter by date range
+        if date_from:
+            try:
+                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                q = q.filter(r.AdminAuditLog.created_at >= dt_from)
+            except (ValueError, TypeError):
+                pass
+
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+                dt_to = dt_to.replace(hour=23, minute=59, second=59)
+                q = q.filter(r.AdminAuditLog.created_at <= dt_to)
+            except (ValueError, TypeError):
+                pass
+
+        # Order by most recent first
+        q = q.order_by(r.AdminAuditLog.created_at.desc())
+
+        # Paginate
+        total = q.count()
+        paginated = q.offset((page - 1) * per_page).limit(per_page).all()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+
+        # Build module options for filter dropdown
+        module_options = [
+            "grades",
+            "attendance",
+            "permissions",
+            "announcements",
+        ]
+
+        return render_template(
+            "admin/audit_log.html",
+            logs=paginated,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            per_page=per_page,
+            search=search,
+            module_filter=module_filter,
+            date_from=date_from,
+            date_to=date_to,
+            module_options=module_options,
+        )
