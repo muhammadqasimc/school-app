@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Audit Log{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="fas fa-history"></i> Admin Audit Log</h4>
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+                <div class="card-body">
+                    <!-- Search & Filter Form -->
+                    <form method="GET" action="{{ url_for('admin_audit_log') }}" class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Search</label>
+                            <input type="text" class="form-control" id="search" name="search"
+                                   placeholder="Search summary, target, module..."
+                                   value="{{ search }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="module" class="form-label">Module</label>
+                            <select class="form-control" id="module" name="module">
+                                <option value="">All modules</option>
+                                {% for m in module_options %}
+                                <option value="{{ m }}" {% if module_filter == m %}selected{% endif %}>{{ m|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_from" class="form-label">From</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_to" class="form-label">To</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Filter
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Summary stats -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted">
+                            Showing <strong>{{ logs|length }}</strong> of <strong>{{ total }}</strong> entries
+                            {% if page > 1 or total_pages > 1 %}
+                            — Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <!-- Log Table -->
+                    {% if logs %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Date/Time</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Module</th>
+                                    <th>Target</th>
+                                    <th>Summary</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in logs %}
+                                <tr>
+                                    <td class="text-nowrap small">
+                                        {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}
+                                    </td>
+                                    <td class="small">
+                                        {% if log.user_id %}
+                                        <a href="{{ url_for('admin_users') }}?user_id={{ log.user_id }}"
+                                           title="View user in admin users page">
+                                            User #{{ log.user_id }}
+                                        </a>
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if 'delete' in (log.action or '') %}bg-danger{% elif 'create' in (log.action or '') %}bg-success{% elif 'update' in (log.action or '') %}bg-info{% elif 'permission' in (log.action or '') %}bg-warning text-dark{% elif log.action %}bg-secondary{% else %}bg-light text-dark{% endif %}">
+                                            {{ log.action or log.operation or '-' }}
+                                        </span>
+                                    </td>
+                                    <td><span class="badge bg-dark">{{ log.module }}</span></td>
+                                    <td class="small">
+                                        {% if log.target_type %}
+                                        <span class="text-muted">{{ log.target_type }}:</span> {{ log.target_id }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">{{ log.summary or '-' }}</td>
+                                    <td class="small text-muted">{{ log.ip_address or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav>
+                        <ul class="pagination pagination-sm justify-content-center">
+                            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin_audit_log', page=page-1, search=search, module=module_filter, date_from=date_from, date_to=date_to) }}">Previous</a>
+                            </li>
+                            {% for p in range(1, total_pages + 1) %}
+                            {% if p == page %}
+                            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                            {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin_audit_log', page=p, search=search, module=module_filter, date_from=date_from, date_to=date_to) }}">{{ p }}</a>
+                            </li>
+                            {% elif p == 4 and page > 5 or p == total_pages - 3 and page < total_pages - 4 %}
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
+                            {% endfor %}
+                            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin_audit_log', page=page+1, search=search, module=module_filter, date_from=date_from, date_to=date_to) }}">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
+
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No audit log entries found.
+                        {% if search or module_filter or date_from or date_to %}
+                        <a href="{{ url_for('admin_audit_log') }}" class="alert-link">Clear filters</a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
