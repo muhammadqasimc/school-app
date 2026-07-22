@@ -182,6 +182,34 @@
                         </a>
                     </div>
                     {% endif %}
+                    {% if endpoint_available('admin_bulk_import') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_bulk_import') }}" class="text-decoration-none">
+                            <div class="card h-100 border-success hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-csv fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Bulk Import</h5>
+                                    <p class="card-text small text-muted">Upload CSV, preview contents, map columns to known fields, and import records.</p>
+                                    <span class="btn btn-success btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if endpoint_available('admin_audit_log') %}
+                    <div class="col-md-6 col-lg-3">
+                        <a href="{{ url_for('admin_audit_log') }}" class="text-decoration-none">
+                            <div class="card h-100 border-info hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-history fa-3x text-info mb-3"></i>
+                                    <h5 class="card-title">Audit Log</h5>
+                                    <p class="card-text small text-muted">Searchable audit trail for grades, attendance, permissions, and announcements.</p>
+                                    <span class="btn btn-info btn-sm">Open <i class="fas fa-external-link-alt"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
