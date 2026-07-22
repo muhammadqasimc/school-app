@@ -17,7 +17,6 @@
 [ ] Add static/uploads/attendance_exceptions/ to .gitignore — test artifacts (5 files) accumulate in the upload directory
 
 ## Future / Enhancements
-[x] Add saved filter presets for management report pages — implemented in 2f23f47 (ReportFilterPreset model, API, save/load UI, 352-line test suite)
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
 [x] Add attendance exception codes with notes and attachment support for late/excused/medical absences
