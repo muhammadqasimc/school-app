@@ -952,6 +952,21 @@ class ReportSubscription(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ReportDelivery(db.Model):
+    __tablename__ = 'report_delivery'
+    id = db.Column(db.Integer, primary_key=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('report_subscription.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')   # pending, delivered, failed
+    channel = db.Column(db.String(20), nullable=False, default='in_app')
+    details_json = db.Column(db.Text, nullable=False, default='{}')
+    error_message = db.Column(db.Text, nullable=True)
+    delivered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    subscription = db.relationship('ReportSubscription', backref=db.backref('deliveries', lazy='dynamic', cascade='all, delete-orphan'))
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -1710,6 +1725,78 @@ def sync_daemon_command():
         return
     interval = int(app.config.get("SYNC_INTERVAL_SECONDS", 120))
     svc.run_forever(interval_seconds=interval)
+
+
+@app.cli.command("process-report-subscriptions")
+def process_report_subscriptions_command():
+    """Check all active report subscriptions and create delivery records for due ones."""
+    import json
+    from datetime import date, timedelta
+
+    now = datetime.utcnow()
+    today = date.today()
+    cutoff = now - timedelta(hours=1)  # grace window: skip subscriptions run within last hour
+    total_processed = 0
+    total_due = 0
+
+    try:
+        subs = ReportSubscription.query.filter_by(is_active=True).all()
+        print(f"Checking {len(subs)} active subscription(s)...")
+
+        for sub in subs:
+            skip = False
+            # If last_run_at is within the grace window, skip
+            if sub.last_run_at and sub.last_run_at > cutoff:
+                skip = True
+
+            if skip:
+                continue
+
+            due = False
+            sp = json.loads(sub.schedule_params_json or "{}")
+
+            if sub.schedule_type == "daily":
+                # Due if never run, or last run was before today
+                if not sub.last_run_at or sub.last_run_at.date() < today:
+                    due = True
+            elif sub.schedule_type == "weekly":
+                dow_target = (sp.get("day_of_week") or "monday").lower().strip()
+                dow_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                           "friday": 4, "saturday": 5, "sunday": 6}
+                if today.weekday() == dow_map.get(dow_target, 0):
+                    if not sub.last_run_at or sub.last_run_at.date() < today:
+                        due = True
+            elif sub.schedule_type == "monthly":
+                dom = int(sp.get("day_of_month", 1))
+                if today.day == dom:
+                    if not sub.last_run_at or sub.last_run_at.date() < today:
+                        due = True
+
+            if due:
+                total_due += 1
+                preset = sub.preset
+                delivery = ReportDelivery(
+                    subscription_id=sub.id,
+                    user_id=sub.user_id,
+                    status="delivered",
+                    channel=sub.delivery_channel,
+                    details_json=json.dumps({
+                        "report_key": preset.report_key if preset else None,
+                        "filters": json.loads(preset.filters_json) if preset and preset.filters_json else {},
+                        "preset_name": preset.name if preset else None,
+                        "subscription_name": sub.name,
+                    }),
+                )
+                db.session.add(delivery)
+                sub.last_run_at = now
+                total_processed += 1
+
+        db.session.commit()
+        print(f"Done. {total_due} subscription(s) due, {total_processed} delivery record(s) created.")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("process-report-subscriptions failed")
+        print(f"Error: {e}")
 
 
 def start_sync_background_thread():
