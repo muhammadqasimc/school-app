@@ -1,3 +1,73 @@
+2026-07-22 12:00 — Cron intake scan
+====================================
+
+HEAD: 8d5a25e chore: update todo — mark saved filter presets sub-piece complete
+
+State: Clean working tree (untracked: static/uploads/attendance_exceptions/). 334 tests (329 pass, 5 fail, 139 warnings).
+
+Completed since last scan:
+  [x] ReportFilterPreset model, API, and save/load UI (2f23f47) — 166 lines in app.py, 91+89 lines in templates, 71 lines in JS, 352-line test file, all tests pass.
+  [x] User attempted to mark "saved filter presets" todo item done (8d5a25e), but only committed test artifacts — the todo file is unchanged across all recent commits.
+
+Still failing (5 tests, unchanged):
+  1. test_translate_quotes_unbracketed_ems_tables — calls deleted MDBConnection._translate_access_to_postgres
+  2. test_translate_top_limit_with_quoted_tables — same root cause
+  3. test_translate_quotes_qualified_mixed_case_columns — same root cause
+  4. test_teacher_routes_exist — expects /teacher/classes; only /teacher and /teacher/announcements exist
+  5. test_teacher_api_smoke_authenticated — teacher API endpoints return 404
+
+Regressions:
+  - Legacy Query.get() count increased from 39 to 43 (+4). Production: +3 in app.py (filter presets lines 7827, 7853, 7887). Tests: +1 in test_report_filter_presets.py (line 81).
+  - Warning count: 139 (was 105). Filter presets test file + production code added ~34 more warnings.
+  - Upload artifacts: 10 test PDFs (was 5). static/uploads/attendance_exceptions/ now has double the artifacts.
+  - The .gitignore gap is growing — each new feature commit adds more orphaned test PDFs.
+
+Legacy Query.get() count: 37 production (inventory_routes.py:21, app.py:13, admin_routes.py:3) + 6 test (test_report_filter_presets.py:1, test_early_intervention.py:2, test_attendance_exceptions.py:3) = 43 total.
+
+Warnings increased: 139 (was 105). Filter presets alone contributed ~34 new warnings.
+
+Notable:
+  - Filter presets feature is well-tested (352-line suite, all tests pass) with full CRUD, ownership scoping, and UI save/load.
+  - The commit message claimed the todo item was marked done, but the file was never changed — only test PDFs were committed. This is the 2nd scan in a row where a todo item was completed but the todo file wasn't actually updated.
+  - The `.query.get()` regression trend continues: 27 → 28 → 30 → 36 → 39 → 43 across 6 scans. Every new feature adds legacy calls instead of replacing them.
+  - No progress on the two longest-standing gaps: teacher portal (2 failing tests, 5 scans) and PG compat translation tests (3 failing tests, 6 scans).
+
+2026-07-21 21:48 — Cron intake scan
+====================================
+
+HEAD: 74f4e56 chore(schoolapp): complete todo work
+
+State: Clean working tree (untracked: static/uploads/attendance_exceptions/). 319 tests (314 pass, 5 fail, 105 warnings).
+
+Completed since last scan:
+  [x] Attendance exception codes with notes and attachment support (67d0d59) — 2 new models, 7+ admin routes, 310-line template, 18 tests all pass.
+  [x] User removed 2 completed todo items (chat platform, attendance exceptions)
+
+Still failing (5 tests, unchanged):
+  1. test_translate_quotes_unbracketed_ems_tables — calls deleted MDBConnection._translate_access_to_postgres
+  2. test_translate_top_limit_with_quoted_tables — same root cause
+  3. test_translate_quotes_qualified_mixed_case_columns — same root cause
+  4. test_teacher_routes_exist — expects /teacher/classes; only /teacher and /teacher/announcements exist
+  5. test_teacher_api_smoke_authenticated — teacher API endpoints return 404
+
+Resolved since last scan:
+  [x] test_attendance_exception_* (18 new tests) — all PASS
+
+Regressions:
+  - Legacy Query.get() count increased from 36 to 39 total. Production holds at 34 (unchanged). Tests increased by +3: test_attendance_exceptions.py added 3 new .query.get() calls (lines 28, 110, 136).
+  - Warning count jumped from 39 to 105. The attendance exception test file accounts for ~14 warnings; most of the rest is duplication across test suites hitting the same legacy calls.
+  - static/uploads/attendance_exceptions/ is untracked — 5 test artifact PDFs accumulated. Should add the folder to .gitignore.
+
+Legacy Query.get() count: 34 production (inventory_routes.py:21, app.py:10, admin_routes.py:3) + 5 test (test_early_intervention.py:2, test_attendance_exceptions.py:3) = 39 total.
+
+Warnings increased: 105 (was 39). New test file introduced legacy Query.get calls, and existing tests also emit warnings per-call.
+
+Notable:
+  - Attendance exceptions feature is well-tested (18 tests, all pass) with full CRUD + file upload/download.
+  - Upload folder has no .gitignore entry — test PDF artifacts bleed into `git status`.
+  - Teacher portal and PG compat tests remain the two longest-standing gaps (no progress for 3+ scans).
+  - The `.query.get()` → `Session.get()` migration continues to regress — new features add legacy calls instead of replacing them. The count has grown from 27 → 28 → 30 → 36 → 39 across 5 scans.
+
 2026-07-21 12:00 — Cron intake scan
 ====================================
 

@@ -2228,6 +2228,192 @@ def register_admin_routes(flask_app: Flask) -> None:
         flash("Password reset.", "success")
         return redirect(url_for("admin_dashboard"))
 
+    # --- Attendance exception codes ------------------------------------------------
+
+    @flask_app.route("/admin/attendance-exceptions")
+    @login_required
+    def admin_attendance_exceptions():
+        """List all attendance exceptions with filters."""
+        require_admin()
+        learner_id = str(request.args.get("learner_id", "")).strip()
+        date_from = str(request.args.get("date_from", "")).strip()
+        date_to = str(request.args.get("date_to", "")).strip()
+        code_id = str(request.args.get("code_id", "")).strip()
+
+        query = r.AttendanceException.query
+        if learner_id:
+            query = query.filter(r.AttendanceException.learner_id == learner_id)
+        if date_from:
+            query = query.filter(r.AttendanceException.absentee_date >= date_from)
+        if date_to:
+            query = query.filter(r.AttendanceException.absentee_date <= date_to)
+        if code_id:
+            query = query.filter(r.AttendanceException.exception_code_id == int(code_id))
+
+        exceptions = query.order_by(r.AttendanceException.created_at.desc()).all()
+        codes = r.AttendanceExceptionCode.query.order_by(r.AttendanceExceptionCode.code).all()
+        return render_template(
+            "admin/attendance_exceptions.html",
+            exceptions=exceptions,
+            codes=codes,
+        )
+
+    @flask_app.route("/admin/attendance-exceptions/add", methods=["POST"])
+    @login_required
+    def admin_attendance_exceptions_add():
+        """Add a new attendance exception with optional file attachment."""
+        require_admin()
+        learner_id = str(request.form.get("learner_id", "")).strip()
+        absentee_date = str(request.form.get("absentee_date", "")).strip()
+        code_id = str(request.form.get("code_id", "")).strip()
+        notes = str(request.form.get("notes", "")).strip()
+
+        if not learner_id or not absentee_date or not code_id:
+            flash("Learner ID, date, and exception code are required.", "error")
+            return redirect(url_for("admin_attendance_exceptions"))
+
+        try:
+            parsed_date = datetime.strptime(absentee_date, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            flash("Invalid date format.", "error")
+            return redirect(url_for("admin_attendance_exceptions"))
+
+        file = request.files.get("attachment")
+        original_filename = None
+        stored_filename = None
+        storage_relpath = None
+        mime_type = None
+        size_bytes = None
+
+        if file and file.filename and file.filename.strip():
+            orig = secure_filename(file.filename)
+            ext = orig.rsplit(".", 1)[-1].lower() if "." in orig else ""
+            if ext not in r.ATTENDANCE_EXCEPTION_EXTENSIONS:
+                flash(f"File type .{ext} not allowed.", "error")
+                return redirect(url_for("admin_attendance_exceptions"))
+            file.seek(0, os.SEEK_END)
+            fsize = file.tell()
+            file.seek(0)
+            if fsize > r.ATTENDANCE_EXCEPTION_MAX_BYTES:
+                flash("File exceeds 6 MB limit.", "error")
+                return redirect(url_for("admin_attendance_exceptions"))
+            stored = f"{uuid.uuid4().hex}_{orig}"
+            folder = flask_app.config.get("ATTENDANCE_EXCEPTION_UPLOAD_FOLDER", "static/uploads/attendance_exceptions")
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, stored)
+            file.save(path)
+            original_filename = orig
+            stored_filename = stored
+            storage_relpath = path
+            mime_type = file.content_type or "application/octet-stream"
+            size_bytes = fsize
+
+        exc = r.AttendanceException(
+            exception_code_id=int(code_id),
+            learner_id=learner_id,
+            absentee_date=parsed_date,
+            notes=notes or None,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            storage_relpath=storage_relpath,
+            mime_type=mime_type,
+            size_bytes=size_bytes,
+            created_by_user_id=current_user.id,
+            created_by_name=current_user.username,
+        )
+        r.db.session.add(exc)
+        r.db.session.commit()
+        flash("Attendance exception added.", "success")
+        return redirect(url_for("admin_attendance_exceptions"))
+
+    @flask_app.route("/admin/attendance-exception-codes")
+    @login_required
+    def admin_attendance_exception_codes():
+        """Manage exception codes."""
+        require_admin()
+        codes = r.AttendanceExceptionCode.query.order_by(r.AttendanceExceptionCode.code).all()
+        return render_template("admin/attendance_exceptions.html", codes=codes, exceptions=[], manage_codes=True)
+
+    @flask_app.route("/admin/attendance-exception-codes/add", methods=["POST"])
+    @login_required
+    def admin_attendance_exception_codes_add():
+        """Create a new exception code."""
+        require_admin()
+        code = str(request.form.get("code", "")).strip().upper()
+        name = str(request.form.get("name", "")).strip()
+        description = str(request.form.get("description", "")).strip()
+        color = str(request.form.get("color", "")).strip()
+        if not code or not name:
+            flash("Code and name are required.", "error")
+            return redirect(url_for("admin_attendance_exceptions"))
+        existing = r.AttendanceExceptionCode.query.filter_by(code=code).first()
+        if existing:
+            flash(f"Code '{code}' already exists.", "error")
+            return redirect(url_for("admin_attendance_exceptions"))
+        c = r.AttendanceExceptionCode(code=code, name=name, description=description or None, color=color or None)
+        r.db.session.add(c)
+        r.db.session.commit()
+        flash(f"Exception code '{code}' created.", "success")
+        return redirect(url_for("admin_attendance_exceptions"))
+
+    @flask_app.route("/admin/attendance-exception-codes/<int:code_id>/edit", methods=["POST"])
+    @login_required
+    def admin_attendance_exception_codes_edit(code_id):
+        """Edit an exception code."""
+        require_admin()
+        c = r.AttendanceExceptionCode.query.get_or_404(code_id)
+        c.code = str(request.form.get("code", "")).strip().upper()
+        c.name = str(request.form.get("name", "")).strip()
+        c.description = str(request.form.get("description", "")).strip() or None
+        c.color = str(request.form.get("color", "")).strip() or None
+        r.db.session.commit()
+        flash(f"Exception code '{c.code}' updated.", "success")
+        return redirect(url_for("admin_attendance_exceptions"))
+
+    @flask_app.route("/admin/attendance-exception-codes/<int:code_id>/toggle", methods=["POST"])
+    @login_required
+    def admin_attendance_exception_codes_toggle(code_id):
+        """Toggle an exception code active/inactive."""
+        require_admin()
+        c = r.AttendanceExceptionCode.query.get_or_404(code_id)
+        c.is_active = not c.is_active
+        r.db.session.commit()
+        status = "activated" if c.is_active else "deactivated"
+        flash(f"Exception code '{c.code}' {status}.", "success")
+        return redirect(url_for("admin_attendance_exceptions"))
+
+    @flask_app.route("/admin/attendance-exception/<int:exception_id>/delete", methods=["POST"])
+    @login_required
+    def admin_attendance_exception_delete(exception_id):
+        """Delete an attendance exception."""
+        require_admin()
+        exc = r.AttendanceException.query.get_or_404(exception_id)
+        if exc.storage_relpath and os.path.exists(exc.storage_relpath):
+            try:
+                os.remove(exc.storage_relpath)
+            except OSError:
+                pass
+        r.db.session.delete(exc)
+        r.db.session.commit()
+        flash("Attendance exception deleted.", "success")
+        return redirect(url_for("admin_attendance_exceptions"))
+
+    @flask_app.route("/admin/attendance-exception/<int:exception_id>/download")
+    @login_required
+    def admin_attendance_exception_download(exception_id):
+        """Download the attached file for an attendance exception."""
+        require_admin()
+        exc = r.AttendanceException.query.get_or_404(exception_id)
+        if not exc.storage_relpath or not os.path.exists(exc.storage_relpath):
+            flash("File not found.", "error")
+            return redirect(url_for("admin_attendance_exceptions"))
+        return send_file(
+            exc.storage_relpath,
+            mimetype=exc.mime_type or "application/octet-stream",
+            as_attachment=True,
+            download_name=exc.original_filename or "attachment",
+        )
+
     # --- Sync control UI -----------------------------------------------------------
 
     def _sync_state_response():
