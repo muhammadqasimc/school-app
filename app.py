@@ -934,6 +934,22 @@ class ReportFilterPreset(db.Model):
     is_default = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    subscriptions = db.relationship('ReportSubscription', backref='preset', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class ReportSubscription(db.Model):
+    __tablename__ = 'report_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey('report_filter_preset.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    schedule_type = db.Column(db.String(20), nullable=False, default='daily')
+    schedule_params_json = db.Column(db.Text, nullable=False, default='{}')
+    delivery_channel = db.Column(db.String(20), nullable=False, default='in_app')
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 @login_manager.user_loader
@@ -7896,6 +7912,189 @@ def api_report_filter_presets_delete(preset_id):
         db.session.rollback()
         app.logger.exception("delete report filter preset failed")
         return jsonify({"error": "Could not delete preset."}), 500
+
+
+# ---------------------------------------------------------------------------
+# ReportSubscription CRUD API
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-subscriptions", methods=["GET"])
+@login_required
+def api_report_subscriptions_list():
+    """List all subscriptions for the current user."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        subs = ReportSubscription.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ReportSubscription.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": s.id,
+                "preset_id": s.preset_id,
+                "name": s.name,
+                "schedule_type": s.schedule_type,
+                "schedule_params": json.loads(s.schedule_params_json or "{}"),
+                "delivery_channel": s.delivery_channel,
+                "is_active": s.is_active,
+                "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+                "preset_name": s.preset.name if s.preset else None,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in subs
+        ])
+    except Exception:
+        app.logger.exception("list report subscriptions failed")
+        return jsonify({"error": "Could not list subscriptions."}), 500
+
+
+@app.route("/api/report-subscriptions", methods=["POST"])
+@login_required
+def api_report_subscriptions_create():
+    """Create a new subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    preset_id = data.get("preset_id")
+    if not preset_id:
+        return jsonify({"error": "preset_id is required"}), 400
+    try:
+        preset = db.session.get(ReportFilterPreset, preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 400
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        sub = ReportSubscription(
+            user_id=current_user.id,
+            preset_id=preset_id,
+            name=(data.get("name") or "").strip() or None,
+            schedule_type=(data.get("schedule_type") or "daily").strip(),
+            schedule_params_json=json.dumps(data.get("schedule_params") or {}),
+            delivery_channel=(data.get("delivery_channel") or "in_app").strip(),
+            is_active=data.get("is_active", True),
+        )
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("create report subscription failed")
+        return jsonify({"error": "Could not create subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["GET"])
+@login_required
+def api_report_subscriptions_get(sub_id):
+    """Get a single subscription by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report subscription failed")
+        return jsonify({"error": "Could not get subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["PUT"])
+@login_required
+def api_report_subscriptions_update(sub_id):
+    """Update a subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        if "name" in data:
+            sub.name = (data["name"] or "").strip() or None
+        if "schedule_type" in data:
+            sub.schedule_type = (data["schedule_type"] or "daily").strip()
+        if "schedule_params" in data:
+            sub.schedule_params_json = json.dumps(data["schedule_params"])
+        if "delivery_channel" in data:
+            sub.delivery_channel = (data["delivery_channel"] or "in_app").strip()
+        if "is_active" in data:
+            sub.is_active = bool(data["is_active"])
+        if "preset_id" in data:
+            new_preset = db.session.get(ReportFilterPreset, data["preset_id"])
+            if not new_preset:
+                return jsonify({"error": "Preset not found."}), 400
+            if new_preset.user_id != current_user.id:
+                return jsonify({"error": "Forbidden"}), 403
+            sub.preset_id = data["preset_id"]
+        db.session.commit()
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report subscription failed")
+        return jsonify({"error": "Could not update subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["DELETE"])
+@login_required
+def api_report_subscriptions_delete(sub_id):
+    """Delete a subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(sub)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Subscription deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report subscription failed")
+        return jsonify({"error": "Could not delete subscription."}), 500
 
 
 MANAGEMENT_REPORT_REGISTRY = [
