@@ -8,7 +8,7 @@ warnings.filterwarnings(
     category=Warning,
 )
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
+from flask import Flask, Response, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -65,6 +65,7 @@ app.config['DISCIPLINARY_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads',
 app.config['DETENTION_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'detention')
 app.config['CHAT_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'chat')
 app.config['SICK_NOTE_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'sick_notes')
+app.config['ATTENDANCE_EXCEPTION_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'attendance_exceptions')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -77,6 +78,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 CHAT_ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
 SICK_NOTE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf'}
 SICK_NOTE_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
+ATTENDANCE_EXCEPTION_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf', 'docx'}
+ATTENDANCE_EXCEPTION_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
 CHAT_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 # Lightweight in-process cache for expensive management endpoints.
@@ -547,6 +550,23 @@ class TeacherAuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class AdminAuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    operation = db.Column(db.String(64), nullable=True, index=True)  # Used by _log_admin_action
+    action = db.Column(db.String(64), nullable=True, index=True)  # e.g. grade_update, attendance_record, permission_change, announcement_create
+    module = db.Column(db.String(64), nullable=False, index=True)  # e.g. grades, attendance, permissions, announcements
+    target_type = db.Column(db.String(64), nullable=True)  # e.g. learner, user, announcement
+    target_id = db.Column(db.String(64), nullable=True)  # ID of the affected entity
+    summary = db.Column(db.Text, nullable=True)  # Human-readable description
+    details_json = db.Column(db.Text, nullable=True)  # JSON with change details
+    ip_address = db.Column(db.String(64), nullable=True)  # request.remote_addr
+    record_count = db.Column(db.Integer, nullable=True)  # Used by _log_admin_action
+    filename = db.Column(db.String(255), nullable=True)  # Used by _log_admin_action
+    status = db.Column(db.String(32), default='success')  # Used by _log_admin_action
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class TeacherTermLock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     academic_year = db.Column(db.String(8), nullable=False, index=True)
@@ -844,53 +864,86 @@ class SchoolAssetRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
-class EarlyIntervention(db.Model):
-    __tablename__ = 'early_intervention'
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
     id = db.Column(db.Integer, primary_key=True)
-    learner_id = db.Column(db.String(50), nullable=False, index=True)
-    learner_name = db.Column(db.String(200), nullable=True)
-    grade = db.Column(db.String(20), nullable=True)
-    class_name = db.Column(db.String(50), nullable=True)
-    risk_type = db.Column(db.String(32), nullable=False)  # attendance|grade|discipline|general
-    intervention_type = db.Column(db.String(64), nullable=False)  # parent_meeting|academic_support|counseling|tutoring|mentoring|other
-    description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(24), nullable=False, default='open', index=True)  # open|in_progress|resolved|closed
-    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
+    body = db.Column(db.Text, nullable=False)
+    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    outcome_notes = db.Column(db.Text, nullable=True)
 
 
-class InterventionNotification(db.Model):
-    __tablename__ = 'intervention_notification'
+class ReportFilterPreset(db.Model):
+    __tablename__ = 'report_filter_preset'
     id = db.Column(db.Integer, primary_key=True)
-    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
-    learner_id = db.Column(db.String(50), nullable=False, index=True)
-    recipient_name = db.Column(db.String(160), nullable=True)
-    recipient_phone = db.Column(db.String(32), nullable=False)
-    channel = db.Column(db.String(16), nullable=False, default='sms')  # sms|whatsapp
-    message_snapshot = db.Column(db.Text, nullable=False)
-    communication_log_id = db.Column(db.Integer, db.ForeignKey('communication_delivery_log.id'), nullable=True)
-    sent_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(24), nullable=False, default='sent')
-
-
-class InterventionReferral(db.Model):
-    __tablename__ = 'intervention_referral'
-    id = db.Column(db.Integer, primary_key=True)
-    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
-    referred_to = db.Column(db.String(64), nullable=False)  # counselor|academic_head|principal|support_staff|other
-    referred_to_name = db.Column(db.String(200), nullable=True)
-    reason = db.Column(db.Text, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(24), nullable=False, default='pending', index=True)  # pending|accepted|completed|declined
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    report_key = db.Column(db.String(80), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False, default='{}')
+    is_default = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    outcome = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    subscriptions = db.relationship('ReportSubscription', backref='preset', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class ReportSubscription(db.Model):
+    __tablename__ = 'report_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey('report_filter_preset.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    schedule_type = db.Column(db.String(20), nullable=False, default='daily')
+    schedule_params_json = db.Column(db.Text, nullable=False, default='{}')
+    delivery_channel = db.Column(db.String(20), nullable=False, default='in_app')
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ReportFilterPreset(db.Model):
+    __tablename__ = 'report_filter_preset'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    report_key = db.Column(db.String(80), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False, default='{}')
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AttendanceExceptionCode(db.Model):
+    __tablename__ = 'attendance_exception_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AttendanceException(db.Model):
+    __tablename__ = 'attendance_exception'
+    id = db.Column(db.Integer, primary_key=True)
+    exception_code_id = db.Column(db.Integer, db.ForeignKey('attendance_exception_code.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    absentee_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    original_filename = db.Column(db.String(255), nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True, unique=True)
+    storage_relpath = db.Column(db.String(512), nullable=True)
+    mime_type = db.Column(db.String(128), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
 @login_manager.user_loader
@@ -908,6 +961,7 @@ def ensure_app_schema():
         ensure_announcement_columns()
         ensure_pg_compat_views()
         _sync_postgres_id_sequences()
+        _seed_attendance_exception_codes()
         db.session.commit()
         return True
     except Exception as e:
@@ -1117,6 +1171,22 @@ def _sync_postgres_id_sequences():
                 """
             )
         )
+
+
+def _seed_attendance_exception_codes() -> None:
+    """Seed default attendance exception codes if the table is empty."""
+    if AttendanceExceptionCode.query.first() is not None:
+        return
+    defaults = [
+        ("LATE", "Late Arrival", "Student arrived after the start of the school day.", "#FFC107", True),
+        ("EXCUSED", "Excused Absence", "Absence approved by the school or parent.", "#2196F3", True),
+        ("MEDICAL", "Medical Absence", "Absence due to illness or medical appointment.", "#4CAF50", True),
+        ("UNEXCUSED", "Unexcused Absence", "Absence without a valid reason.", "#F44336", True),
+        ("OTHER", "Other", "Other attendance-related exception.", "#9E9E9E", True),
+    ]
+    for code, name, desc, color, active in defaults:
+        db.session.add(AttendanceExceptionCode(code=code, name=name, description=desc, color=color, is_active=active))
+    db.session.commit()
 
 
 # MDB Database Connection
@@ -3578,6 +3648,409 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+# ---------------------------------------------------------------------------
+# Teacher Portal — Page routes
+# ---------------------------------------------------------------------------
+@app.route("/teacher/classes")
+@login_required
+def teacher_classes_page():
+    """Teacher classes/roster page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/classes.html")
+
+
+@app.route("/teacher/attendance")
+@login_required
+def teacher_attendance_page():
+    """Teacher attendance page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/attendance.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — API routes
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/dashboard")
+@login_required
+def api_teacher_dashboard():
+    """Return KPI data for the teacher dashboard."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    uid = current_user.id
+
+    # Count assigned classes and distinct grades from UserTeacherAssignment
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=uid, is_active=True
+    ).all()
+    assigned_classes = len(set(a.class_id for a in assignments if a.class_id))
+    assigned_grades = len(set(a.grade for a in assignments if a.grade))
+
+    # Learner count — approximate from MDB
+    learner_count = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Learner_Info]"
+        )
+        if rows:
+            learner_count = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending attendance — count from Absentees in current year
+    pending_attendance = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if rows:
+            pending_attendance = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending assessments — count from ReportMarks in current year
+    pending_assessments = 0
+    try:
+        mark_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if mark_rows:
+            pending_assessments = int(mark_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Recent discipline — count from DisciplinaryLearnerMisconduct
+    recent_discipline = 0
+    try:
+        disc_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct]"
+        )
+        if disc_rows:
+            recent_discipline = int(disc_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    return jsonify({
+        "kpis": {
+            "assignedClasses": assigned_classes,
+            "assignedGrades": assigned_grades,
+            "learnerCount": learner_count,
+            "pendingAttendance": pending_attendance,
+            "pendingAssessments": pending_assessments,
+            "recentDiscipline": recent_discipline,
+        }
+    })
+
+
+@app.route("/api/teacher/classes")
+@login_required
+def api_teacher_classes():
+    """Return the current teacher's class/subject assignments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=current_user.id, is_active=True
+    ).all()
+    return jsonify({
+        "assignments": [
+            {
+                "classId": a.class_id or "",
+                "grade": a.grade or "",
+                "subject": a.subject or "",
+                "academicYear": a.academic_year or "",
+            }
+            for a in assignments
+        ]
+    })
+
+
+@app.route("/api/teacher/roster")
+@login_required
+def api_teacher_roster():
+    """Return learners filtered by grade and/or class_id for roster view."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    return jsonify({
+        "learners": [
+            {
+                "learnerId": str(r.get("LearnerID", r.get("ID", "")) or ""),
+                "name": str(r.get("FName", "") or ""),
+                "surname": str(r.get("SName", "") or ""),
+                "grade": str(r.get("Grade", "") or ""),
+                "classId": str(r.get("Class", "") or ""),
+            }
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/teacher/attendance")
+@login_required
+def api_teacher_attendance():
+    """Return attendance records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Learnerid], [DateAbsent], [Grade], [Class], [ReasonOther] "
+        "FROM [Absentees] ORDER BY [DateAbsent] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/discipline")
+@login_required
+def api_teacher_discipline():
+    """Return discipline records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Date], [Learnerid], [Type], [Demerit], [Merit], [Comment] "
+        "FROM [DisciplinaryLearnerMisconduct] ORDER BY [Date] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/assessments")
+@login_required
+def api_teacher_assessments():
+    """Return assessment records and available subjects."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    # Fetch assessment rows
+    sql = (
+        "SELECT TOP 200 [LearnerID], [SubjectId], [SubjectName], [Mark], [TotalMark], [Datayear], [ReportId] "
+        "FROM [ReportMarks] ORDER BY [Datayear] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+
+    # Fetch subjects for dropdown
+    subjects_sql = "SELECT [ID], [Name] FROM [Subjects]"
+    try:
+        subjects = mdb_conn.execute_query(subjects_sql) or []
+    except Exception:
+        subjects = []
+
+    return jsonify({
+        "rows": rows,
+        "subjects": [{"Id": str(s.get("ID", "") or ""), "Name": str(s.get("Name", "") or "")} for s in subjects],
+    })
+
+
+@app.route("/api/teacher/reports/export")
+@login_required
+def api_teacher_reports_export():
+    """Export a CSV report of learners with attendance, discipline, and assessment counts for the teacher's scope."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    academic_year = request.args.get("academic_year", "").strip() or str(datetime.now().year)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Build learner query
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        learners = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        learners = []
+
+    import csv
+    from io import StringIO
+
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["LearnerID", "Name", "Surname", "Grade", "Class", "AttendanceCount", "DisciplineCount", "AssessmentCount"])
+
+    for l in learners:
+        lid = str(l.get("LearnerID", l.get("ID", "")) or "")
+        # Attendance count for this learner
+        att_count = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE CSTR([Learnerid]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar:
+                att_count = int(ar[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Discipline count
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Assessment count
+        asm_count = 0
+        try:
+            ar2 = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar2:
+                asm_count = int(ar2[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        cw.writerow([
+            lid,
+            str(l.get("FName", "") or ""),
+            str(l.get("SName", "") or ""),
+            str(l.get("Grade", "") or ""),
+            str(l.get("Class", "") or ""),
+            att_count,
+            disc_count,
+            asm_count,
+        ])
+
+    csv_output = si.getvalue()
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=teacher_report_{academic_year}.csv"},
+    )
+
+
+@app.route("/api/teacher/messages/send", methods=["POST"])
+@login_required
+def api_teacher_messages_send():
+    """Send a chat message. Creates a thread if needed."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    recipient_id = request.form.get("recipient_id", "").strip()
+    learner_id = request.form.get("learner_id", "").strip()
+    body = request.form.get("body", "").strip()
+    thread_id = request.form.get("thread_id", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    # Idempotency check
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already sent.", "idempotent": True})
+
+    # Resolve thread
+    thread = None
+    if thread_id:
+        thread = ChatThread.query.get(int(thread_id))
+    elif recipient_id:
+        # Look for existing direct thread between these two users + learner
+        participants = (
+            ChatParticipant.query
+            .filter(ChatParticipant.user_id.in_([current_user.id, int(recipient_id)]))
+            .group_by(ChatParticipant.thread_id)
+            .having(db.func.count(ChatParticipant.thread_id) == 2)
+            .all()
+        )
+        for p in participants:
+            t = ChatThread.query.get(p.thread_id)
+            if t and t.thread_type == "direct" and t.learner_id == (learner_id or None):
+                thread = t
+                break
+
+    if not thread:
+        thread = ChatThread(
+            thread_type="direct" if not learner_id else "direct",
+            learner_id=learner_id or None,
+            title=body[:100],
+            status="active",
+            created_by_user_id=current_user.id,
+        )
+        db.session.add(thread)
+        db.session.flush()
+        # Add current user as participant
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=current_user.id,
+            can_post=True,
+        ))
+        if recipient_id:
+            db.session.add(ChatParticipant(
+                thread_id=thread.id,
+                user_id=int(recipient_id),
+                can_post=True,
+            ))
+
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"message_id": msg.id}),
+        ))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Message sent.",
+        "thread_id": thread.id,
+        "message_id": msg.id,
+    })
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -5112,6 +5585,33 @@ def api_teacher_announcements_save():
     ann.expires_at = expires_at
     db.session.add(ann)
     db.session.commit()
+
+    # Log to admin audit log
+    action_type = "announcement_update" if ann_id else "announcement_create"
+    target_id_str = str(ann.id)
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action=action_type,
+            module="announcements",
+            target_type="announcement",
+            target_id=target_id_str,
+            summary=f"Teacher {current_user.username} {'updated' if ann_id else 'created'} announcement '{title}'",
+            details_json=json.dumps({
+                "announcement_id": ann.id,
+                "title": title,
+                "scope": scope,
+                "priority": priority,
+                "target_grade": target_grade,
+                "target_class": target_class,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+        db.session.commit()
+    except Exception:
+        db.session.commit()
+
     return jsonify({"success": True, "id": ann.id})
 
 
@@ -5124,7 +5624,25 @@ def api_teacher_announcements_delete(ann_id):
     ann = TeacherAnnouncement.query.get_or_404(ann_id)
     if ann.user_id != current_user.id:
         abort(403)
+    title = ann.title
     db.session.delete(ann)
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="announcement_delete",
+            module="announcements",
+            target_type="announcement",
+            target_id=str(ann_id),
+            summary=f"Teacher {current_user.username} deleted announcement '{title}'",
+            details_json=json.dumps({"announcement_id": ann_id, "title": title}),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
     db.session.commit()
     return jsonify({"success": True})
 
@@ -7682,6 +8200,160 @@ def api_management_mark_schedules_pdf():
         download_name=f"mark_schedules_{fn_year}.pdf",
         mimetype="application/pdf",
     )
+
+
+# ---------------------------------------------------------------------------
+# ReportFilterPreset API — save / load / delete named filter presets
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-filters/presets", methods=["GET"])
+@login_required
+def api_report_filter_presets_list():
+    """List saved presets for a given report_key."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    report_key = (request.args.get("report_key") or "").strip()
+    if not report_key:
+        return jsonify({"error": "report_key required"}), 400
+    try:
+        presets = ReportFilterPreset.query.filter_by(
+            user_id=current_user.id, report_key=report_key
+        ).order_by(ReportFilterPreset.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": p.id,
+                "name": p.name,
+                "report_key": p.report_key,
+                "filters": json.loads(p.filters_json or "{}"),
+                "is_default": p.is_default,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in presets
+        ])
+    except Exception:
+        app.logger.exception("list report filter presets failed")
+        return jsonify({"error": "Could not list presets."}), 500
+
+
+@app.route("/api/report-filters/presets", methods=["POST"])
+@login_required
+def api_report_filter_presets_save():
+    """Save current filters as a named preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    report_key = (data.get("report_key") or "").strip()
+    filters = data.get("filters") or {}
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if not report_key:
+        return jsonify({"error": "report_key is required"}), 400
+    try:
+        preset = ReportFilterPreset(
+            user_id=current_user.id,
+            name=name,
+            report_key=report_key,
+            filters_json=json.dumps(filters),
+        )
+        db.session.add(preset)
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("save report filter preset failed")
+        return jsonify({"error": "Could not save preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["GET"])
+@login_required
+def api_report_filter_presets_get(preset_id):
+    """Get a single preset by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report filter preset failed")
+        return jsonify({"error": "Could not get preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["PUT"])
+@login_required
+def api_report_filter_presets_update(preset_id):
+    """Update a preset (rename or change filters)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if name:
+            preset.name = name
+        if "filters" in data:
+            preset.filters_json = json.dumps(data["filters"])
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report filter preset failed")
+        return jsonify({"error": "Could not update preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["DELETE"])
+@login_required
+def api_report_filter_presets_delete(preset_id):
+    """Delete a preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(preset)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Preset deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report filter preset failed")
+        return jsonify({"error": "Could not delete preset."}), 500
 
 
 MANAGEMENT_REPORT_REGISTRY = [
