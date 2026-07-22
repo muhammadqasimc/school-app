@@ -8,6 +8,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h3 class="mb-0"><i class="fas fa-chart-line"></i> Management Reports</h3>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('management_report_subscriptions') }}">
+    <i class="fas fa-bell"></i> Report Subscriptions
+  </a>
 </div>
 
 <div class="card border-0 shadow-sm report-card-accent-primary">

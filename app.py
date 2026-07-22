@@ -65,6 +65,7 @@ app.config['DISCIPLINARY_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads',
 app.config['DETENTION_PDF_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'detention')
 app.config['CHAT_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'chat')
 app.config['SICK_NOTE_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'sick_notes')
+app.config['ATTENDANCE_EXCEPTION_UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'attendance_exceptions')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -77,6 +78,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 CHAT_ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'docx'}
 SICK_NOTE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf'}
 SICK_NOTE_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
+ATTENDANCE_EXCEPTION_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf', 'docx'}
+ATTENDANCE_EXCEPTION_MAX_BYTES = 6 * 1024 * 1024  # 6 MiB
 CHAT_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 # Lightweight in-process cache for expensive management endpoints.
@@ -893,6 +896,77 @@ class InterventionReferral(db.Model):
     outcome = db.Column(db.Text, nullable=True)
 
 
+class AttendanceExceptionCode(db.Model):
+    __tablename__ = 'attendance_exception_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AttendanceException(db.Model):
+    __tablename__ = 'attendance_exception'
+    id = db.Column(db.Integer, primary_key=True)
+    exception_code_id = db.Column(db.Integer, db.ForeignKey('attendance_exception_code.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    absentee_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    original_filename = db.Column(db.String(255), nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True, unique=True)
+    storage_relpath = db.Column(db.String(512), nullable=True)
+    mime_type = db.Column(db.String(128), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class ReportFilterPreset(db.Model):
+    __tablename__ = 'report_filter_preset'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    report_key = db.Column(db.String(80), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False, default='{}')
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    subscriptions = db.relationship('ReportSubscription', backref='preset', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class ReportSubscription(db.Model):
+    __tablename__ = 'report_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey('report_filter_preset.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    schedule_type = db.Column(db.String(20), nullable=False, default='daily')
+    schedule_params_json = db.Column(db.Text, nullable=False, default='{}')
+    delivery_channel = db.Column(db.String(20), nullable=False, default='in_app')
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ReportDelivery(db.Model):
+    __tablename__ = 'report_delivery'
+    id = db.Column(db.Integer, primary_key=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('report_subscription.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')   # pending, delivered, failed
+    channel = db.Column(db.String(20), nullable=False, default='in_app')
+    details_json = db.Column(db.Text, nullable=False, default='{}')
+    error_message = db.Column(db.Text, nullable=True)
+    delivered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    subscription = db.relationship('ReportSubscription', backref=db.backref('deliveries', lazy='dynamic', cascade='all, delete-orphan'))
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -908,6 +982,7 @@ def ensure_app_schema():
         ensure_announcement_columns()
         ensure_pg_compat_views()
         _sync_postgres_id_sequences()
+        _seed_attendance_exception_codes()
         db.session.commit()
         return True
     except Exception as e:
@@ -1117,6 +1192,22 @@ def _sync_postgres_id_sequences():
                 """
             )
         )
+
+
+def _seed_attendance_exception_codes() -> None:
+    """Seed default attendance exception codes if the table is empty."""
+    if AttendanceExceptionCode.query.first() is not None:
+        return
+    defaults = [
+        ("LATE", "Late Arrival", "Student arrived after the start of the school day.", "#FFC107", True),
+        ("EXCUSED", "Excused Absence", "Absence approved by the school or parent.", "#2196F3", True),
+        ("MEDICAL", "Medical Absence", "Absence due to illness or medical appointment.", "#4CAF50", True),
+        ("UNEXCUSED", "Unexcused Absence", "Absence without a valid reason.", "#F44336", True),
+        ("OTHER", "Other", "Other attendance-related exception.", "#9E9E9E", True),
+    ]
+    for code, name, desc, color, active in defaults:
+        db.session.add(AttendanceExceptionCode(code=code, name=name, description=desc, color=color, is_active=active))
+    db.session.commit()
 
 
 # MDB Database Connection
@@ -1634,6 +1725,78 @@ def sync_daemon_command():
         return
     interval = int(app.config.get("SYNC_INTERVAL_SECONDS", 120))
     svc.run_forever(interval_seconds=interval)
+
+
+@app.cli.command("process-report-subscriptions")
+def process_report_subscriptions_command():
+    """Check all active report subscriptions and create delivery records for due ones."""
+    import json
+    from datetime import date, timedelta
+
+    now = datetime.utcnow()
+    today = date.today()
+    cutoff = now - timedelta(hours=1)  # grace window: skip subscriptions run within last hour
+    total_processed = 0
+    total_due = 0
+
+    try:
+        subs = ReportSubscription.query.filter_by(is_active=True).all()
+        print(f"Checking {len(subs)} active subscription(s)...")
+
+        for sub in subs:
+            skip = False
+            # If last_run_at is within the grace window, skip
+            if sub.last_run_at and sub.last_run_at > cutoff:
+                skip = True
+
+            if skip:
+                continue
+
+            due = False
+            sp = json.loads(sub.schedule_params_json or "{}")
+
+            if sub.schedule_type == "daily":
+                # Due if never run, or last run was before today
+                if not sub.last_run_at or sub.last_run_at.date() < today:
+                    due = True
+            elif sub.schedule_type == "weekly":
+                dow_target = (sp.get("day_of_week") or "monday").lower().strip()
+                dow_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                           "friday": 4, "saturday": 5, "sunday": 6}
+                if today.weekday() == dow_map.get(dow_target, 0):
+                    if not sub.last_run_at or sub.last_run_at.date() < today:
+                        due = True
+            elif sub.schedule_type == "monthly":
+                dom = int(sp.get("day_of_month", 1))
+                if today.day == dom:
+                    if not sub.last_run_at or sub.last_run_at.date() < today:
+                        due = True
+
+            if due:
+                total_due += 1
+                preset = sub.preset
+                delivery = ReportDelivery(
+                    subscription_id=sub.id,
+                    user_id=sub.user_id,
+                    status="delivered",
+                    channel=sub.delivery_channel,
+                    details_json=json.dumps({
+                        "report_key": preset.report_key if preset else None,
+                        "filters": json.loads(preset.filters_json) if preset and preset.filters_json else {},
+                        "preset_name": preset.name if preset else None,
+                        "subscription_name": sub.name,
+                    }),
+                )
+                db.session.add(delivery)
+                sub.last_run_at = now
+                total_processed += 1
+
+        db.session.commit()
+        print(f"Done. {total_due} subscription(s) due, {total_processed} delivery record(s) created.")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("process-report-subscriptions failed")
+        print(f"Error: {e}")
 
 
 def start_sync_background_thread():
@@ -3576,6 +3739,22 @@ def teacher_announcements_page():
         return redirect(url_for("dashboard"))
     session["portal_mode"] = "teacher"
     return render_template("teacher/announcements.html")
+
+
+@app.route("/management/report-subscriptions")
+@login_required
+def management_report_subscriptions():
+    if not _management_user_can_access_reports(current_user):
+        abort(403)
+    session["portal_mode"] = "management"
+    presets = ReportFilterPreset.query.filter_by(
+        user_id=current_user.id
+    ).order_by(ReportFilterPreset.name).all()
+    return render_template(
+        "management/report_subscriptions.html",
+        presets=presets,
+        reports=MANAGEMENT_REPORT_REGISTRY,
+    )
 
 
 @app.route("/management")
@@ -7682,6 +7861,343 @@ def api_management_mark_schedules_pdf():
         download_name=f"mark_schedules_{fn_year}.pdf",
         mimetype="application/pdf",
     )
+
+
+# ---------------------------------------------------------------------------
+# ReportFilterPreset API — save / load / delete named filter presets
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-filters/presets", methods=["GET"])
+@login_required
+def api_report_filter_presets_list():
+    """List saved presets for a given report_key."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    report_key = (request.args.get("report_key") or "").strip()
+    if not report_key:
+        return jsonify({"error": "report_key required"}), 400
+    try:
+        presets = ReportFilterPreset.query.filter_by(
+            user_id=current_user.id, report_key=report_key
+        ).order_by(ReportFilterPreset.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": p.id,
+                "name": p.name,
+                "report_key": p.report_key,
+                "filters": json.loads(p.filters_json or "{}"),
+                "is_default": p.is_default,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in presets
+        ])
+    except Exception:
+        app.logger.exception("list report filter presets failed")
+        return jsonify({"error": "Could not list presets."}), 500
+
+
+@app.route("/api/report-filters/presets", methods=["POST"])
+@login_required
+def api_report_filter_presets_save():
+    """Save current filters as a named preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    report_key = (data.get("report_key") or "").strip()
+    filters = data.get("filters") or {}
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if not report_key:
+        return jsonify({"error": "report_key is required"}), 400
+    try:
+        preset = ReportFilterPreset(
+            user_id=current_user.id,
+            name=name,
+            report_key=report_key,
+            filters_json=json.dumps(filters),
+        )
+        db.session.add(preset)
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("save report filter preset failed")
+        return jsonify({"error": "Could not save preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["GET"])
+@login_required
+def api_report_filter_presets_get(preset_id):
+    """Get a single preset by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report filter preset failed")
+        return jsonify({"error": "Could not get preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["PUT"])
+@login_required
+def api_report_filter_presets_update(preset_id):
+    """Update a preset (rename or change filters)."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if name:
+            preset.name = name
+        if "filters" in data:
+            preset.filters_json = json.dumps(data["filters"])
+        db.session.commit()
+        return jsonify({
+            "id": preset.id,
+            "name": preset.name,
+            "report_key": preset.report_key,
+            "filters": json.loads(preset.filters_json or "{}"),
+            "is_default": preset.is_default,
+            "created_at": preset.created_at.isoformat() if preset.created_at else None,
+            "updated_at": preset.updated_at.isoformat() if preset.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report filter preset failed")
+        return jsonify({"error": "Could not update preset."}), 500
+
+
+@app.route("/api/report-filters/presets/<int:preset_id>", methods=["DELETE"])
+@login_required
+def api_report_filter_presets_delete(preset_id):
+    """Delete a preset."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        preset = ReportFilterPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(preset)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Preset deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report filter preset failed")
+        return jsonify({"error": "Could not delete preset."}), 500
+
+
+# ---------------------------------------------------------------------------
+# ReportSubscription CRUD API
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/report-subscriptions", methods=["GET"])
+@login_required
+def api_report_subscriptions_list():
+    """List all subscriptions for the current user."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        subs = ReportSubscription.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ReportSubscription.updated_at.desc()).all()
+        return jsonify([
+            {
+                "id": s.id,
+                "preset_id": s.preset_id,
+                "name": s.name,
+                "schedule_type": s.schedule_type,
+                "schedule_params": json.loads(s.schedule_params_json or "{}"),
+                "delivery_channel": s.delivery_channel,
+                "is_active": s.is_active,
+                "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+                "preset_name": s.preset.name if s.preset else None,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in subs
+        ])
+    except Exception:
+        app.logger.exception("list report subscriptions failed")
+        return jsonify({"error": "Could not list subscriptions."}), 500
+
+
+@app.route("/api/report-subscriptions", methods=["POST"])
+@login_required
+def api_report_subscriptions_create():
+    """Create a new subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    preset_id = data.get("preset_id")
+    if not preset_id:
+        return jsonify({"error": "preset_id is required"}), 400
+    try:
+        preset = db.session.get(ReportFilterPreset, preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 400
+        if preset.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        sub = ReportSubscription(
+            user_id=current_user.id,
+            preset_id=preset_id,
+            name=(data.get("name") or "").strip() or None,
+            schedule_type=(data.get("schedule_type") or "daily").strip(),
+            schedule_params_json=json.dumps(data.get("schedule_params") or {}),
+            delivery_channel=(data.get("delivery_channel") or "in_app").strip(),
+            is_active=data.get("is_active", True),
+        )
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        }), 201
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("create report subscription failed")
+        return jsonify({"error": "Could not create subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["GET"])
+@login_required
+def api_report_subscriptions_get(sub_id):
+    """Get a single subscription by id."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        })
+    except Exception:
+        app.logger.exception("get report subscription failed")
+        return jsonify({"error": "Could not get subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["PUT"])
+@login_required
+def api_report_subscriptions_update(sub_id):
+    """Update a subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json(silent=True) or {}
+        if "name" in data:
+            sub.name = (data["name"] or "").strip() or None
+        if "schedule_type" in data:
+            sub.schedule_type = (data["schedule_type"] or "daily").strip()
+        if "schedule_params" in data:
+            sub.schedule_params_json = json.dumps(data["schedule_params"])
+        if "delivery_channel" in data:
+            sub.delivery_channel = (data["delivery_channel"] or "in_app").strip()
+        if "is_active" in data:
+            sub.is_active = bool(data["is_active"])
+        if "preset_id" in data:
+            new_preset = db.session.get(ReportFilterPreset, data["preset_id"])
+            if not new_preset:
+                return jsonify({"error": "Preset not found."}), 400
+            if new_preset.user_id != current_user.id:
+                return jsonify({"error": "Forbidden"}), 403
+            sub.preset_id = data["preset_id"]
+        db.session.commit()
+        return jsonify({
+            "id": sub.id,
+            "preset_id": sub.preset_id,
+            "name": sub.name,
+            "schedule_type": sub.schedule_type,
+            "schedule_params": json.loads(sub.schedule_params_json or "{}"),
+            "delivery_channel": sub.delivery_channel,
+            "is_active": sub.is_active,
+            "last_run_at": sub.last_run_at.isoformat() if sub.last_run_at else None,
+            "preset_name": sub.preset.name if sub.preset else None,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+            "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("update report subscription failed")
+        return jsonify({"error": "Could not update subscription."}), 500
+
+
+@app.route("/api/report-subscriptions/<int:sub_id>", methods=["DELETE"])
+@login_required
+def api_report_subscriptions_delete(sub_id):
+    """Delete a subscription."""
+    if not _management_user_can_access_reports(current_user):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        sub = ReportSubscription.query.get(sub_id)
+        if not sub:
+            return jsonify({"error": "Subscription not found."}), 404
+        if sub.user_id != current_user.id:
+            return jsonify({"error": "Forbidden"}), 403
+        db.session.delete(sub)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Subscription deleted."})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("delete report subscription failed")
+        return jsonify({"error": "Could not delete subscription."}), 500
 
 
 MANAGEMENT_REPORT_REGISTRY = [

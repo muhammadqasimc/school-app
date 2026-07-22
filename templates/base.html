@@ -93,6 +93,9 @@
         <a class="kismet-nav-item {% if request.endpoint == 'management_dashboard' %}active{% endif %}" href="{{ url_for('management_dashboard') }}">
             <i class="fas fa-chart-line"></i> Management Reports
         </a>
+        <a class="kismet-nav-item {% if request.endpoint == 'management_report_subscriptions' %}active{% endif %}" href="{{ url_for('management_report_subscriptions') }}">
+            <i class="fas fa-bell"></i> Report Subscriptions
+        </a>
         {% if endpoint_available('management_chat_page') %}
         <a class="kismet-nav-item {% if request.endpoint == 'management_chat_page' %}active{% endif %}" href="{{ url_for('management_chat_page') }}">
             <i class="fas fa-comments"></i> Mgmt Chat
