@@ -578,6 +578,22 @@ class TeacherAnnouncement(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class FunctionNotice(db.Model):
+    __tablename__ = 'function_notice'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    notice_type = db.Column(db.String(32), default='general')  # general, academic, sports, holiday, meeting
+    target_audience = db.Column(db.String(16), default='all')  # all, teachers, parents
+    priority = db.Column(db.String(16), default='normal')  # low, normal, high
+    is_active = db.Column(db.Boolean, default=True)
+    start_date = db.Column(db.DateTime, nullable=True)
+    end_date = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class TeacherWriteEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Notice Board{% endblock %}
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center my-4">
+        <h2><i class="fas fa-bullhorn"></i> Notice Board</h2>
+        <div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Back to Admin
+            </a>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+                <i class="fas fa-plus"></i> New Notice
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>Type</th>
+                        <th>Audience</th>
+                        <th>Priority</th>
+                        <th>Active</th>
+                        <th>Dates</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in notices %}
+                    <tr>
+                        <td>{{ n.title }}</td>
+                        <td>{{ n.author }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ n.notice_type }}</span>
+                        </td>
+                        <td>
+                            <span class="badge {% if n.target_audience == 'all' %}bg-info text-dark{% elif n.target_audience == 'teachers' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                {{ n.target_audience }}
+                            </span>
+                        </td>
+                        <td>
+                            {% set p = n.priority %}
+                            <span class="badge {% if p == 'high' %}bg-danger{% elif p == 'normal' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ p }}
+                            </span>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('admin_notice_board_toggle', notice_id=n.id) }}" method="POST" style="display:inline">
+                                <button type="submit" class="btn btn-sm {% if n.is_active %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                                    {{ 'Active' if n.is_active else 'Inactive' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            {% if n.start_date or n.end_date %}
+                                <small>
+                                    {% if n.start_date %}{{ n.start_date[:10] }}{% endif %}
+                                    {% if n.start_date and n.end_date %} → {% endif %}
+                                    {% if n.end_date %}{{ n.end_date[:10] }}{% endif %}
+                                </small>
+                            {% else %}
+                                <span class="text-muted">Always</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ n.created_at[:10] if n.created_at else '' }}</small></td>
+                        <td>
+                            <form action="{{ url_for('admin_notice_board_delete', notice_id=n.id) }}" method="POST" style="display:inline"
+                                  onsubmit="return confirm('Delete this notice?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="mt-3">
+        <ul class="pagination">
+            {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+                <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Create Modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin_notice_board_create') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Notice</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="title" name="title" required maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label for="body" class="form-label">Body</label>
+                        <textarea class="form-control" id="body" name="body" rows="3" required></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="notice_type" class="form-label">Type</label>
+                            <select class="form-select" id="notice_type" name="notice_type">
+                                <option value="general">General</option>
+                                <option value="academic">Academic</option>
+                                <option value="sports">Sports</option>
+                                <option value="holiday">Holiday</option>
+                                <option value="meeting">Meeting</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="target_audience" class="form-label">Target Audience</label>
+                            <select class="form-select" id="target_audience" name="target_audience">
+                                <option value="all">All</option>
+                                <option value="teachers">Teachers</option>
+                                <option value="parents">Parents</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="priority" class="form-label">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="normal">Normal</option>
+                                <option value="low">Low</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="start_date" class="form-label">Start Date</label>
+                            <input type="datetime-local" class="form-control" id="start_date" name="start_date">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="end_date" class="form-label">End Date</label>
+                            <input type="datetime-local" class="form-control" id="end_date" name="end_date">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if not notices %}
+<div class="text-center py-5">
+    <p class="text-muted">No notices yet.</p>
+</div>
+{% endif %}
+{% endblock %}

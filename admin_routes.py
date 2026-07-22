@@ -1916,6 +1916,109 @@ def register_admin_routes(flask_app: Flask) -> None:
         flash("Announcement created.", "success")
         return redirect(url_for("admin_announcements"))
 
+    # --- Notice Board ---------------------------------------------------------------
+
+    @flask_app.route("/admin/notice-board")
+    @login_required
+    def admin_notice_board():
+        require_admin()
+        page = max(int(request.args.get("page", 1)), 1)
+        per_page = 50
+        q = r.FunctionNotice.query.order_by(r.FunctionNotice.created_at.desc())
+        total = q.count()
+        rows = q.offset((page - 1) * per_page).limit(per_page).all()
+        items = []
+        for n in rows:
+            author = r.User.query.get(n.user_id)
+            author_name = author.username if author else "Unknown"
+            now = datetime.utcnow()
+            items.append({
+                "id": n.id,
+                "title": n.title,
+                "body": n.body,
+                "notice_type": n.notice_type,
+                "target_audience": n.target_audience,
+                "priority": n.priority,
+                "is_active": n.is_active,
+                "start_date": n.start_date.isoformat() if n.start_date else None,
+                "end_date": n.end_date.isoformat() if n.end_date else None,
+                "author": author_name,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            })
+        total_pages = (total + per_page - 1) // per_page if total else 1
+        return render_template(
+            "admin/notice_board.html",
+            notices=items,
+            page=page,
+            total_pages=total_pages,
+        )
+
+    @flask_app.route("/admin/notice-board/<int:notice_id>/toggle", methods=["POST"])
+    @login_required
+    def admin_notice_board_toggle(notice_id: int):
+        require_admin()
+        n = r.FunctionNotice.query.get_or_404(notice_id)
+        n.is_active = not n.is_active
+        r.db.session.commit()
+        return redirect(url_for("admin_notice_board"))
+
+    @flask_app.route("/admin/notice-board/<int:notice_id>/delete", methods=["POST"])
+    @login_required
+    def admin_notice_board_delete(notice_id: int):
+        require_admin()
+        n = r.FunctionNotice.query.get_or_404(notice_id)
+        r.db.session.delete(n)
+        r.db.session.commit()
+        flash("Notice deleted.", "success")
+        return redirect(url_for("admin_notice_board"))
+
+    @flask_app.route("/admin/notice-board/create", methods=["POST"])
+    @login_required
+    def admin_notice_board_create():
+        require_admin()
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        if not title or not body:
+            flash("Title and body are required.", "error")
+            return redirect(url_for("admin_notice_board"))
+        notice_type = request.form.get("notice_type", "general").strip()
+        if notice_type not in ("general", "academic", "sports", "holiday", "meeting"):
+            notice_type = "general"
+        target_audience = request.form.get("target_audience", "all").strip()
+        if target_audience not in ("all", "teachers", "parents"):
+            target_audience = "all"
+        priority = request.form.get("priority", "normal").strip()
+        if priority not in ("low", "normal", "high"):
+            priority = "normal"
+        start_date_str = request.form.get("start_date", "").strip()
+        end_date_str = request.form.get("end_date", "").strip()
+        start_date = None
+        end_date = None
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str)
+            except (ValueError, TypeError):
+                pass
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str)
+            except (ValueError, TypeError):
+                pass
+        n = r.FunctionNotice(
+            user_id=current_user.id,
+            title=title,
+            body=body,
+            notice_type=notice_type,
+            target_audience=target_audience,
+            priority=priority,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        r.db.session.add(n)
+        r.db.session.commit()
+        flash("Notice created.", "success")
+        return redirect(url_for("admin_notice_board"))
+
     # --- WhatsApp admin page -------------------------------------------------------
 
     @flask_app.route("/admin/whatsapp")
