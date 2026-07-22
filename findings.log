@@ -97,3 +97,71 @@ Notable:
   - ChatThread model exists at app.py:588 but no chat API routes anywhere in the codebase.
   - Teacher portal has only announcements routes — dashboard, classes, roster, attendance, discipline, assessments, report export are all missing from master.
   - Legacy Query.get() count increased: 28 production calls (was 27) + 2 in tests/test_early_intervention.py. New early intervention test file also introduced fresh legacy calls.
+
+2026-07-22 13:35 — Cron intake scan
+====================================
+
+HEAD: 7367a04 chore(schoolapp): complete todo work
+Branch: cron/schoolapp-todo-20260722-111607
+
+State: Clean working tree. 382 tests (306 pass, 76 fail, 78 warnings).
+
+New since last scan (16 commits across ~28 hours):
+  [x] Teacher portal routes implemented — 3/3 smoke tests now PASS (was 2 failing)
+  [x] Chat platform fully stable — test_chat_platform.py 3/3 PASS (was test in different file)
+  [x] CSV import preview with column mapping — 4 test files added/updated
+  [x] Searchable admin audit log (5/7 pass)
+  [x] MessageTemplate model + CRUD API (but all 8 tests fail — routes not registered)
+  [x] Overdue finance reminder history with resend tracking (4/7 fail)
+  [x] Parent/guardian notification workflows marked complete in todo
+
+CRITICAL REGRESSION: 7 model classes removed from app.py, no replacement modules
+------------------------------------------------------------------------------
+Commit 3788029 ("feat: add MessageTemplate model, CRUD API, and teacher template
+selector") REMOVED 489 lines from app.py including ALL of these model classes:
+  - EarlyIntervention
+  - InterventionNotification
+  - InterventionReferral
+  - AttendanceExceptionCode
+  - AttendanceException
+  - ReportFilterPreset
+  - ReportSubscription
+
+These classes do NOT exist anywhere else in the codebase. No replacement module
+files were created. This is a destructive refactoring that deleted working models
+and their routes without providing alternatives.
+
+App startup risks: _seed_attendance_exception_codes() at app.py:1108 references
+AttendanceExceptionCode which is now undefined — will NameError if triggered.
+admin_routes.py still references r.AttendanceExceptionCode in 6 locations.
+
+Test failures by file (76 total, was 5):
+  - test_attendance_exceptions.py: 23/23 fail — models deleted
+  - test_early_intervention.py: 13/16 fail — models deleted (3 pass = basic app tests)
+  - test_report_filter_presets.py: 13/13 fail — model deleted
+  - test_report_subscriptions.py: 14/14 fail — model deleted
+  - test_message_templates.py: 8/8 fail — routes never registered in app
+  - test_admin_communication_center.py: 4/7 fail — likely finance reminder model issue
+  - test_admin_audit_log.py: 2/7 fail — possibly related to model removal
+  - test_pg_compat_translation.py: 3/3 fail — old, unchanged (deleted private method)
+
+Positive: teacher smoke tests now PASS (was 2 failing). Chat tests PASS (was 2 failing).
+
+Legacy Query.get() count: ~82 total (app.py:21, admin_routes.py:21, inventory_routes.py:34,
+tests: 6). Up significantly from 36 in prior scan. Many new routes added legacy
+pattern instead of Session.get().
+
+Warnings increased: 78 (was 39). Reflects more .query.get() usage and possibly
+import warnings from the broken model references.
+
+Notable:
+  - Significant feature progress: teacher portal, chat, CSV import, audit log,
+    attendance exceptions, filter presets, subscriptions all implemented.
+  - BUT: the removal of 7 model classes has created a severe regression where
+    all new feature tests fail. This needs immediate remediation.
+  - SchoolApp_todo.txt had merge conflict markers (<<<<<<< / ======= / >>>>>>>)
+    from a previous stash/merge. Cleaned up in this scan.
+  - The app module still imports OK but seed functions will fail at runtime.
+  - Recommend: either revert commit 3788029 and re-extract models properly into
+    separate module files, or re-add the model classes to app.py and fix the
+    route registrations for message templates.
