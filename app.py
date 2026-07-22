@@ -962,6 +962,22 @@ class ReportFilterPreset(db.Model):
     is_default = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    subscriptions = db.relationship('ReportSubscription', backref='preset', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class ReportSubscription(db.Model):
+    __tablename__ = 'report_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey('report_filter_preset.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    schedule_type = db.Column(db.String(20), nullable=False, default='daily')
+    schedule_params_json = db.Column(db.Text, nullable=False, default='{}')
+    delivery_channel = db.Column(db.String(20), nullable=False, default='in_app')
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 @login_manager.user_loader
