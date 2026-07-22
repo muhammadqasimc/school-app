@@ -20,7 +20,6 @@
 [x] Add saved filter presets for management report pages — implemented in 2f23f47 (ReportFilterPreset model, API, save/load UI, 352-line test suite)
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
-[x] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add saved filter presets for management report pages
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
