@@ -3654,6 +3654,22 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+@app.route("/management/report-subscriptions")
+@login_required
+def management_report_subscriptions():
+    if not _management_user_can_access_reports(current_user):
+        abort(403)
+    session["portal_mode"] = "management"
+    presets = ReportFilterPreset.query.filter_by(
+        user_id=current_user.id
+    ).order_by(ReportFilterPreset.name).all()
+    return render_template(
+        "management/report_subscriptions.html",
+        presets=presets,
+        reports=MANAGEMENT_REPORT_REGISTRY,
+    )
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():

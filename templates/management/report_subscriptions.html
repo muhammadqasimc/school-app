@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+{% block title %}Report Subscriptions{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/management-reports.css') }}" rel="stylesheet">
+<style>
+.mgt-sub-status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+}
+.mgt-sub-status-active {
+  background: #10b981;
+}
+.mgt-sub-status-inactive {
+  background: #d1d5db;
+}
+.subscription-row:last-child td {
+  border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0"><i class="fas fa-bell"></i> Report Subscriptions</h3>
+  <div>
+    <a class="btn btn-outline-secondary btn-sm me-1" href="{{ url_for('management_dashboard') }}">
+      <i class="fas fa-arrow-left"></i> Back to Reports
+    </a>
+    <button class="btn kismet-btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#subscriptionModal" onclick="resetSubscriptionForm()">
+      <i class="fas fa-plus"></i> New Subscription
+    </button>
+  </div>
+</div>
+
+<!-- Subscriptions List -->
+<div class="card border-0 shadow-sm report-card-accent-primary">
+  <div class="card-header card-header-accent-primary">
+    <h5 class="mb-0"><i class="fas fa-list"></i> Your Subscriptions</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mgt-table mb-0" id="subscriptionsTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Preset</th>
+            <th>Schedule</th>
+            <th>Channel</th>
+            <th>Status</th>
+            <th>Last Run</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="subscriptionsTableBody">
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              <i class="fas fa-spinner fa-spin me-2"></i> Loading subscriptions...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Subscription Modal (Create / Edit) -->
+<div class="modal fade" id="subscriptionModal" tabindex="-1" aria-labelledby="subscriptionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="subscriptionModalLabel"><i class="fas fa-bell"></i> New Subscription</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="subscriptionForm">
+          <input type="hidden" id="sub-id" value="">
+          <input type="hidden" id="sub-is-active" value="1">
+
+          <!-- Name -->
+          <div class="mb-3">
+            <label for="sub-name" class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="sub-name" required
+                   placeholder="e.g. Weekly Finance Summary">
+          </div>
+
+          <!-- Preset -->
+          <div class="mb-3">
+            <label for="sub-preset" class="form-label">Filter Preset <span class="text-danger">*</span></label>
+            <select class="form-select" id="sub-preset" required>
+              <option value="">— Select a Preset —</option>
+              {% for p in presets %}
+              <option value="{{ p.id }}">{{ p.name }} ({{ p.report_key }})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">
+              Presets define which report and filters this subscription applies.
+              <a href="{{ url_for('management_dashboard') }}">Create presets</a> from any report page.
+            </div>
+          </div>
+
+          <div class="row">
+            <!-- Schedule Type -->
+            <div class="col-md-4 mb-3">
+              <label for="sub-schedule-type" class="form-label">Schedule <span class="text-danger">*</span></label>
+              <select class="form-select" id="sub-schedule-type" onchange="updateScheduleParamsUI()">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+
+            <!-- Schedule Params -->
+            <div class="col-md-4 mb-3" id="schedule-params-weekly" style="display:none;">
+              <label for="sub-day-of-week" class="form-label">Day of Week</label>
+              <select class="form-select" id="sub-day-of-week">
+                <option value="monday">Monday</option>
+                <option value="tuesday">Tuesday</option>
+                <option value="wednesday">Wednesday</option>
+                <option value="thursday">Thursday</option>
+                <option value="friday">Friday</option>
+                <option value="saturday">Saturday</option>
+                <option value="sunday">Sunday</option>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3" id="schedule-params-monthly" style="display:none;">
+              <label for="sub-day-of-month" class="form-label">Day of Month</label>
+              <select class="form-select" id="sub-day-of-month">
+                {% for d in range(1, 32) %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 mb-3" id="schedule-params-hour" style="display:none;">
+              <label for="sub-hour" class="form-label">Time of Day</label>
+              <select class="form-select" id="sub-hour">
+                {% for h in range(0, 24) %}
+                <option value="{{ h }}">{{ '%02d:00' | format(h) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Delivery Channel -->
+            <div class="col-md-4 mb-3">
+              <label for="sub-channel" class="form-label">Delivery Channel</label>
+              <select class="form-select" id="sub-channel">
+                <option value="in_app">In-App</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+
+            <!-- Active toggle -->
+            <div class="col-md-4 mb-3 d-flex align-items-end">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="sub-active" checked>
+                <label class="form-check-label" for="sub-active">Active</label>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn kismet-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn kismet-btn-primary" id="saveSubscriptionBtn" onclick="saveSubscription()">
+          <i class="fas fa-save"></i> Save Subscription
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="fas fa-trash-alt text-danger me-1"></i> Delete Subscription</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">Are you sure you want to delete <strong id="deleteSubName"></strong>?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn kismet-btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn kismet-btn-danger btn-sm" id="confirmDeleteBtn" onclick="deleteSubscription()">
+          <i class="fas fa-trash-alt"></i> Delete
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── State ──────────────────────────────────────────────────────
+let subscriptions = [];
+let editingSubId = null;
+let deleteSubId = null;
+
+// ── Schedule Params UI ────────────────────────────────────────
+function updateScheduleParamsUI() {
+  const type = document.getElementById('sub-schedule-type').value;
+  document.getElementById('schedule-params-weekly').style.display = type === 'weekly' ? '' : 'none';
+  document.getElementById('schedule-params-monthly').style.display = type === 'monthly' ? '' : 'none';
+  document.getElementById('schedule-params-hour').style.display = (type === 'daily') ? '' : 'none';
+}
+
+// ── Build schedule_params from form ────────────────────────────
+function getScheduleParams() {
+  const type = document.getElementById('sub-schedule-type').value;
+  const params = {};
+  if (type === 'weekly') {
+    params.day_of_week = document.getElementById('sub-day-of-week').value;
+  } else if (type === 'monthly') {
+    params.day_of_month = parseInt(document.getElementById('sub-day-of-month').value, 10);
+  } else {
+    params.hour = parseInt(document.getElementById('sub-hour').value, 10);
+  }
+  return params;
+}
+
+// ── Format schedule for display ────────────────────────────────
+function formatSchedule(sub) {
+  const type = sub.schedule_type || 'daily';
+  const sp = sub.schedule_params || {};
+  switch (type) {
+    case 'weekly':
+      const dow = sp.day_of_week ? sp.day_of_week.charAt(0).toUpperCase() + sp.day_of_week.slice(1) : '—';
+      return `Weekly on ${dow}`;
+    case 'monthly':
+      const dom = sp.day_of_month || '—';
+      return `Day ${dom} of month`;
+    default:
+      const hour = sp.hour != null ? `${String(sp.hour).padStart(2, '0')}:00` : '';
+      return `Daily${hour ? ' at ' + hour : ''}`;
+  }
+}
+
+// ── Format last run ────────────────────────────────────────────
+function formatLastRun(sub) {
+  if (!sub.last_run_at) return '<span class="text-muted">Never</span>';
+  const d = new Date(sub.last_run_at);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Render table ───────────────────────────────────────────────
+function renderSubscriptions() {
+  const tbody = document.getElementById('subscriptionsTableBody');
+  if (!subscriptions.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-inbox me-2"></i> No subscriptions yet. Click "New Subscription" to create one.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = subscriptions.map(sub => {
+    const activeBadge = sub.is_active
+      ? '<span class="badge bg-success"><span class="mgt-sub-status-indicator mgt-sub-status-active"></span>Active</span>'
+      : '<span class="badge bg-secondary"><span class="mgt-sub-status-indicator mgt-sub-status-inactive"></span>Inactive</span>';
+    const channelIcon = sub.delivery_channel === 'email' ? 'fa-envelope' : 'fa-bell';
+    const channelLabel = sub.delivery_channel === 'email' ? 'Email' : 'In-App';
+    return `
+      <tr class="subscription-row">
+        <td><strong>${escHtml(sub.name || '(unnamed)')}</strong></td>
+        <td>${escHtml(sub.preset_name || '—')}</td>
+        <td>${formatSchedule(sub)}</td>
+        <td><i class="fas ${channelIcon} me-1"></i>${channelLabel}</td>
+        <td>${activeBadge}</td>
+        <td>${formatLastRun(sub)}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary me-1" title="Edit" onclick="editSubscription(${sub.id})">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-success me-1" title="${sub.is_active ? 'Deactivate' : 'Activate'}" onclick="toggleActive(${sub.id})">
+            <i class="fas ${sub.is_active ? 'fa-pause' : 'fa-play'}"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger" title="Delete" onclick="confirmDelete(${sub.id})">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── Escaping helper ────────────────────────────────────────────
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Load subscriptions from API ────────────────────────────────
+async function loadSubscriptions() {
+  try {
+    const r = await fetch('/api/report-subscriptions');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    subscriptions = await r.json();
+    renderSubscriptions();
+  } catch (err) {
+    console.error('Failed to load subscriptions:', err);
+    document.getElementById('subscriptionsTableBody').innerHTML =
+      '<tr><td colspan="7" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle me-2"></i> Failed to load subscriptions.</td></tr>';
+  }
+}
+
+// ── Reset form for new subscription ────────────────────────────
+function resetSubscriptionForm() {
+  editingSubId = null;
+  document.getElementById('subscriptionModalLabel').innerHTML = '<i class="fas fa-bell"></i> New Subscription';
+  document.getElementById('saveSubscriptionBtn').innerHTML = '<i class="fas fa-save"></i> Save Subscription';
+  document.getElementById('sub-id').value = '';
+  document.getElementById('sub-name').value = '';
+  document.getElementById('sub-preset').value = '';
+  document.getElementById('sub-schedule-type').value = 'daily';
+  document.getElementById('sub-day-of-week').value = 'monday';
+  document.getElementById('sub-day-of-month').value = '1';
+  document.getElementById('sub-hour').value = '8';
+  document.getElementById('sub-channel').value = 'in_app';
+  document.getElementById('sub-active').checked = true;
+  updateScheduleParamsUI();
+}
+
+// ── Populate form for edit ─────────────────────────────────────
+function editSubscription(id) {
+  const sub = subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  editingSubId = id;
+  document.getElementById('subscriptionModalLabel').innerHTML = '<i class="fas fa-edit"></i> Edit Subscription';
+  document.getElementById('saveSubscriptionBtn').innerHTML = '<i class="fas fa-save"></i> Update Subscription';
+  document.getElementById('sub-id').value = id;
+  document.getElementById('sub-name').value = sub.name || '';
+  document.getElementById('sub-preset').value = sub.preset_id;
+  document.getElementById('sub-schedule-type').value = sub.schedule_type;
+
+  const sp = sub.schedule_params || {};
+  if (sub.schedule_type === 'weekly') {
+    document.getElementById('sub-day-of-week').value = sp.day_of_week || 'monday';
+  } else if (sub.schedule_type === 'monthly') {
+    document.getElementById('sub-day-of-month').value = String(sp.day_of_month || 1);
+  } else {
+    document.getElementById('sub-hour').value = String(sp.hour != null ? sp.hour : 8);
+  }
+  document.getElementById('sub-channel').value = sub.delivery_channel || 'in_app';
+  document.getElementById('sub-active').checked = sub.is_active;
+  updateScheduleParamsUI();
+
+  // Show the modal
+  const modal = new bootstrap.Modal(document.getElementById('subscriptionModal'));
+  modal.show();
+}
+
+// ── Save (create or update) ────────────────────────────────────
+async function saveSubscription() {
+  const name = document.getElementById('sub-name').value.trim();
+  const presetId = document.getElementById('sub-preset').value;
+  const scheduleType = document.getElementById('sub-schedule-type').value;
+  const channel = document.getElementById('sub-channel').value;
+  const isActive = document.getElementById('sub-active').checked;
+
+  if (!name) {
+    showToast('Please enter a name for the subscription.', 'error');
+    return;
+  }
+  if (!presetId) {
+    showToast('Please select a filter preset.', 'error');
+    return;
+  }
+
+  const payload = {
+    name,
+    preset_id: parseInt(presetId, 10),
+    schedule_type: scheduleType,
+    schedule_params: getScheduleParams(),
+    delivery_channel: channel,
+    is_active: isActive,
+  };
+
+  const btn = document.getElementById('saveSubscriptionBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+  try {
+    const isEdit = !!editingSubId;
+    const url = isEdit ? `/api/report-subscriptions/${editingSubId}` : '/api/report-subscriptions';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const r = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+
+    // Close modal and refresh
+    bootstrap.Modal.getInstance(document.getElementById('subscriptionModal')).hide();
+    showToast(isEdit ? 'Subscription updated.' : 'Subscription created.', 'success');
+    await loadSubscriptions();
+  } catch (err) {
+    console.error('Save failed:', err);
+    showToast(err.message || 'Failed to save subscription.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = editingSubId
+      ? '<i class="fas fa-save"></i> Update Subscription'
+      : '<i class="fas fa-save"></i> Save Subscription';
+  }
+}
+
+// ── Confirm delete ─────────────────────────────────────────────
+function confirmDelete(id) {
+  const sub = subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  deleteSubId = id;
+  document.getElementById('deleteSubName').textContent = sub.name || '(unnamed)';
+  const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  modal.show();
+}
+
+// ── Delete subscription ────────────────────────────────────────
+async function deleteSubscription() {
+  if (!deleteSubId) return;
+  const btn = document.getElementById('confirmDeleteBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+  try {
+    const r = await fetch(`/api/report-subscriptions/${deleteSubId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    showToast('Subscription deleted.', 'success');
+    deleteSubId = null;
+    await loadSubscriptions();
+  } catch (err) {
+    console.error('Delete failed:', err);
+    showToast(err.message || 'Failed to delete subscription.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-trash-alt"></i> Delete';
+  }
+}
+
+// ── Toggle active/inactive ─────────────────────────────────────
+async function toggleActive(id) {
+  const sub = subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  const newActive = !sub.is_active;
+
+  try {
+    const r = await fetch(`/api/report-subscriptions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: newActive }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    showToast(newActive ? 'Subscription activated.' : 'Subscription deactivated.', 'success');
+    await loadSubscriptions();
+  } catch (err) {
+    console.error('Toggle failed:', err);
+    showToast(err.message || 'Failed to toggle subscription.', 'error');
+  }
+}
+
+// ── Init on page load ──────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  updateScheduleParamsUI();
+  loadSubscriptions();
+});
+</script>
+{% endblock %}
