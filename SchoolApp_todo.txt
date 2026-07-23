@@ -6,7 +6,14 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
+<<<<<<< Updated upstream
 [ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
+=======
+
+[ ] Add CSV row validation with error reporting for admin bulk imports
+[ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
+[ ] Add a teacher home screen with quick actions for attendance, class roster, messaging, and exports
+>>>>>>> Stashed changes
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 [ ] Add saved filter presets for management report pages
 [ ] Add parent/guardian notification workflows for attendance, discipline, and finance events
@@ -14,6 +21,7 @@
 [ ] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
 [ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
 [ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+<<<<<<< Updated upstream
 [ ] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
 [ ] Add templated parent/teacher messaging with delivery tracking and read history
 [ ] Add CSV import preview, row validation, and an audit log for admin bulk data workflows
@@ -21,3 +29,11 @@
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+=======
+[ ] Fix test flakiness: test_parent_assignments_requires_auth is ordering-dependent
+[ ] Fix PG compat translation tests (3 tests, MDBConnection._translate_access_to_postgres deleted)
+[ ] Clean up stale test PDF uploads in static/uploads/ (68 test artifacts)
+[ ] Add pre-commit hook to reject files with merge conflict markers
+[ ] Add .gitignore entries for static/uploads/assignments/ and static/uploads/attendance_exceptions/ to prevent test PDF commits
+[ ] Drop 45/45 stale git stashes (only keep stash@{0})
+>>>>>>> Stashed changes
