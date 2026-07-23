@@ -6,12 +6,8 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-
-## Implementation
-[x] Add function notice board with admin CRUD — completed in 3dc7f93 (8 tests all pass)
-[x] Add per-report icons and sort management reports A-Z — completed in 941b250
-[x] Add student lookup with full learner profile on admin dashboard — completed in 0d706ac
-[ ] Add missing teacher portal routes and API endpoints for dashboard, classes, roster, attendance, discipline, assessments, and report export — currently only /teacher, /teacher/announcements and their API counterparts exist
+<<<<<<< Updated upstream
+[ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 
 ## Fixes
@@ -26,4 +22,8 @@
 [x] Add saved filter presets for management report pages — completed in 38dee98 (15 tests all pass)
 [x] Add report scheduling/subscriptions for saved management filters and automated delivery — completed in fcc1650 (15 tests all pass)
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+=======
 [ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
+    [ ] Parent portal view of assignments with download links
+    [ ] Parent read acknowledgment tracking for assignments
+>>>>>>> Stashed changes

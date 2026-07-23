@@ -594,6 +594,41 @@ class FunctionNotice(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+<<<<<<< Updated upstream
+=======
+class TeacherAssignment(db.Model):
+    __tablename__ = 'teacher_assignment'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    assignment_type = db.Column(db.String(32), nullable=False, default='assignment')
+    target_grade = db.Column(db.String(32), nullable=True)
+    target_class = db.Column(db.String(64), nullable=True)
+    due_date = db.Column(db.DateTime, nullable=True)
+    file_attachments = db.Column(db.Text, nullable=True)  # JSON array of {original_name, stored_name, mime_type, size_bytes, storage_relpath}
+    links = db.Column(db.Text, nullable=True)  # JSON array of {url, title}
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "userId": self.user_id,
+            "title": self.title,
+            "description": self.description or "",
+            "assignmentType": self.assignment_type,
+            "targetGrade": self.target_grade or "",
+            "targetClass": self.target_class or "",
+            "dueDate": self.due_date.isoformat() if self.due_date else None,
+            "fileAttachments": json.loads(self.file_attachments) if self.file_attachments else [],
+            "links": json.loads(self.links) if self.links else [],
+            "isActive": self.is_active,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+        }
+>>>>>>> Stashed changes
 class TeacherWriteEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -3670,6 +3705,420 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+@app.route("/teacher/assignments")
+@login_required
+def teacher_assignments_page():
+    """Teacher assignment posting page."""
+    if not is_teacher_user(current_user):
+        flash("Teacher portal is only for educator accounts.", "error")
+        return redirect(url_for("dashboard"))
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/assignments.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Page routes
+# ---------------------------------------------------------------------------
+@app.route("/teacher/classes")
+@login_required
+def teacher_classes_page():
+    """Teacher classes/roster page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/classes.html")
+
+
+@app.route("/teacher/attendance")
+@login_required
+def teacher_attendance_page():
+    """Teacher attendance page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/attendance.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — API routes
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/dashboard")
+@login_required
+def api_teacher_dashboard():
+    """Return KPI data for the teacher dashboard."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    uid = current_user.id
+
+    # Count assigned classes and distinct grades from UserTeacherAssignment
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=uid, is_active=True
+    ).all()
+    assigned_classes = len(set(a.class_id for a in assignments if a.class_id))
+    assigned_grades = len(set(a.grade for a in assignments if a.grade))
+
+    # Learner count — approximate from MDB
+    learner_count = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Learner_Info]"
+        )
+        if rows:
+            learner_count = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending attendance — count from Absentees in current year
+    pending_attendance = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if rows:
+            pending_attendance = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending assessments — count from ReportMarks in current year
+    pending_assessments = 0
+    try:
+        mark_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if mark_rows:
+            pending_assessments = int(mark_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Recent discipline — count from DisciplinaryLearnerMisconduct
+    recent_discipline = 0
+    try:
+        disc_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct]"
+        )
+        if disc_rows:
+            recent_discipline = int(disc_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    return jsonify({
+        "kpis": {
+            "assignedClasses": assigned_classes,
+            "assignedGrades": assigned_grades,
+            "learnerCount": learner_count,
+            "pendingAttendance": pending_attendance,
+            "pendingAssessments": pending_assessments,
+            "recentDiscipline": recent_discipline,
+        }
+    })
+
+
+@app.route("/api/teacher/classes")
+@login_required
+def api_teacher_classes():
+    """Return the current teacher's class/subject assignments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=current_user.id, is_active=True
+    ).all()
+    return jsonify({
+        "assignments": [
+            {
+                "classId": a.class_id or "",
+                "grade": a.grade or "",
+                "subject": a.subject or "",
+                "academicYear": a.academic_year or "",
+            }
+            for a in assignments
+        ]
+    })
+
+
+@app.route("/api/teacher/roster")
+@login_required
+def api_teacher_roster():
+    """Return learners filtered by grade and/or class_id for roster view."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    return jsonify({
+        "learners": [
+            {
+                "learnerId": str(r.get("LearnerID", r.get("ID", "")) or ""),
+                "name": str(r.get("FName", "") or ""),
+                "surname": str(r.get("SName", "") or ""),
+                "grade": str(r.get("Grade", "") or ""),
+                "classId": str(r.get("Class", "") or ""),
+            }
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/teacher/attendance")
+@login_required
+def api_teacher_attendance():
+    """Return attendance records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Learnerid], [DateAbsent], [Grade], [Class], [ReasonOther] "
+        "FROM [Absentees] ORDER BY [DateAbsent] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/discipline")
+@login_required
+def api_teacher_discipline():
+    """Return discipline records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Date], [Learnerid], [Type], [Demerit], [Merit], [Comment] "
+        "FROM [DisciplinaryLearnerMisconduct] ORDER BY [Date] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/assessments")
+@login_required
+def api_teacher_assessments():
+    """Return assessment records and available subjects."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    # Fetch assessment rows
+    sql = (
+        "SELECT TOP 200 [LearnerID], [SubjectId], [SubjectName], [Mark], [TotalMark], [Datayear], [ReportId] "
+        "FROM [ReportMarks] ORDER BY [Datayear] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+
+    # Fetch subjects for dropdown
+    subjects_sql = "SELECT [ID], [Name] FROM [Subjects]"
+    try:
+        subjects = mdb_conn.execute_query(subjects_sql) or []
+    except Exception:
+        subjects = []
+
+    return jsonify({
+        "rows": rows,
+        "subjects": [{"Id": str(s.get("ID", "") or ""), "Name": str(s.get("Name", "") or "")} for s in subjects],
+    })
+
+
+@app.route("/api/teacher/reports/export")
+@login_required
+def api_teacher_reports_export():
+    """Export a CSV report of learners with attendance, discipline, and assessment counts for the teacher's scope."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    academic_year = request.args.get("academic_year", "").strip() or str(datetime.now().year)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Build learner query
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        learners = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        learners = []
+
+    import csv
+    from io import StringIO
+
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["LearnerID", "Name", "Surname", "Grade", "Class", "AttendanceCount", "DisciplineCount", "AssessmentCount"])
+
+    for l in learners:
+        lid = str(l.get("LearnerID", l.get("ID", "")) or "")
+        # Attendance count for this learner
+        att_count = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE CSTR([Learnerid]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar:
+                att_count = int(ar[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Discipline count
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Assessment count
+        asm_count = 0
+        try:
+            ar2 = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar2:
+                asm_count = int(ar2[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        cw.writerow([
+            lid,
+            str(l.get("FName", "") or ""),
+            str(l.get("SName", "") or ""),
+            str(l.get("Grade", "") or ""),
+            str(l.get("Class", "") or ""),
+            att_count,
+            disc_count,
+            asm_count,
+        ])
+
+    csv_output = si.getvalue()
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=teacher_report_{academic_year}.csv"},
+    )
+
+
+@app.route("/api/teacher/messages/send", methods=["POST"])
+@login_required
+def api_teacher_messages_send():
+    """Send a chat message. Creates a thread if needed."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    recipient_id = request.form.get("recipient_id", "").strip()
+    learner_id = request.form.get("learner_id", "").strip()
+    body = request.form.get("body", "").strip()
+    thread_id = request.form.get("thread_id", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    # Idempotency check
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already sent.", "idempotent": True})
+
+    # Resolve thread
+    thread = None
+    if thread_id:
+        thread = ChatThread.query.get(int(thread_id))
+    elif recipient_id:
+        # Look for existing direct thread between these two users + learner
+        participants = (
+            ChatParticipant.query
+            .filter(ChatParticipant.user_id.in_([current_user.id, int(recipient_id)]))
+            .group_by(ChatParticipant.thread_id)
+            .having(db.func.count(ChatParticipant.thread_id) == 2)
+            .all()
+        )
+        for p in participants:
+            t = ChatThread.query.get(p.thread_id)
+            if t and t.thread_type == "direct" and t.learner_id == (learner_id or None):
+                thread = t
+                break
+
+    if not thread:
+        thread = ChatThread(
+            thread_type="direct" if not learner_id else "direct",
+            learner_id=learner_id or None,
+            title=body[:100],
+            status="active",
+            created_by_user_id=current_user.id,
+        )
+        db.session.add(thread)
+        db.session.flush()
+        # Add current user as participant
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=current_user.id,
+            can_post=True,
+        ))
+        if recipient_id:
+            db.session.add(ChatParticipant(
+                thread_id=thread.id,
+                user_id=int(recipient_id),
+                can_post=True,
+            ))
+
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"message_id": msg.id}),
+        ))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Message sent.",
+        "thread_id": thread.id,
+        "message_id": msg.id,
+    })
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -5499,6 +5948,263 @@ def api_teacher_announcements_delete(ann_id):
     db.session.delete(ann)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Teacher Assignment API
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/assignments")
+@login_required
+def api_teacher_assignments():
+    """List assignments for the current teacher."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    q = TeacherAssignment.query.filter_by(
+        user_id=current_user.id
+    ).order_by(TeacherAssignment.created_at.desc())
+    return jsonify([a.to_dict() for a in q.all()])
+
+
+@app.route("/api/teacher/assignments/save", methods=["POST"])
+@login_required
+def api_teacher_assignments_save():
+    """Create or update a teacher assignment with file/link attachments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    title = request.form.get("title", "").strip()
+    if not title:
+        return jsonify({"error": "Title is required."}), 400
+
+    description = request.form.get("description", "").strip() or None
+    assignment_type = request.form.get("assignment_type", "assignment").strip()
+    if assignment_type not in ("assignment", "homework", "activity"):
+        assignment_type = "assignment"
+    target_grade = request.form.get("target_grade", "").strip() or None
+    target_class = request.form.get("target_class", "").strip() or None
+    due_date_str = request.form.get("due_date", "").strip()
+
+    due_date = None
+    if due_date_str:
+        try:
+            due_date = datetime.fromisoformat(due_date_str)
+        except (ValueError, TypeError):
+            pass
+
+    assignment_id = request.form.get("id", "").strip()
+    if assignment_id:
+        assignment = TeacherAssignment.query.get(int(assignment_id))
+        if not assignment or assignment.user_id != current_user.id:
+            return jsonify({"error": "Assignment not found."}), 404
+        # Keep existing attachments/links unless new ones replace them
+        existing_attachments = json.loads(assignment.file_attachments) if assignment.file_attachments else []
+        existing_links = json.loads(assignment.links) if assignment.links else []
+    else:
+        assignment = TeacherAssignment(user_id=current_user.id)
+        existing_attachments = []
+        existing_links = []
+
+    # Handle file uploads
+    files = request.files.getlist("files")
+    new_attachments = []
+    for f in files:
+        if f and f.filename:
+            safe_name = secure_filename(f.filename) or f.filename
+            ext = os.path.splitext(safe_name)[1] if "." in safe_name else ""
+            stored_name = f"{secrets.token_hex(16)}{ext}"
+            upload_dir = os.path.join(app.root_path, "static", "uploads", "assignments")
+            os.makedirs(upload_dir, exist_ok=True)
+            f.save(os.path.join(upload_dir, stored_name))
+            new_attachments.append({
+                "original_name": f.filename,
+                "stored_name": stored_name,
+                "mime_type": f.content_type or "application/octet-stream",
+                "size_bytes": os.path.getsize(os.path.join(upload_dir, stored_name)),
+                "storage_relpath": os.path.join("uploads", "assignments", stored_name),
+            })
+
+    # Handle links (JSON string from form)
+    links_str = request.form.get("links", "")
+    new_links = []
+    if links_str:
+        try:
+            parsed = json.loads(links_str)
+            if isinstance(parsed, list):
+                new_links = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Replace attachments if new ones were uploaded, otherwise keep existing
+    if new_attachments:
+        attachment_list = new_attachments
+    else:
+        attachment_list = existing_attachments
+
+    # Replace links if new ones were sent, otherwise keep existing
+    if links_str:
+        link_list = new_links
+    else:
+        link_list = existing_links
+
+    assignment.title = title
+    assignment.description = description
+    assignment.assignment_type = assignment_type
+    assignment.target_grade = target_grade
+    assignment.target_class = target_class
+    assignment.due_date = due_date
+    assignment.file_attachments = json.dumps(attachment_list)
+    assignment.links = json.dumps(link_list)
+    db.session.add(assignment)
+    db.session.commit()
+
+    # Log to admin audit log
+    action_type = "assignment_update" if assignment_id else "assignment_create"
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action=action_type,
+            module="assignments",
+            target_type="assignment",
+            target_id=str(assignment.id),
+            summary=f"Teacher {current_user.username} {'updated' if assignment_id else 'created'} assignment '{title}'",
+            details_json=json.dumps({
+                "assignment_id": assignment.id,
+                "title": title,
+                "assignment_type": assignment_type,
+                "target_grade": target_grade,
+                "target_class": target_class,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+        db.session.commit()
+    except Exception:
+        pass
+
+    return jsonify({"success": True, "id": assignment.id})
+
+
+@app.route("/api/teacher/assignments/<int:assignment_id>/delete", methods=["POST"])
+@login_required
+def api_teacher_assignments_delete(assignment_id):
+    """Soft-delete a teacher assignment."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignment = TeacherAssignment.query.get_or_404(assignment_id)
+    if assignment.user_id != current_user.id:
+        abort(403)
+    title = assignment.title
+    assignment.is_active = False
+    db.session.commit()
+
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="assignment_delete",
+            module="assignments",
+            target_type="assignment",
+            target_id=str(assignment_id),
+            summary=f"Teacher {current_user.username} deleted assignment '{title}'",
+            details_json=json.dumps({"assignment_id": assignment_id, "title": title}),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+        db.session.commit()
+    except Exception:
+        pass
+
+    return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Parent Portal Assignment API
+# ---------------------------------------------------------------------------
+@app.route("/api/parent/assignments", methods=["GET"])
+@login_required
+def api_parent_assignments():
+    """Return active assignments matching the active learner's grade."""
+    learner_id = get_active_learner_id_for_request(current_user)
+    if not learner_id:
+        return jsonify([])
+
+    learner_info = fetch_learner_info_by_id(learner_id)
+    if not learner_info:
+        return jsonify([])
+
+    grade = str(learner_info.get("grade") or "").strip()
+    learner_class = str(learner_info.get("learner_class") or "").strip()
+
+    # Query active assignments where target_grade matches the learner's grade
+    # or target_grade is NULL/empty (targeting all grades).
+    q = TeacherAssignment.query.filter(
+        TeacherAssignment.is_active == True,
+        db.or_(
+            TeacherAssignment.target_grade.is_(None),
+            TeacherAssignment.target_grade == "",
+            TeacherAssignment.target_grade == grade,
+        ),
+    ).order_by(TeacherAssignment.due_date.asc(), TeacherAssignment.created_at.desc())
+
+    assignments = []
+    for a in q.all():
+        d = a.to_dict()
+        # Add file download URLs
+        files = d.get("fileAttachments", [])
+        download_urls = []
+        for idx in range(len(files)):
+            download_urls.append(
+                url_for("api_parent_assignment_file_download",
+                        assignment_id=a.id, file_index=idx, _external=False)
+            )
+        d["fileDownloadUrls"] = download_urls
+        assignments.append(d)
+
+    return jsonify(assignments)
+
+
+@app.route("/api/parent/assignments/<int:assignment_id>/files/<int:file_index>", methods=["GET"])
+@login_required
+def api_parent_assignment_file_download(assignment_id, file_index):
+    """Serve an assignment attachment file with its original filename."""
+    # Validate learner context
+    learner_id = get_active_learner_id_for_request(current_user)
+    if not learner_id:
+        abort(404)
+
+    assignment = db.session.get(TeacherAssignment, assignment_id)
+    if not assignment or not assignment.is_active:
+        abort(404)
+
+    # Parse file attachments
+    files_raw = assignment.file_attachments
+    if not files_raw:
+        abort(404)
+    try:
+        files = json.loads(files_raw)
+    except (json.JSONDecodeError, TypeError):
+        abort(404)
+
+    if not isinstance(files, list) or file_index < 0 or file_index >= len(files):
+        abort(404)
+
+    file_info = files[file_index]
+    storage_relpath = file_info.get("storage_relpath", "")
+    original_name = file_info.get("original_name", f"file_{file_index}")
+    mime_type = file_info.get("mime_type", "application/octet-stream")
+
+    if not storage_relpath:
+        abort(404)
+
+    filepath = os.path.join(app.root_path, "static", storage_relpath)
+    if not os.path.exists(filepath):
+        abort(404)
+
+    return send_file(
+        filepath,
+        mimetype=mime_type,
+        as_attachment=True,
+        download_name=original_name,
+    )
 
 
 @app.route("/api/announcements")

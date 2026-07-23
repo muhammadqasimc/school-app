@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block title %}Assignments{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-book"></i> Assignments</h2>
+            <p class="text-muted">Post assignments, homework, and activities with file/link attachments for your classes.</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignmentModal" onclick="newAssignment()">
+                <i class="fas fa-plus"></i> Post New Assignment
+            </button>
+        </div>
+    </div>
+
+    <!-- Assignment List -->
+    <div id="assignmentList" class="row">
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="assignmentModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="assignmentForm" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" id="assignmentId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Post New Assignment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" required maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="assignment_type" class="form-label">Type</label>
+                            <select class="form-select" id="assignment_type" name="assignment_type">
+                                <option value="assignment">Assignment</option>
+                                <option value="homework">Homework</option>
+                                <option value="activity">Activity</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="target_grade" class="form-label">Target Grade</label>
+                            <select class="form-select" id="target_grade" name="target_grade">
+                                <option value="">All Grades</option>
+                                {% for g in range(1, 13) %}
+                                <option value="{{ g }}">Grade {{ g }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="target_class" class="form-label">Target Class</label>
+                            <input type="text" class="form-control" id="target_class" name="target_class" placeholder="e.g. A, B">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="due_date" class="form-label">Due Date</label>
+                        <input type="datetime-local" class="form-control" id="due_date" name="due_date">
+                    </div>
+                    <div class="mb-3">
+                        <label for="files" class="form-label">File Attachments</label>
+                        <input type="file" class="form-control" id="files" name="files" multiple>
+                        <div class="form-text">Upload files (documents, images, PDFs, etc.).</div>
+                        <div id="existingFiles" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="links" class="form-label">Links</label>
+                        <div id="linksContainer">
+                            <div class="input-group mb-2 link-row">
+                                <input type="text" class="form-control" name="link_url[]" placeholder="URL">
+                                <input type="text" class="form-control" name="link_title[]" placeholder="Link Title">
+                                <button type="button" class="btn btn-outline-danger" onclick="this.closest('.link-row').remove()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addLinkRow()">
+                            <i class="fas fa-plus"></i> Add Link
+                        </button>
+                        <input type="hidden" name="links" id="linksJson">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentAttachments = [];
+
+function newAssignment() {
+    document.getElementById('modalTitle').innerText = 'Post New Assignment';
+    document.getElementById('assignmentForm').reset();
+    document.getElementById('assignmentId').value = '';
+    document.getElementById('existingFiles').innerHTML = '';
+    document.getElementById('linksContainer').innerHTML = `
+        <div class="input-group mb-2 link-row">
+            <input type="text" class="form-control" name="link_url[]" placeholder="URL">
+            <input type="text" class="form-control" name="link_title[]" placeholder="Link Title">
+            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.link-row').remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    currentAttachments = [];
+}
+
+function editAssignment(id) {
+    fetch('/api/teacher/assignments')
+        .then(r => r.json())
+        .then(data => {
+            const assignment = (data || []).find(a => a.id === id);
+            if (!assignment) return;
+            document.getElementById('modalTitle').innerText = 'Edit Assignment';
+            document.getElementById('assignmentId').value = assignment.id;
+            document.getElementById('title').value = assignment.title;
+            document.getElementById('description').value = assignment.description || '';
+            document.getElementById('assignment_type').value = assignment.assignmentType || 'assignment';
+            document.getElementById('target_grade').value = assignment.targetGrade || '';
+            document.getElementById('target_class').value = assignment.targetClass || '';
+            if (assignment.dueDate) {
+                document.getElementById('due_date').value = assignment.dueDate.substring(0, 16);
+            } else {
+                document.getElementById('due_date').value = '';
+            }
+
+            // Show existing files
+            currentAttachments = assignment.fileAttachments || [];
+            const fileContainer = document.getElementById('existingFiles');
+            if (currentAttachments.length > 0) {
+                let html = '<small class="text-muted">Existing files:</small><ul class="list-unstyled mb-0">';
+                currentAttachments.forEach(f => {
+                    html += '<li><i class="fas fa-paperclip me-1"></i> ' + f.original_name + '</li>';
+                });
+                html += '</ul>';
+                fileContainer.innerHTML = html;
+            } else {
+                fileContainer.innerHTML = '';
+            }
+
+            // Show existing links
+            const linksContainer = document.getElementById('linksContainer');
+            linksContainer.innerHTML = '';
+            const links = assignment.links || [];
+            if (links.length === 0) {
+                addLinkRow();
+            } else {
+                links.forEach(function(link) {
+                    addLinkRow(link.url || '', link.title || '');
+                });
+            }
+
+            new bootstrap.Modal(document.getElementById('assignmentModal')).show();
+        });
+}
+
+function deleteAssignment(id) {
+    if (!confirm('Delete this assignment?')) return;
+    fetch('/api/teacher/assignments/' + id + '/delete', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Assignment deleted', 'success');
+                loadAssignments();
+            } else {
+                alert(data.error || 'Failed to delete');
+            }
+        });
+}
+
+function addLinkRow(url, title) {
+    const container = document.getElementById('linksContainer');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2 link-row';
+    div.innerHTML = `
+        <input type="text" class="form-control" name="link_url[]" placeholder="URL" value="${escapeHtml(url || '')}">
+        <input type="text" class="form-control" name="link_title[]" placeholder="Link Title" value="${escapeHtml(title || '')}">
+        <button type="button" class="btn btn-outline-danger" onclick="this.closest('.link-row').remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    container.appendChild(div);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function collectLinks() {
+    const rows = document.querySelectorAll('.link-row');
+    const links = [];
+    rows.forEach(function(row) {
+        const url = row.querySelector('input[name="link_url[]"]').value.trim();
+        const title = row.querySelector('input[name="link_title[]"]').value.trim();
+        if (url) {
+            links.push({url: url, title: title || url});
+        }
+    });
+    return JSON.stringify(links);
+}
+
+function loadAssignments() {
+    fetch('/api/teacher/assignments')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('assignmentList');
+            const rows = data || [];
+            if (rows.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center py-5"><p class="text-muted">No assignments yet. Click "Post New Assignment" to create one.</p></div>';
+                return;
+            }
+            let html = '';
+            rows.forEach(function(a) {
+                const typeBadge = {
+                    'assignment': 'bg-primary',
+                    'homework': 'bg-info text-dark',
+                    'activity': 'bg-success'
+                };
+                const badgeClass = typeBadge[a.assignmentType] || 'bg-secondary';
+                const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
+                const cardClass = !a.isActive ? 'opacity-50' : (isPastDue ? 'border-warning' : '');
+                html += '<div class="col-md-6 mb-3">';
+                html += '<div class="card h-100 ' + cardClass + '">';
+                html += '<div class="card-header d-flex justify-content-between align-items-center">';
+                html += '<div>';
+                html += '<span class="badge ' + badgeClass + ' me-1">' + a.assignmentType.charAt(0).toUpperCase() + a.assignmentType.slice(1) + '</span>';
+                if (!a.isActive) html += '<span class="badge bg-secondary">Deleted</span>';
+                if (isPastDue && a.isActive) html += '<span class="badge bg-warning text-dark ms-1">Past Due</span>';
+                html += '</div>';
+                if (a.targetGrade || a.targetClass) {
+                    html += '<small class="text-muted">';
+                    if (a.targetGrade) html += 'Grade ' + a.targetGrade;
+                    if (a.targetClass) html += ' - ' + a.targetClass;
+                    html += '</small>';
+                }
+                html += '</div>';
+                html += '<div class="card-body">';
+                html += '<h5 class="card-title">' + escapeHtml(a.title) + '</h5>';
+                if (a.description) {
+                    html += '<p class="card-text text-muted">' + escapeHtml(a.description.substring(0, 150)) + (a.description.length > 150 ? '...' : '') + '</p>';
+                }
+                // File attachments
+                if (a.fileAttachments && a.fileAttachments.length > 0) {
+                    html += '<div class="mb-2">';
+                    a.fileAttachments.forEach(function(f) {
+                        const url = '/static/' + f.storage_relpath;
+                        html += '<a href="' + url + '" target="_blank" class="badge bg-light text-dark text-decoration-none me-1 mb-1"><i class="fas fa-paperclip me-1"></i>' + escapeHtml(f.original_name) + '</a> ';
+                    });
+                    html += '</div>';
+                }
+                // Links
+                if (a.links && a.links.length > 0) {
+                    html += '<div class="mb-2">';
+                    a.links.forEach(function(l) {
+                        html += '<a href="' + escapeHtml(l.url) + '" target="_blank" class="badge bg-light text-primary text-decoration-none me-1 mb-1"><i class="fas fa-link me-1"></i>' + escapeHtml(l.title || l.url) + '</a> ';
+                    });
+                    html += '</div>';
+                }
+                if (a.dueDate) {
+                    html += '<small class="text-muted">Due: ' + new Date(a.dueDate).toLocaleString() + '</small><br>';
+                }
+                html += '<small class="text-muted">Posted: ' + new Date(a.createdAt).toLocaleString() + '</small>';
+                html += '</div>';
+                if (a.isActive) {
+                    html += '<div class="card-footer d-flex justify-content-end gap-2">';
+                    html += '<button class="btn btn-sm btn-outline-primary" onclick="editAssignment(' + a.id + ')">Edit</button>';
+                    html += '<button class="btn btn-sm btn-outline-danger" onclick="deleteAssignment(' + a.id + ')">Delete</button>';
+                    html += '</div>';
+                }
+                html += '</div></div>';
+            });
+            container.innerHTML = html;
+        });
+}
+
+document.getElementById('assignmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+
+    // Collect links as JSON
+    const linksJson = collectLinks();
+    formData.set('links', linksJson);
+
+    // Remove individual link fields so the server only sees the JSON
+    const linkFields = ['link_url[]', 'link_title[]'];
+    linkFields.forEach(function(name) {
+        const elements = formData.getAll(name);
+        if (elements) {
+            // We already have the JSON, just delete them
+            formData.delete(name);
+        }
+    });
+
+    fetch('/api/teacher/assignments/save', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('assignmentModal')).hide();
+            showToast('Assignment saved successfully', 'success');
+            loadAssignments();
+        } else {
+            alert(data.error || 'Failed to save');
+        }
+    })
+    .catch(function(err) {
+        alert('Error saving assignment: ' + err.message);
+    });
+});
+
+loadAssignments();
+</script>
+{% endblock %}
