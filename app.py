@@ -926,6 +926,418 @@ class MessageTemplate(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
+    id = db.Column(db.Integer, primary_key=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    learner_name = db.Column(db.String(200), nullable=True)
+    grade = db.Column(db.String(20), nullable=True)
+    class_name = db.Column(db.String(50), nullable=True)
+    risk_type = db.Column(db.String(32), nullable=False)  # attendance|grade|discipline|general
+    intervention_type = db.Column(db.String(64), nullable=False)  # parent_meeting|academic_support|counseling|tutoring|mentoring|other
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='open', index=True)  # open|in_progress|resolved|closed
+    assigned_to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome_notes = db.Column(db.Text, nullable=True)
+
+
+class InterventionNotification(db.Model):
+    __tablename__ = 'intervention_notification'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    recipient_name = db.Column(db.String(160), nullable=True)
+    recipient_phone = db.Column(db.String(32), nullable=False)
+    channel = db.Column(db.String(16), nullable=False, default='sms')  # sms|whatsapp
+    message_snapshot = db.Column(db.Text, nullable=False)
+    communication_log_id = db.Column(db.Integer, db.ForeignKey('communication_delivery_log.id'), nullable=True)
+    sent_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(24), nullable=False, default='sent')
+
+
+class InterventionReferral(db.Model):
+    __tablename__ = 'intervention_referral'
+    id = db.Column(db.Integer, primary_key=True)
+    intervention_id = db.Column(db.Integer, db.ForeignKey('early_intervention.id'), nullable=False, index=True)
+    referred_to = db.Column(db.String(64), nullable=False)  # counselor|academic_head|principal|support_staff|other
+    referred_to_name = db.Column(db.String(200), nullable=True)
+    reason = db.Column(db.Text, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(24), nullable=False, default='pending', index=True)  # pending|accepted|completed|declined
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    outcome = db.Column(db.Text, nullable=True)
+
+
+class AttendanceExceptionCode(db.Model):
+    __tablename__ = 'attendance_exception_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AttendanceException(db.Model):
+    __tablename__ = 'attendance_exception'
+    id = db.Column(db.Integer, primary_key=True)
+    exception_code_id = db.Column(db.Integer, db.ForeignKey('attendance_exception_code.id'), nullable=False, index=True)
+    learner_id = db.Column(db.String(50), nullable=False, index=True)
+    absentee_date = db.Column(db.Date, nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    original_filename = db.Column(db.String(255), nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True, unique=True)
+    storage_relpath = db.Column(db.String(512), nullable=True)
+    mime_type = db.Column(db.String(128), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_by_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class ReportFilterPreset(db.Model):
+    __tablename__ = 'report_filter_preset'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    report_key = db.Column(db.String(80), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False, default='{}')
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    subscriptions = db.relationship('ReportSubscription', backref='preset', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class ReportSubscription(db.Model):
+    __tablename__ = 'report_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    preset_id = db.Column(db.Integer, db.ForeignKey('report_filter_preset.id'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    schedule_type = db.Column(db.String(20), nullable=False, default='daily')
+    schedule_params_json = db.Column(db.Text, nullable=False, default='{}')
+    delivery_channel = db.Column(db.String(20), nullable=False, default='in_app')
+    is_active = db.Column(db.Boolean, default=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# --- Message Templates API ---
+
+
+@app.route("/api/message-templates", methods=["GET"])
+@login_required
+def api_message_templates_list():
+    """List active message templates, optionally filtered by category."""
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
+    })
+
+
+@app.route("/api/message-templates", methods=["POST"])
+@login_required
+def api_message_templates_create():
+    """Create a new message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    category = (data.get("category") or "general").strip()
+    body = (data.get("body") or "").strip()
+    placeholders = data.get("placeholders") or []
+    if not name or not body:
+        return jsonify({"error": "Name and body are required."}), 400
+    valid_categories = {"attendance", "behavior", "academic", "general"}
+    if category not in valid_categories:
+        return jsonify({"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"}), 400
+    tpl = MessageTemplate(
+        name=name,
+        category=category,
+        body=body,
+        placeholders_json=json.dumps(placeholders) if placeholders else None,
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(tpl)
+    db.session.commit()
+    return jsonify({"ok": True, "template": {"id": tpl.id, "name": tpl.name, "category": tpl.category}}), 201
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["PUT"])
+@login_required
+def api_message_templates_update(template_id):
+    """Update a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    data = request.get_json(force=True)
+    if "name" in data:
+        tpl.name = (data["name"] or "").strip()
+    if "category" in data:
+        cat = (data["category"] or "").strip()
+        valid_categories = {"attendance", "behavior", "academic", "general"}
+        if cat not in valid_categories:
+            return jsonify({"error": f"Invalid category."}), 400
+        tpl.category = cat
+    if "body" in data:
+        tpl.body = (data["body"] or "").strip()
+    if "placeholders" in data:
+        tpl.placeholders_json = json.dumps(data["placeholders"]) if data["placeholders"] else None
+    if "is_active" in data:
+        tpl.is_active = bool(data["is_active"])
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["DELETE"])
+@login_required
+def api_message_templates_delete(template_id):
+    """Soft-delete (deactivate) a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    tpl.is_active = False
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/teacher/message-templates", methods=["GET"])
+@login_required
+def api_teacher_message_templates():
+    """Teacher-facing list of message templates with placeholders info."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
+    })
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Save API stubs (referenced by templates)
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/teacher/attendance/save", methods=["POST"])
+@login_required
+def api_teacher_attendance_save():
+    """Save an attendance record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_absent = request.form.get("date_absent", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    reason_id = request.form.get("reason_id", "").strip()
+    reason_other = request.form.get("reason_other", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not date_absent:
+        return jsonify({"error": "Learner ID and date are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    # Record audit trail
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_attendance", module="attendance",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date_absent": date_absent,
+            "academic_year": academic_year, "term": term,
+            "reason_id": reason_id, "reason_other": reason_other,
+        }),
+    )
+    db.session.add(audit)
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="attendance_record",
+            module="attendance",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} recorded attendance for learner {learner_id} on {date_absent}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "date_absent": date_absent,
+                "academic_year": academic_year, "term": term,
+                "reason_id": reason_id, "reason_other": reason_other,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Attendance recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/discipline/save", methods=["POST"])
+@login_required
+def api_teacher_discipline_save():
+    """Save a discipline record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_str = request.form.get("date", "").strip()
+    entry_type = request.form.get("type", "Demerit").strip()
+    points = request.form.get("points", "1").strip()
+    comment = request.form.get("comment", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id:
+        return jsonify({"error": "Learner ID is required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    points_int = 0
+    try:
+        points_int = max(0, min(10, int(points)))
+    except (ValueError, TypeError):
+        pass
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_discipline", module="discipline",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date": date_str, "type": entry_type,
+            "points": points_int, "comment": comment,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Discipline recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/assessments/save", methods=["POST"])
+@login_required
+def api_teacher_assessments_save():
+    """Save an assessment mark record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    subject_id = request.form.get("subject_id", "").strip()
+    mark = request.form.get("mark", "").strip()
+    total_mark = request.form.get("total_mark", "100").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not subject_id or not mark:
+        return jsonify({"error": "Learner ID, subject, and mark are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_assessment", module="assessments",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "subject_id": subject_id,
+            "mark": mark, "total_mark": total_mark,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="grade_update",
+            module="grades",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} saved assessment mark {mark}/{total_mark} for learner {learner_id} in {subject_id}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "subject_id": subject_id,
+                "mark": mark, "total_mark": total_mark,
+                "academic_year": academic_year, "term": term,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
+    db.session.commit()
+    return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
