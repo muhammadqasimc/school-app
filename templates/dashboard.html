@@ -91,6 +91,11 @@
             <i class="fas fa-notes-medical"></i> Sick note
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="assignments-tab" data-bs-toggle="tab" data-bs-target="#assignments" type="button">
+            <i class="fas fa-book-open"></i> Assignments
+        </button>
+    </li>
     {% endif %}
 </ul>
 
@@ -884,6 +889,25 @@
         </div>
     </div>
     {% endif %}
+
+    {% if active_learner_id or graphs_unrestricted %}
+    <div class="tab-pane fade" id="assignments" role="tabpanel">
+        <div class="learner-profile-card mb-4">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h4 class="mb-1"><i class="fas fa-book-open"></i> Assignments</h4>
+                    <p class="mb-0 opacity-90">View assignments and homework for {{ learner_info.name ~ ' ' ~ learner_info.surname if learner_info else 'the active learner' }}.</p>
+                </div>
+            </div>
+        </div>
+        <div id="assignmentsList">
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                <p>Loading assignments...</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Subject Details Modal -->
@@ -1277,6 +1301,14 @@ document.addEventListener('DOMContentLoaded', function() {
             loadSickNoteHistory();
         });
     }
+
+    const assignmentsTab = document.getElementById('assignments-tab');
+    if (assignmentsTab) {
+        assignmentsTab.addEventListener('shown.bs.tab', function() {
+            loadAssignments();
+        });
+    }
+
     const camInput = document.getElementById('sickNoteCamera');
     const fileInput = document.getElementById('sickNoteFile');
     if (camInput) {
@@ -2836,6 +2868,79 @@ function onAttendanceYearChange() {
 
 function applyAttendanceFilters() {
     loadAttendanceData();
+}
+
+// Load Assignments Data
+function loadAssignments() {
+    const listEl = document.getElementById('assignmentsList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x mb-3"></i><p>Loading assignments...</p></div>';
+
+    fetch('/api/parent/assignments')
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to load assignments');
+            return r.json();
+        })
+        .then(data => {
+            if (!Array.isArray(data) || data.length === 0) {
+                listEl.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-inbox fa-3x mb-3"></i><p>No assignments available for this learner yet.</p></div>';
+                return;
+            }
+            let html = '';
+            data.forEach(a => {
+                const due = a.dueDate ? new Date(a.dueDate).toLocaleDateString() : 'No due date';
+                const typeBadge = a.assignmentType === 'homework' ? 'secondary' :
+                                  a.assignmentType === 'activity' ? 'info' : 'primary';
+                const typeLabel = a.assignmentType.charAt(0).toUpperCase() + a.assignmentType.slice(1);
+
+                html += '<div class="card mb-3">';
+                html += '<div class="card-body">';
+                html += '<div class="d-flex justify-content-between align-items-start">';
+                html += '<div>';
+                html += '<h5 class="card-title mb-1">' + escapeHtml(a.title) + '</h5>';
+                html += '<span class="badge bg-' + typeBadge + ' me-1">' + typeLabel + '</span>';
+                html += '<small class="text-muted"><i class="fas fa-calendar-alt"></i> Due: ' + due + '</small>';
+                html += '</div></div>';
+
+                if (a.description) {
+                    html += '<p class="card-text mt-2">' + escapeHtml(a.description) + '</p>';
+                }
+
+                // File attachments
+                if (a.fileAttachments && a.fileAttachments.length > 0) {
+                    html += '<div class="mt-2"><small class="fw-bold text-muted"><i class="fas fa-paperclip"></i> Attachments:</small><ul class="list-unstyled mb-0 ms-2">';
+                    a.fileAttachments.forEach((f, idx) => {
+                        const dlUrl = (a.fileDownloadUrls && a.fileDownloadUrls[idx]) ? a.fileDownloadUrls[idx] : '#';
+                        html += '<li class="small"><i class="fas fa-file me-1"></i><a href="' + dlUrl + '" target="_blank" download>' + escapeHtml(f.original_name || 'File') + '</a></li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                // External links
+                if (a.links && a.links.length > 0) {
+                    html += '<div class="mt-2"><small class="fw-bold text-muted"><i class="fas fa-link"></i> Links:</small><ul class="list-unstyled mb-0 ms-2">';
+                    a.links.forEach(link => {
+                        const linkTitle = link.title || link.url;
+                        html += '<li class="small"><i class="fas fa-external-link-alt me-1"></i><a href="' + escapeHtml(link.url) + '" target="_blank" rel="noopener">' + escapeHtml(linkTitle) + '</a></li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                html += '</div></div>';
+            });
+            listEl.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error loading assignments:', err);
+            listEl.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Error loading assignments. Please try again later.</div>';
+        });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // Load Finance Data

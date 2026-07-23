@@ -6,6 +6,7 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
+<<<<<<< Updated upstream
 [ ] Add teacher portal routes for dashboard/classes/roster/report export smoke coverage
 [ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
 [ ] Add saved filter presets for management report pages
@@ -21,3 +22,8 @@
 [ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
 [ ] Add report scheduling/subscriptions for saved management filters and automated delivery
 [ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+=======
+[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
+    [ ] Parent portal view of assignments with download links
+    [ ] Parent read acknowledgment tracking for assignments
+>>>>>>> Stashed changes
