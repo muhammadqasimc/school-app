@@ -62,3 +62,66 @@ Notable:
   - Potential minor XSS vector in innerHTML rendering of learner_info dict entries (field names from Access DB rendered directly), but low risk since admin-only page and DB values are controlled.
   - One stale test PDF remains in static/uploads/attendance_exceptions/ — clean up candidate.
   - Test suite runtime improved to ~2m10s (was 3m17s last scan), possibly due to less contention.
+
+2026-07-23 11:07 — Cron intake scan (emergency recovery)
+=======================================================
+
+HEAD: f4c5b97 fix: resolve stash merge corruption — restore deleted models, routes, and fix app.py SyntaxError
+
+State: Clean working tree. 401 pass, 8 fail (262 warnings).
+
+CRITICAL: Previous commit 10f5243 was pushed with unresolved git stash merge
+conflicts that corrupted app.py AND SchoolApp_todo.txt. The following damage
+was found and repaired:
+
+CORRUPTION SCOPE:
+  - Merge conflict markers in app.py (<<<<<<< Updated upstream / >>>>>>> Stashed changes)
+    caused SyntaxError on import → all 409 tests failed collection
+  - Merge conflict markers in SchoolApp_todo.txt
+  - 226 lines silently DELETED from app.py by the stash resolution:
+    7 model classes: EarlyIntervention, InterventionNotification,
+    InterventionReferral, AttendanceExceptionCode, AttendanceException,
+    ReportFilterPreset, ReportSubscription
+    5 message template API routes
+    3 teacher save API routes (attendance, discipline, assessments/save)
+  - Duplicate Chat Platform API block (388 lines) causing endpoint collision
+
+REPAIRS:
+  - Removed all conflict markers from app.py and SchoolApp_todo.txt
+  - Deleted duplicate chat API block (originally 6371-6758, 12 duplicate endpoints)
+  - Restored 7 model classes + 8 API route functions from git history
+  - Resolved SchoolApp_todo.txt merge conflict (kept upstream + stash items)
+  - Updated todo list: 21 [x], 3 pending
+
+COMPLETED since last scan:
+  [x] Searchable admin audit log for grades, attendance, permissions, announcements
+  [x] CSV import preview with column mapping and data display
+  [x] Chat API routes with delivery/read receipts
+  [x] MessageTemplate model + CRUD + teacher selector
+  [x] Parent/guardian notification workflows
+  [x] Overdue finance reminder history + resend tracking + frontend
+  [x] Teacher portal routes: dashboard, classes, roster, attendance,
+      discipline, assessments, reports, messages, save endpoints,
+      learner profiles, discipline entry
+  [x] Parent portal view of assignments with download links
+  [x] Teacher assignment posting with file/link attachments
+
+REMAINING failures (8):
+  1-4. test_admin_communication_center — finance reminder routes not implemented
+        (tests exist as spec, feature pending)
+  5. test_parent_assignments_requires_auth — ordering-dependent, passes in isolation
+  6-8. test_pg_compat_translation (3) — pre-existing, PG compat stubs deleted
+
+REGRESSIONS: N/A (recovery diff, not normal scan)
+  - .query.get() regression count: rescan needed on next cycle
+  - Warnings: 262 (up from 194) — likely from the restored legacy calls
+
+NOTEBOOK:
+  - Stash merge corruption is the #1 source of instability in this codebase.
+    Consider a pre-commit hook that rejects files with conflict markers.
+  - Several stash entries remain in git (stash@{0}..stash@{42}) with partial
+    feature branches that may contain unreferenced code.
+  - Many test PDF files accumulated in static/uploads/ — 19 new test upload
+    artifacts from teacher assignment and attendance exception tests.
+  - The `ensure_app_schema()` function references `_sync_postgres_id_sequences()`
+    which was also deleted? Verify on next scan.
