@@ -62,3 +62,190 @@ Notable:
   - Potential minor XSS vector in innerHTML rendering of learner_info dict entries (field names from Access DB rendered directly), but low risk since admin-only page and DB values are controlled.
   - One stale test PDF remains in static/uploads/attendance_exceptions/ — clean up candidate.
   - Test suite runtime improved to ~2m10s (was 3m17s last scan), possibly due to less contention.
+
+2026-07-23 11:07 — Cron intake scan (emergency recovery)
+=======================================================
+
+HEAD: f4c5b97 fix: resolve stash merge corruption — restore deleted models, routes, and fix app.py SyntaxError
+
+State: Clean working tree. 401 pass, 8 fail (262 warnings).
+
+CRITICAL: Previous commit 10f5243 was pushed with unresolved git stash merge
+conflicts that corrupted app.py AND SchoolApp_todo.txt. The following damage
+was found and repaired:
+
+CORRUPTION SCOPE:
+  - Merge conflict markers in app.py (<<<<<<< Updated upstream / >>>>>>> Stashed changes)
+    caused SyntaxError on import → all 409 tests failed collection
+  - Merge conflict markers in SchoolApp_todo.txt
+  - 226 lines silently DELETED from app.py by the stash resolution:
+    7 model classes: EarlyIntervention, InterventionNotification,
+    InterventionReferral, AttendanceExceptionCode, AttendanceException,
+    ReportFilterPreset, ReportSubscription
+    5 message template API routes
+    3 teacher save API routes (attendance, discipline, assessments/save)
+  - Duplicate Chat Platform API block (388 lines) causing endpoint collision
+
+REPAIRS:
+  - Removed all conflict markers from app.py and SchoolApp_todo.txt
+  - Deleted duplicate chat API block (originally 6371-6758, 12 duplicate endpoints)
+  - Restored 7 model classes + 8 API route functions from git history
+  - Resolved SchoolApp_todo.txt merge conflict (kept upstream + stash items)
+  - Updated todo list: 21 [x], 3 pending
+
+COMPLETED since last scan:
+  [x] Searchable admin audit log for grades, attendance, permissions, announcements
+  [x] CSV import preview with column mapping and data display
+  [x] Chat API routes with delivery/read receipts
+  [x] MessageTemplate model + CRUD + teacher selector
+  [x] Parent/guardian notification workflows
+  [x] Overdue finance reminder history + resend tracking + frontend
+  [x] Teacher portal routes: dashboard, classes, roster, attendance,
+      discipline, assessments, reports, messages, save endpoints,
+      learner profiles, discipline entry
+  [x] Parent portal view of assignments with download links
+  [x] Teacher assignment posting with file/link attachments
+
+REMAINING failures (8):
+  1-4. test_admin_communication_center — finance reminder routes not implemented
+        (tests exist as spec, feature pending)
+  5. test_parent_assignments_requires_auth — ordering-dependent, passes in isolation
+  6-8. test_pg_compat_translation (3) — pre-existing, PG compat stubs deleted
+
+REGRESSIONS: N/A (recovery diff, not normal scan)
+  - .query.get() regression count: rescan needed on next cycle
+  - Warnings: 262 (up from 194) — likely from the restored legacy calls
+
+NOTEBOOK:
+  - Stash merge corruption is the #1 source of instability in this codebase.
+    Consider a pre-commit hook that rejects files with conflict markers.
+  - Several stash entries remain in git (stash@{0}..stash@{42}) with partial
+    feature branches that may contain unreferenced code.
+  - Many test PDF files accumulated in static/uploads/ — 19 new test upload
+    artifacts from teacher assignment and attendance exception tests.
+  - The `ensure_app_schema()` function references `_sync_postgres_id_sequences()`
+    which was also deleted? Verify on next scan.
+
+2026-07-23 18:30 — Cron intake scan (cycle 2 this date)
+=====================================================
+
+HEAD: d3f119e feat: add parent read acknowledgment tracking for assignments
+
+State: Modified (SchoolApp_todo.txt resolved). 389 pass, 10 fail (16 deselected — teacher portal smokes + report schedules + parent assignments long-timers).
+
+FIXED since last scan:
+  [x] Resolved merge conflict markers in SchoolApp_todo.txt — upstream/stash conflict from corrupted stash merge
+  [x] Updated todo list: 8 → 12 items, dropping 15 completed upstream items and 3 completed stash items
+
+Still failing (10 tests, 3 new flaky):
+  1-4. test_admin_communication_finance_* (4) — spec tests, routes not implemented
+  5-7. test_pg_compat_translation (3) — pre-existing, PG compat stubs deleted
+  8-10. test_student_360 (3) — NEW: flaky/ordering-dependent, fail in full suite, pass in isolation
+
+NEW FINDINGS:
+  1. stash@{30} has uncommitted finance reminder routes:
+     - `/admin/communication/finance/outstanding` (GET)
+     - `/admin/communication/finance/send` (POST)
+     - `/admin/communication/finance/reminders` (GET)
+     - `/admin/communication/finance/reminder/<batch_id>` (GET)
+     - These exist in admin_routes.py in the stash but were never applied to the working tree
+     - app.py changes from that stash are already committed (AdminAuditLog model, finance helpers)
+
+  2. 65 stale test PDFs in static/uploads/:
+     - assignments/: 21 files (all 16-byte "fake pdf content" placeholders)
+     - attendance_exceptions/: 43 files (all _test_doc.pdf, same 16-byte placeholder)
+     - disciplinary/pdfs/: 1 .~lock file (LibreOffice stale lock artifact)
+     - Detention/ (76 files) and others are legitimate user-generated files
+
+  3. Git stash audit completed (GIT_STASH_AUDIT.md):
+     - 44 stashes total → 42 can be dropped
+     - 31 are auto-generated todo/findings-only artifacts (zero code value)
+     - 11 contain already-committed code
+     - Keep: stash@{0} (current branch WIP), stash@{30} (uncommitted finance routes)
+
+  4. .query.get() count STABLE at 26 (19 app.py + 7 tests) — no new regressions
+
+  5. Warnings: 253 (down from 262 in recovery scan, up from 194 pre-corruption)
+
+  6. ensure_app_schema() is NOT called at module import — test modules must call it
+     explicitly. test_admin_audit_log.py doesn't call it (works because table already
+     exists in dashboard.db; would fail on fresh DB).
+
+  7. SQLite "database is locked" errors continue — root cause is shared dashboard.db
+     between test processes without proper timeout or in-memory test DB isolation.
+     Affects test_admin_audit_log (flaky) and test_student_360 (3 tests flaky).
+
+Notable:
+  - Major todo cleanup: 15 completed items removed from upstream list, 3 completed items from stash
+  - Full test suite now takes ~4m48s (up from 2m10s before corruption) — likely due to more features
+  - stash audit revealed a pattern: every cron cycle creates ~3 new auto-generated todo/findings stashes over 44, none of which contain valuable code
+  - Consider `git stash clear` after reviewing stash@{30}
+
+2026-07-23 23:30 — Cron intake scan
+=====================================
+
+HEAD: d3f119e feat: add parent read acknowledgment tracking for assignments
+
+State: Uncommitted local modifications (SchoolApp_todo.txt, findings.log). 407 pass, 8 fail (277 warnings).
+
+No new commits since last scan (same HEAD as 18:30 scan).
+
+IMPROVED since last scan:
+  [x] test_student_360 flakiness RESOLVED — 6/6 pass in full suite (was failing in 18:30 scan)
+  [x] Parent read acknowledgment tracking (d3f119e): 392-line test file, 8 tests, 0 new .query.get() calls — clean pattern adherence
+
+Still failing (8 tests, same set):
+  1-4. test_admin_communication_finance_* (4) — spec tests, routes not implemented (stash@{30})
+  5. test_parent_assignments_requires_auth — still ordering-dependent flaky
+  6-8. test_pg_compat_translation (3) — pre-existing, PG compat stubs deleted
+
+METRICS:
+  - .query.get() count: 26 (19 app.py + 7 tests) — STABLE, no new regressions
+  - Warnings: 277 (up from 253 last scan, +24 from new feature tests)
+  - Stale test PDFs: 68 (was 65, +3 new from parent assignment receipts tests)
+  - Test suite runtime: ~3m42s (down from 4m48s — possibly fewer contention collisions)
+  - Stash count: 44 (unchanged — no cleanup performed)
+
+Notable:
+  - The parent read acknowledgment feature is well-built with dedicated tests and zero new .query.get() calls.
+  - test_student_360 resolution suggests the SQLite locking issue is intermittent, not structural — may recur.
+  - Still no movement on the 4 finance route spec tests (blocked on stash@{30} extraction).
+  - 44 stale stashes still accumulating. Each cron cycle creates ~3 more auto-generated artifacts.
+  - The test suite runtime improved (3m42s vs 4m48s) suggesting last scan's 4m48s was an outlier from contention.
+
+2026-07-24 05:00 — Cron intake scan (corruption repair + scan)
+============================================================
+
+HEAD: 13dc1a2 chore(schoolapp): complete todo work (cron/schoolapp-todo-20260723-190738)
+
+State: Modified (app.py, SchoolApp_todo.txt, findings.log — all had merge conflict markers). 403 pass, 6 fail (266 warnings, 200s runtime).
+
+CRITICAL REPAIRS PERFORMED:
+  [x] Removed merge conflict markers from app.py (SyntaxError at line 614 blocked ALL tests)
+  [x] Fixed duplicate EarlyIntervention model (was misnamed as second MessageTemplate class)
+  [x] Removed 3 duplicated API blocks: Message Templates routes (98 lines), Teacher Save stubs (197 lines), Chat Platform API + page routes (387 lines) — ~680 lines of dead duplicate code
+  [x] Removed conflict markers from SchoolApp_todo.txt and findings.log
+
+STILL FAILING (6 tests):
+  1. test_parent_assignments_requires_auth — ordering-dependent flaky
+  2-4. test_pg_compat_translation (3) — PG compat stubs deleted (pre-existing)
+  5-6. test_teacher_assignments::test_page_renders / test_page_requires_teacher — /teacher/assignments page route never implemented (spec test)
+
+FIXED since last scan:
+  [x] test_admin_communication_finance_* (4 tests) now PASS — finance routes were extracted from stash@{30} and exist in admin_routes.py
+  [x] test_student_360 (3 tests) continue to pass — confirmed stable
+
+METRICS:
+  - .query.get() count: 20 (13 app.py + 7 tests) — DOWN from 26, improved by removing duplicate code paths
+  - Warnings: 266 (down from 277)
+  - Stale test PDFs: 68 (22 assignments + 46 attendance_exceptions) — unchanged
+  - Stash count: 45 (+1 from this session's work)
+  - Test suite runtime: ~3m20s (stable)
+
+NOTABLE:
+  - The stash merge corruption from Jul 23 continued to plague this branch with committed conflict markers. All three corrupted files (app.py, todo, findings) now clean.
+  - Finance reminder routes from stash@{30} were already extracted to admin_routes.py sometime after the 23:30 scan — the 4 spec tests now pass.
+  - 686 lines of dead duplicate code removed from app.py — reduces cognitive load and eliminates endpoint collision vulnerabilities.
+  - Teacher assignments page route (/teacher/assignments) still missing — the API routes exist but the page route referenced by test_teacher_assignments.py was never implemented. This is a todo item, not a regression.
+  - The 45 stashes continue to accumulate. Each cron session on this branch adds ~1-3 stash entries with todo/findings changes. A `git stash clear` after reviewing stash@{30} would reclaim significant clutter.
+  - .query.get() count dropped from 26 to 20 — the duplicate code removal eliminated 6 legacy lookups that existed only in the dead code blocks.

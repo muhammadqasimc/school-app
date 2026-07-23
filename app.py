@@ -8,7 +8,7 @@ warnings.filterwarnings(
     category=Warning,
 )
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
+from flask import Flask, Response, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -550,6 +550,23 @@ class TeacherAuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class AdminAuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    operation = db.Column(db.String(64), nullable=True, index=True)  # Used by _log_admin_action
+    action = db.Column(db.String(64), nullable=True, index=True)  # e.g. grade_update, attendance_record, permission_change, announcement_create
+    module = db.Column(db.String(64), nullable=False, index=True)  # e.g. grades, attendance, permissions, announcements
+    target_type = db.Column(db.String(64), nullable=True)  # e.g. learner, user, announcement
+    target_id = db.Column(db.String(64), nullable=True)  # ID of the affected entity
+    summary = db.Column(db.Text, nullable=True)  # Human-readable description
+    details_json = db.Column(db.Text, nullable=True)  # JSON with change details
+    ip_address = db.Column(db.String(64), nullable=True)  # request.remote_addr
+    record_count = db.Column(db.Integer, nullable=True)  # Used by _log_admin_action
+    filename = db.Column(db.String(255), nullable=True)  # Used by _log_admin_action
+    status = db.Column(db.String(32), default='success')  # Used by _log_admin_action
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class TeacherTermLock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     academic_year = db.Column(db.String(8), nullable=False, index=True)
@@ -594,6 +611,38 @@ class FunctionNotice(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class TeacherAssignment(db.Model):
+    __tablename__ = 'teacher_assignment'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    assignment_type = db.Column(db.String(32), nullable=False, default='assignment')
+    target_grade = db.Column(db.String(32), nullable=True)
+    target_class = db.Column(db.String(64), nullable=True)
+    due_date = db.Column(db.DateTime, nullable=True)
+    file_attachments = db.Column(db.Text, nullable=True)  # JSON array of {original_name, stored_name, mime_type, size_bytes, storage_relpath}
+    links = db.Column(db.Text, nullable=True)  # JSON array of {url, title}
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "userId": self.user_id,
+            "title": self.title,
+            "description": self.description or "",
+            "assignmentType": self.assignment_type,
+            "targetGrade": self.target_grade or "",
+            "targetClass": self.target_class or "",
+            "dueDate": self.due_date.isoformat() if self.due_date else None,
+            "fileAttachments": json.loads(self.file_attachments) if self.file_attachments else [],
+            "links": json.loads(self.links) if self.links else [],
+            "isActive": self.is_active,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+        }
 class TeacherWriteEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -863,8 +912,23 @@ class SchoolAssetRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
-class EarlyIntervention(db.Model):
-    __tablename__ = 'early_intervention'
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='general', index=True)  # attendance|behavior|academic|general
+    body = db.Column(db.Text, nullable=False)
+    placeholders_json = db.Column(db.Text, nullable=True)  # JSON list like ["parent_name","learner_name","grade"]
+    is_active = db.Column(db.Boolean, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MessageTemplate(db.Model):
+    __tablename__ = 'message_template'
+
     id = db.Column(db.Integer, primary_key=True)
     learner_id = db.Column(db.String(50), nullable=False, index=True)
     learner_name = db.Column(db.String(200), nullable=True)
@@ -966,6 +1030,312 @@ class ReportSubscription(db.Model):
     last_run_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# --- Message Templates API ---
+
+
+@app.route("/api/message-templates", methods=["GET"])
+@login_required
+def api_message_templates_list():
+    """List active message templates, optionally filtered by category."""
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
+    })
+
+
+@app.route("/api/message-templates", methods=["POST"])
+@login_required
+def api_message_templates_create():
+    """Create a new message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    category = (data.get("category") or "general").strip()
+    body = (data.get("body") or "").strip()
+    placeholders = data.get("placeholders") or []
+    if not name or not body:
+        return jsonify({"error": "Name and body are required."}), 400
+    valid_categories = {"attendance", "behavior", "academic", "general"}
+    if category not in valid_categories:
+        return jsonify({"error": f"Invalid category. Must be one of: {', '.join(sorted(valid_categories))}"}), 400
+    tpl = MessageTemplate(
+        name=name,
+        category=category,
+        body=body,
+        placeholders_json=json.dumps(placeholders) if placeholders else None,
+        created_by_user_id=current_user.id,
+    )
+    db.session.add(tpl)
+    db.session.commit()
+    return jsonify({"ok": True, "template": {"id": tpl.id, "name": tpl.name, "category": tpl.category}}), 201
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["PUT"])
+@login_required
+def api_message_templates_update(template_id):
+    """Update a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    data = request.get_json(force=True)
+    if "name" in data:
+        tpl.name = (data["name"] or "").strip()
+    if "category" in data:
+        cat = (data["category"] or "").strip()
+        valid_categories = {"attendance", "behavior", "academic", "general"}
+        if cat not in valid_categories:
+            return jsonify({"error": f"Invalid category."}), 400
+        tpl.category = cat
+    if "body" in data:
+        tpl.body = (data["body"] or "").strip()
+    if "placeholders" in data:
+        tpl.placeholders_json = json.dumps(data["placeholders"]) if data["placeholders"] else None
+    if "is_active" in data:
+        tpl.is_active = bool(data["is_active"])
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/message-templates/<int:template_id>", methods=["DELETE"])
+@login_required
+def api_message_templates_delete(template_id):
+    """Soft-delete (deactivate) a message template (admin only)."""
+    if not is_admin_user(current_user):
+        abort(403)
+    tpl = db.session.get(MessageTemplate, template_id)
+    if not tpl:
+        return jsonify({"error": "Template not found."}), 404
+    tpl.is_active = False
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/teacher/message-templates", methods=["GET"])
+@login_required
+def api_teacher_message_templates():
+    """Teacher-facing list of message templates with placeholders info."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    category = request.args.get("category", "").strip()
+    query = MessageTemplate.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    templates = query.order_by(MessageTemplate.category, MessageTemplate.name).all()
+    return jsonify({
+        "templates": [{
+            "id": t.id,
+            "name": t.name,
+            "category": t.category,
+            "body": t.body,
+            "placeholders": json.loads(t.placeholders_json) if t.placeholders_json else [],
+        } for t in templates]
+    })
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Save API stubs (referenced by templates)
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/teacher/attendance/save", methods=["POST"])
+@login_required
+def api_teacher_attendance_save():
+    """Save an attendance record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_absent = request.form.get("date_absent", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    reason_id = request.form.get("reason_id", "").strip()
+    reason_other = request.form.get("reason_other", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not date_absent:
+        return jsonify({"error": "Learner ID and date are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    # Record audit trail
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_attendance", module="attendance",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date_absent": date_absent,
+            "academic_year": academic_year, "term": term,
+            "reason_id": reason_id, "reason_other": reason_other,
+        }),
+    )
+    db.session.add(audit)
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="attendance_record",
+            module="attendance",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} recorded attendance for learner {learner_id} on {date_absent}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "date_absent": date_absent,
+                "academic_year": academic_year, "term": term,
+                "reason_id": reason_id, "reason_other": reason_other,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Attendance recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/discipline/save", methods=["POST"])
+@login_required
+def api_teacher_discipline_save():
+    """Save a discipline record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_str = request.form.get("date", "").strip()
+    entry_type = request.form.get("type", "Demerit").strip()
+    points = request.form.get("points", "1").strip()
+    comment = request.form.get("comment", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id:
+        return jsonify({"error": "Learner ID is required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    points_int = 0
+    try:
+        points_int = max(0, min(10, int(points)))
+    except (ValueError, TypeError):
+        pass
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_discipline", module="discipline",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date": date_str, "type": entry_type,
+            "points": points_int, "comment": comment,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Discipline recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/assessments/save", methods=["POST"])
+@login_required
+def api_teacher_assessments_save():
+    """Save an assessment mark record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    subject_id = request.form.get("subject_id", "").strip()
+    mark = request.form.get("mark", "").strip()
+    total_mark = request.form.get("total_mark", "100").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not subject_id or not mark:
+        return jsonify({"error": "Learner ID, subject, and mark are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_assessment", module="assessments",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "subject_id": subject_id,
+            "mark": mark, "total_mark": total_mark,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="grade_update",
+            module="grades",
+            target_type="learner",
+            target_id=learner_id,
+            summary=f"Teacher {current_user.username} saved assessment mark {mark}/{total_mark} for learner {learner_id} in {subject_id}",
+            details_json=json.dumps({
+                "learner_id": learner_id, "subject_id": subject_id,
+                "mark": mark, "total_mark": total_mark,
+                "academic_year": academic_year, "term": term,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
+    db.session.commit()
+    return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
 
 
 @login_manager.user_loader
@@ -3670,6 +4040,849 @@ def teacher_announcements_page():
     return render_template("teacher/announcements.html")
 
 
+# ---------------------------------------------------------------------------
+# Teacher Portal — Page routes
+# ---------------------------------------------------------------------------
+@app.route("/teacher/classes")
+@login_required
+def teacher_classes_page():
+    """Teacher classes/roster page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/classes.html")
+
+
+@app.route("/teacher/attendance")
+@login_required
+def teacher_attendance_page():
+    """Teacher attendance page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/attendance.html")
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — API routes
+# ---------------------------------------------------------------------------
+@app.route("/api/teacher/dashboard")
+@login_required
+def api_teacher_dashboard():
+    """Return KPI data for the teacher dashboard."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    uid = current_user.id
+
+    # Count assigned classes and distinct grades from UserTeacherAssignment
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=uid, is_active=True
+    ).all()
+    assigned_classes = len(set(a.class_id for a in assignments if a.class_id))
+    assigned_grades = len(set(a.grade for a in assignments if a.grade))
+
+    # Learner count — approximate from MDB
+    learner_count = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Learner_Info]"
+        )
+        if rows:
+            learner_count = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending attendance — count from Absentees in current year
+    pending_attendance = 0
+    try:
+        rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if rows:
+            pending_attendance = int(rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Pending assessments — count from ReportMarks in current year
+    pending_assessments = 0
+    try:
+        mark_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE [Datayear] = ?",
+            (str(datetime.now().year),),
+        )
+        if mark_rows:
+            pending_assessments = int(mark_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    # Recent discipline — count from DisciplinaryLearnerMisconduct
+    recent_discipline = 0
+    try:
+        disc_rows = mdb_conn.execute_query(
+            "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct]"
+        )
+        if disc_rows:
+            recent_discipline = int(disc_rows[0].get("cnt", 0) or 0)
+    except Exception:
+        pass
+
+    return jsonify({
+        "kpis": {
+            "assignedClasses": assigned_classes,
+            "assignedGrades": assigned_grades,
+            "learnerCount": learner_count,
+            "pendingAttendance": pending_attendance,
+            "pendingAssessments": pending_assessments,
+            "recentDiscipline": recent_discipline,
+        }
+    })
+
+
+@app.route("/api/teacher/classes")
+@login_required
+def api_teacher_classes():
+    """Return the current teacher's class/subject assignments."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    assignments = UserTeacherAssignment.query.filter_by(
+        user_id=current_user.id, is_active=True
+    ).all()
+    return jsonify({
+        "assignments": [
+            {
+                "classId": a.class_id or "",
+                "grade": a.grade or "",
+                "subject": a.subject or "",
+                "academicYear": a.academic_year or "",
+            }
+            for a in assignments
+        ]
+    })
+
+
+@app.route("/api/teacher/roster")
+@login_required
+def api_teacher_roster():
+    """Return learners filtered by grade and/or class_id for roster view."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    return jsonify({
+        "learners": [
+            {
+                "learnerId": str(r.get("LearnerID", r.get("ID", "")) or ""),
+                "name": str(r.get("FName", "") or ""),
+                "surname": str(r.get("SName", "") or ""),
+                "grade": str(r.get("Grade", "") or ""),
+                "classId": str(r.get("Class", "") or ""),
+            }
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/teacher/attendance")
+@login_required
+def api_teacher_attendance():
+    """Return attendance records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Learnerid], [DateAbsent], [Grade], [Class], [ReasonOther] "
+        "FROM [Absentees] ORDER BY [DateAbsent] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/discipline")
+@login_required
+def api_teacher_discipline():
+    """Return discipline records."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    sql = (
+        "SELECT TOP 200 [Date], [Learnerid], [Type], [Demerit], [Merit], [Comment] "
+        "FROM [DisciplinaryLearnerMisconduct] ORDER BY [Date] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+    return jsonify({"rows": rows})
+
+
+@app.route("/api/teacher/assessments")
+@login_required
+def api_teacher_assessments():
+    """Return assessment records and available subjects."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    # Fetch assessment rows
+    sql = (
+        "SELECT TOP 200 [LearnerID], [SubjectId], [SubjectName], [Mark], [TotalMark], [Datayear], [ReportId] "
+        "FROM [ReportMarks] ORDER BY [Datayear] DESC"
+    )
+    try:
+        rows = mdb_conn.execute_query(sql) or []
+    except Exception:
+        rows = []
+
+    # Fetch subjects for dropdown
+    subjects_sql = "SELECT [ID], [Name] FROM [Subjects]"
+    try:
+        subjects = mdb_conn.execute_query(subjects_sql) or []
+    except Exception:
+        subjects = []
+
+    return jsonify({
+        "rows": rows,
+        "subjects": [{"Id": str(s.get("ID", "") or ""), "Name": str(s.get("Name", "") or "")} for s in subjects],
+    })
+
+
+@app.route("/api/teacher/reports/export")
+@login_required
+def api_teacher_reports_export():
+    """Export a CSV report of learners with attendance, discipline, and assessment counts for the teacher's scope."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    academic_year = request.args.get("academic_year", "").strip() or str(datetime.now().year)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Build learner query
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+
+    try:
+        learners = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        learners = []
+
+    import csv
+    from io import StringIO
+
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["LearnerID", "Name", "Surname", "Grade", "Class", "AttendanceCount", "DisciplineCount", "AssessmentCount"])
+
+    for l in learners:
+        lid = str(l.get("LearnerID", l.get("ID", "")) or "")
+        # Attendance count for this learner
+        att_count = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [Absentees] WHERE CSTR([Learnerid]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar:
+                att_count = int(ar[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Discipline count
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Assessment count
+        asm_count = 0
+        try:
+            ar2 = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND CSTR([Datayear]) = ?",
+                (lid, academic_year),
+            )
+            if ar2:
+                asm_count = int(ar2[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        cw.writerow([
+            lid,
+            str(l.get("FName", "") or ""),
+            str(l.get("SName", "") or ""),
+            str(l.get("Grade", "") or ""),
+            str(l.get("Class", "") or ""),
+            att_count,
+            disc_count,
+            asm_count,
+        ])
+
+    csv_output = si.getvalue()
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=teacher_report_{academic_year}.csv"},
+    )
+
+
+@app.route("/api/teacher/messages/send", methods=["POST"])
+@login_required
+def api_teacher_messages_send():
+    """Send a chat message. Creates a thread if needed."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    recipient_id = request.form.get("recipient_id", "").strip()
+    learner_id = request.form.get("learner_id", "").strip()
+    body = request.form.get("body", "").strip()
+    thread_id = request.form.get("thread_id", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not body:
+        return jsonify({"error": "Message body is required."}), 400
+
+    # Idempotency check
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already sent.", "idempotent": True})
+
+    # Resolve thread
+    thread = None
+    if thread_id:
+        thread = ChatThread.query.get(int(thread_id))
+    elif recipient_id:
+        # Look for existing direct thread between these two users + learner
+        participants = (
+            ChatParticipant.query
+            .filter(ChatParticipant.user_id.in_([current_user.id, int(recipient_id)]))
+            .group_by(ChatParticipant.thread_id)
+            .having(db.func.count(ChatParticipant.thread_id) == 2)
+            .all()
+        )
+        for p in participants:
+            t = ChatThread.query.get(p.thread_id)
+            if t and t.thread_type == "direct" and t.learner_id == (learner_id or None):
+                thread = t
+                break
+
+    if not thread:
+        thread = ChatThread(
+            thread_type="direct" if not learner_id else "direct",
+            learner_id=learner_id or None,
+            title=body[:100],
+            status="active",
+            created_by_user_id=current_user.id,
+        )
+        db.session.add(thread)
+        db.session.flush()
+        # Add current user as participant
+        db.session.add(ChatParticipant(
+            thread_id=thread.id,
+            user_id=current_user.id,
+            can_post=True,
+        ))
+        if recipient_id:
+            db.session.add(ChatParticipant(
+                thread_id=thread.id,
+                user_id=int(recipient_id),
+                can_post=True,
+            ))
+
+    msg = ChatMessage(
+        thread_id=thread.id,
+        sender_user_id=current_user.id,
+        body=body,
+        message_type="text",
+    )
+    db.session.add(msg)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id,
+            module="messages_send",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"message_id": msg.id}),
+        ))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Message sent.",
+        "thread_id": thread.id,
+        "message_id": msg.id,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Save API stubs (referenced by templates)
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/teacher/attendance/save", methods=["POST"])
+@login_required
+def api_teacher_attendance_save():
+    """Save an attendance record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_absent = request.form.get("date_absent", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    reason_id = request.form.get("reason_id", "").strip()
+    reason_other = request.form.get("reason_other", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not date_absent:
+        return jsonify({"error": "Learner ID and date are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    # Record audit trail
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_attendance", module="attendance",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date_absent": date_absent,
+            "academic_year": academic_year, "term": term,
+            "reason_id": reason_id, "reason_other": reason_other,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="attendance_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Attendance recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/discipline/save", methods=["POST"])
+@login_required
+def api_teacher_discipline_save():
+    """Save a discipline record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    date_str = request.form.get("date", "").strip()
+    entry_type = request.form.get("type", "Demerit").strip()
+    points = request.form.get("points", "1").strip()
+    comment = request.form.get("comment", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id:
+        return jsonify({"error": "Learner ID is required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    points_int = 0
+    try:
+        points_int = max(0, min(10, int(points)))
+    except (ValueError, TypeError):
+        pass
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_discipline", module="discipline",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "date": date_str, "type": entry_type,
+            "points": points_int, "comment": comment,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="discipline_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Discipline recorded.", "learner_id": learner_id})
+
+
+@app.route("/api/teacher/assessments/save", methods=["POST"])
+@login_required
+def api_teacher_assessments_save():
+    """Save an assessment mark record."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    learner_id = request.form.get("learner_id", "").strip()
+    subject_id = request.form.get("subject_id", "").strip()
+    mark = request.form.get("mark", "").strip()
+    total_mark = request.form.get("total_mark", "100").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    term = request.form.get("term", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_id or not subject_id or not mark:
+        return jsonify({"error": "Learner ID, subject, and mark are required."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    audit = TeacherAuditLog(
+        user_id=current_user.id, action="save_assessment", module="assessments",
+        payload_json=json.dumps({
+            "learner_id": learner_id, "subject_id": subject_id,
+            "mark": mark, "total_mark": total_mark,
+            "academic_year": academic_year, "term": term,
+        }),
+    )
+    db.session.add(audit)
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="assessments_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"learner_id": learner_id}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": "Assessment saved.", "learner_id": learner_id})
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Learner Profiles routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/teacher/learner-profiles")
+@login_required
+def teacher_learner_profiles_page():
+    """Teacher learner profiles page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/learner_profiles.html")
+
+
+@app.route("/api/teacher/learner-profiles/filters")
+@login_required
+def api_teacher_learner_profiles_filters():
+    """Return grade, class, and learner filter options."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+
+    # Fetch distinct grades
+    grades = []
+    classes = []
+    learners = []
+    try:
+        if grade:
+            sql = "SELECT DISTINCT CSTR([Grade]) AS g FROM [Learner_Info] WHERE CSTR([Grade]) = ? ORDER BY 1"
+            rows = mdb_conn.execute_query(sql, (grade,)) or []
+            grades = [r["g"] for r in rows if r.get("g")]
+        else:
+            sql = "SELECT DISTINCT CSTR([Grade]) AS g FROM [Learner_Info] ORDER BY 1"
+            rows = mdb_conn.execute_query(sql) or []
+            grades = [r["g"] for r in rows if r.get("g")]
+
+        if grade:
+            sql = "SELECT DISTINCT CSTR([Class]) AS c FROM [Learner_Info] WHERE CSTR([Grade]) = ? ORDER BY 1"
+            params: list[str] = [grade]
+            if class_id:
+                sql = "SELECT DISTINCT CSTR([Class]) AS c FROM [Learner_Info] WHERE CSTR([Grade]) = ? AND CSTR([Class]) = ? ORDER BY 1"
+                params.append(class_id)
+            rows = mdb_conn.execute_query(sql, tuple(params)) or []
+            classes = [r["c"] for r in rows if r.get("c")]
+
+        # Learners for the dropdown
+        sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info]"
+        where = []
+        params = []
+        if grade:
+            where.append("CSTR([Grade]) = ?")
+            params.append(grade)
+        if class_id:
+            where.append("CSTR([Class]) = ?")
+            params.append(class_id)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY [SName], [FName]"
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+        learners = [
+            {"id": str(r.get("LearnerID", r.get("ID", "")) or ""),
+             "label": f"{str(r.get('SName', '') or '')}, {str(r.get('FName', '') or '')} ({str(r.get('LearnerID', r.get('ID', '')) or '')})"}
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    return jsonify({"grades": grades, "classes": classes, "learners": learners})
+
+
+@app.route("/api/teacher/learner-profiles")
+@login_required
+def api_teacher_learner_profiles():
+    """Return learner profiles with academic and discipline summaries."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    class_id = request.args.get("class_id", "").strip()
+    learner_id = request.args.get("learner_id", "").strip()
+
+    sql = "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM [Learner_Info] WHERE 1=1"
+    params: list[str] = []
+    if grade:
+        sql += " AND CSTR([Grade]) = ?"
+        params.append(grade)
+    if class_id:
+        sql += " AND CSTR([Class]) = ?"
+        params.append(class_id)
+    if learner_id:
+        sql += " AND (CSTR([LearnerID]) = ? OR CSTR([ID]) = ?)"
+        params.extend([learner_id, learner_id])
+
+    try:
+        rows = mdb_conn.execute_query(sql, tuple(params)) or []
+    except Exception:
+        rows = []
+
+    result = []
+    for r in rows:
+        lid = str(r.get("LearnerID", r.get("ID", "")) or "")
+        # Count discipline records for this learner
+        disc_count = 0
+        try:
+            dr = mdb_conn.execute_query(
+                "SELECT COUNT(*) AS cnt FROM [DisciplinaryLearnerMisconduct] WHERE CSTR([Learnerid]) = ?",
+                (lid,),
+            )
+            if dr:
+                disc_count = int(dr[0].get("cnt", 0) or 0)
+        except Exception:
+            pass
+
+        # Average mark from ReportMarks
+        avg_pct = 0
+        try:
+            ar = mdb_conn.execute_query(
+                "SELECT AVG(CAST([Mark] AS FLOAT) / NULLIF(CAST([TotalMark] AS FLOAT), 0) * 100) AS avg_pct "
+                "FROM [ReportMarks] WHERE CSTR([LearnerID]) = ? AND [TotalMark] > 0",
+                (lid,),
+            )
+            if ar and ar[0].get("avg_pct") is not None:
+                avg_pct = round(float(ar[0]["avg_pct"]), 1)
+        except Exception:
+            pass
+
+        result.append({
+            "id": str(r.get("ID", "") or ""),
+            "learnerId": lid,
+            "fname": str(r.get("FName", "") or ""),
+            "sname": str(r.get("SName", "") or ""),
+            "grade": str(r.get("Grade", "") or ""),
+            "classId": str(r.get("Class", "") or ""),
+            "disciplineCount": disc_count,
+            "academicAvgPct": avg_pct,
+        })
+
+    return jsonify({"rows": result})
+
+
+# ---------------------------------------------------------------------------
+# Teacher Portal — Disciplinary Entry routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/teacher/disciplinary-entry")
+@login_required
+def teacher_disciplinary_entry_page():
+    """Teacher disciplinary entry page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/disciplinary_entry.html")
+
+
+@app.route("/api/teacher/disciplinary-entry/options")
+@login_required
+def api_teacher_disciplinary_entry_options():
+    """Return filter options for disciplinary entry form."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    grade = request.args.get("grade", "").strip()
+    level = request.args.get("level", "").strip()
+
+    grades = []
+    levels = []
+    learners = []
+    misconducts = []
+
+    try:
+        # Distinct grades from Learner_Info
+        sql = "SELECT DISTINCT CSTR([Grade]) AS g FROM [Learner_Info] ORDER BY 1"
+        rows = mdb_conn.execute_query(sql) or []
+        grades = [r["g"] for r in rows if r.get("g")]
+
+        # Levels — try DisciplinaryLevels table, fallback to static
+        try:
+            lrows = mdb_conn.execute_query("SELECT DISTINCT [Level] FROM [DisciplinaryLevels] ORDER BY 1") or []
+            if lrows:
+                levels = [r["Level"] for r in lrows if r.get("Level")]
+        except Exception:
+            levels = ["Minor", "Moderate", "Serious"]
+
+        # Learners filtered by grade
+        sql2 = "SELECT [ID], [LearnerID], [FName], [SName], [Grade] FROM [Learner_Info] WHERE 1=1"
+        params2: list[str] = []
+        if grade:
+            sql2 += " AND CSTR([Grade]) = ?"
+            params2.append(grade)
+        sql2 += " ORDER BY [SName], [FName]"
+        lrows = mdb_conn.execute_query(sql2, tuple(params2)) or []
+        learners = [
+            {"id": str(r.get("LearnerID", r.get("ID", "")) or ""),
+             "name": str(r.get("FName", "") or ""),
+             "surname": str(r.get("SName", "") or ""),
+             "grade": str(r.get("Grade", "") or "")}
+            for r in lrows
+        ]
+
+        # Misconduct options
+        try:
+            mrows = mdb_conn.execute_query(
+                "SELECT [ID], [Description], [Point] FROM [DisciplinaryMisconduct] ORDER BY [Description]"
+            ) or []
+            misconducts = [
+                {"id": str(r.get("ID", "") or ""),
+                 "description": str(r.get("Description", "") or ""),
+                 "point": int(r.get("Point", 0) or 0)}
+                for r in mrows
+            ]
+        except Exception:
+            misconducts = [
+                {"id": "1", "description": "Late coming", "point": 1},
+                {"id": "2", "description": "Disruptive behaviour", "point": 2},
+                {"id": "3", "description": "Incomplete homework", "point": 1},
+                {"id": "4", "description": "Bullying", "point": 5},
+                {"id": "5", "description": "Vandalism", "point": 5},
+            ]
+    except Exception:
+        pass
+
+    return jsonify({
+        "grades": grades,
+        "levels": levels,
+        "learners": learners,
+        "misconducts": misconducts,
+    })
+
+
+@app.route("/api/teacher/disciplinary-entry/save", methods=["POST"])
+@login_required
+def api_teacher_disciplinary_entry_save():
+    """Save a disciplinary entry for selected learners."""
+    if not is_teacher_user(current_user):
+        abort(403)
+
+    learner_ids = request.form.getlist("learner_ids")
+    grade = request.form.get("grade", "").strip()
+    level_misconduct = request.form.get("level_misconduct", "").strip()
+    misconduct_id = request.form.get("misconduct_id", "").strip()
+    notes = request.form.get("notes", "").strip()
+    idempotency_key = request.form.get("idempotency_key", "").strip()
+
+    if not learner_ids or not misconduct_id:
+        return jsonify({"error": "Select at least one learner and a misconduct type."}), 400
+
+    if idempotency_key:
+        existing = TeacherWriteEvent.query.filter_by(
+            user_id=current_user.id, module="disciplinary_entry_save",
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return jsonify({"message": "Already saved.", "idempotent": True})
+
+    results = []
+    for lid in learner_ids:
+        audit = TeacherAuditLog(
+            user_id=current_user.id, action="disciplinary_entry", module="discipline",
+            payload_json=json.dumps({
+                "learner_id": lid, "grade": grade,
+                "level": level_misconduct, "misconduct_id": misconduct_id,
+                "notes": notes,
+            }),
+        )
+        db.session.add(audit)
+        results.append({"learner_id": lid, "record_id": None})
+
+    if idempotency_key:
+        db.session.add(TeacherWriteEvent(
+            user_id=current_user.id, module="disciplinary_entry_save",
+            idempotency_key=idempotency_key,
+            response_json=json.dumps({"count": len(learner_ids)}),
+        ))
+
+    db.session.commit()
+    return jsonify({"message": f"Disciplinary entry recorded for {len(results)} learner(s).", "results": results})
+
+
+@app.route("/teacher/messages")
+@login_required
+def teacher_messages_page():
+    """Teacher chat/messages page."""
+    if not is_teacher_user(current_user):
+        abort(403)
+    session["portal_mode"] = "teacher"
+    return render_template("teacher/messages.html")
+
+
 @app.route("/management")
 @login_required
 def management_dashboard():
@@ -5021,393 +6234,6 @@ def student_360_view(learner_id):
 
 
 # ---------------------------------------------------------------------------
-# Chat Platform API
-# ---------------------------------------------------------------------------
-@app.route("/api/chat/threads", methods=["POST"])
-@login_required
-def api_chat_create_thread():
-    """Create a new chat thread."""
-    thread_type = request.form.get("thread_type", "direct").strip()
-    participant_ids_str = request.form.get("participant_ids", "").strip()
-    learner_id = request.form.get("learner_id", "").strip() or None
-    title = request.form.get("title", "").strip() or None
-
-    if not participant_ids_str:
-        return jsonify({"error": "participant_ids is required"}), 400
-
-    participant_ids = []
-    for pid in participant_ids_str.split(","):
-        pid = pid.strip()
-        if pid:
-            try:
-                participant_ids.append(int(pid))
-            except ValueError:
-                return jsonify({"error": f"Invalid participant ID: {pid}"}), 400
-
-    thread = ChatThread(
-        thread_type=thread_type,
-        learner_id=learner_id,
-        title=title,
-        status="active",
-        created_by_user_id=current_user.id,
-    )
-    db.session.add(thread)
-    db.session.flush()  # get thread.id
-
-    # Add creator as participant
-    creator_participant = ChatParticipant(
-        thread_id=thread.id,
-        user_id=current_user.id,
-        role_in_thread="owner",
-        can_post=True,
-    )
-    db.session.add(creator_participant)
-
-    # Add other participants
-    for uid in participant_ids:
-        if uid == current_user.id:
-            continue  # already added
-        participant = ChatParticipant(
-            thread_id=thread.id,
-            user_id=uid,
-            role_in_thread="member",
-            can_post=True,
-        )
-        db.session.add(participant)
-
-    db.session.commit()
-
-    return jsonify({"thread": {"id": thread.id}})
-
-
-@app.route("/api/chat/threads", methods=["GET"])
-@login_required
-def api_chat_list_threads():
-    """List chat threads for the current user."""
-    participant_rows = ChatParticipant.query.filter_by(user_id=current_user.id).all()
-    thread_ids = [p.thread_id for p in participant_rows]
-
-    threads = (
-        ChatThread.query.filter(ChatThread.id.in_(thread_ids))
-        .order_by(ChatThread.updated_at.desc())
-        .all()
-    )
-
-    result = []
-    for t in threads:
-        last_msg = (
-            ChatMessage.query.filter_by(thread_id=t.id, moderation_status="visible")
-            .order_by(ChatMessage.created_at.desc())
-            .first()
-        )
-        result.append({
-            "id": t.id,
-            "thread_type": t.thread_type,
-            "learner_id": t.learner_id,
-            "title": t.title,
-            "status": t.status,
-            "created_at": t.created_at.isoformat() if t.created_at else None,
-            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
-        })
-
-    return jsonify({"threads": result})
-
-
-@app.route("/api/chat/candidates", methods=["GET"])
-@login_required
-def api_chat_candidates():
-    """Get candidate users for starting new chat threads."""
-    search = request.args.get("q", "").strip().lower()
-
-    query = User.query.filter(User.id != current_user.id)
-    if search:
-        query = query.filter(User.username.ilike(f"%{search}%"))
-
-    users = query.order_by(User.username).all()
-
-    rows = []
-    for u in users:
-        role = (
-            "teacher"
-            if u.is_teacher
-            else "manager" if u.is_manager else "parent" if u.is_parent else "staff"
-        )
-        rows.append({
-            "userId": u.id,
-            "username": u.username,
-            "role": role,
-        })
-
-    return jsonify({"rows": rows})
-
-
-@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["POST"])
-@login_required
-def api_chat_send_message(thread_id):
-    """Send a message in a thread."""
-    participant = ChatParticipant.query.filter_by(
-        thread_id=thread_id, user_id=current_user.id
-    ).first()
-    if not participant:
-        return jsonify({"error": "You are not a participant in this thread"}), 403
-
-    body = request.form.get("body", "").strip()
-    if not body:
-        return jsonify({"error": "Message body is required"}), 400
-
-    msg = ChatMessage(
-        thread_id=thread_id,
-        sender_user_id=current_user.id,
-        body=body,
-        message_type="text",
-        moderation_status="visible",
-    )
-    db.session.add(msg)
-    db.session.flush()
-
-    thread = ChatThread.query.get(thread_id)
-    if thread:
-        thread.updated_at = datetime.utcnow()
-
-    # Create delivery receipts for other participants
-    other_participants = ChatParticipant.query.filter(
-        ChatParticipant.thread_id == thread_id,
-        ChatParticipant.user_id != current_user.id,
-    ).all()
-    for p in other_participants:
-        receipt = ChatMessageReceipt(
-            message_id=msg.id,
-            user_id=p.user_id,
-            delivered_at=datetime.utcnow(),
-        )
-        db.session.add(receipt)
-
-    db.session.commit()
-
-    return jsonify({
-        "message": {
-            "id": msg.id,
-            "body": msg.body,
-            "sender_user_id": msg.sender_user_id,
-            "created_at": msg.created_at.isoformat() if msg.created_at else None,
-        }
-    })
-
-
-@app.route("/api/chat/threads/<int:thread_id>/messages", methods=["GET"])
-@login_required
-def api_chat_get_messages(thread_id):
-    """Get messages in a thread."""
-    participant = ChatParticipant.query.filter_by(
-        thread_id=thread_id, user_id=current_user.id
-    ).first()
-    if not participant:
-        return jsonify({"error": "You are not a participant in this thread"}), 403
-
-    limit = request.args.get("limit", 50, type=int)
-
-    messages = (
-        ChatMessage.query.filter_by(thread_id=thread_id, moderation_status="visible")
-        .order_by(ChatMessage.created_at.asc())
-        .limit(limit)
-        .all()
-    )
-
-    rows = []
-    for m in messages:
-        sender = User.query.get(m.sender_user_id)
-        rows.append({
-            "id": m.id,
-            "sender_user_id": m.sender_user_id,
-            "sender_name": sender.username if sender else "Unknown",
-            "body": m.body,
-            "message_type": m.message_type,
-            "moderation_status": m.moderation_status,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-            "attachments": [],
-        })
-
-    return jsonify({"rows": rows})
-
-
-@app.route("/api/chat/threads/<int:thread_id>/read", methods=["POST"])
-@login_required
-def api_chat_mark_read(thread_id):
-    """Mark thread as read by the current user."""
-    participant = ChatParticipant.query.filter_by(
-        thread_id=thread_id, user_id=current_user.id
-    ).first()
-    if not participant:
-        return jsonify({"error": "You are not a participant in this thread"}), 403
-
-    last_msg = (
-        ChatMessage.query.filter_by(thread_id=thread_id, moderation_status="visible")
-        .order_by(ChatMessage.created_at.desc())
-        .first()
-    )
-
-    if last_msg:
-        participant.last_read_message_id = last_msg.id
-
-        receipt = ChatMessageReceipt.query.filter_by(
-            message_id=last_msg.id, user_id=current_user.id
-        ).first()
-        if not receipt:
-            receipt = ChatMessageReceipt(
-                message_id=last_msg.id,
-                user_id=current_user.id,
-                delivered_at=datetime.utcnow(),
-            )
-            db.session.add(receipt)
-        receipt.read_at = datetime.utcnow()
-
-        db.session.commit()
-
-    return jsonify({"ok": True})
-
-
-@app.route("/api/chat/messages/<int:message_id>/moderate", methods=["POST"])
-@login_required
-def api_chat_moderate_message(message_id):
-    """Moderate a message (hide/show/delete/restore)."""
-    if not (
-        is_teacher_user(current_user)
-        or is_admin_user(current_user)
-        or is_manager_user(current_user)
-    ):
-        return jsonify({"error": "Not authorized to moderate"}), 403
-
-    action = request.form.get("action", "").strip()
-    if action not in ("hide", "show", "delete", "restore"):
-        return jsonify({"error": "Invalid action. Use hide, show, delete, or restore."}), 400
-
-    msg = ChatMessage.query.get(message_id)
-    if not msg:
-        return jsonify({"error": "Message not found"}), 404
-
-    if action == "hide":
-        msg.moderation_status = "hidden"
-    elif action in ("show", "restore"):
-        msg.moderation_status = "visible"
-    elif action == "delete":
-        msg.deleted_at = datetime.utcnow()
-
-    db.session.commit()
-
-    return jsonify({
-        "ok": True,
-        "message_id": msg.id,
-        "moderation_status": msg.moderation_status,
-    })
-
-
-@app.route("/api/chat/attachments/<int:attachment_id>", methods=["GET"])
-@login_required
-def api_chat_get_attachment(attachment_id):
-    """Get attachment metadata."""
-    attachment = ChatAttachment.query.get(attachment_id)
-    if not attachment:
-        return jsonify({"error": "Attachment not found"}), 404
-
-    return jsonify({
-        "id": attachment.id,
-        "message_id": attachment.message_id,
-        "original_name": attachment.original_name,
-        "stored_name": attachment.stored_name,
-        "mime_type": attachment.mime_type,
-        "size_bytes": attachment.size_bytes,
-        "storage_relpath": attachment.storage_relpath,
-        "scan_status": attachment.scan_status,
-        "uploaded_at": attachment.uploaded_at.isoformat() if attachment.uploaded_at else None,
-    })
-
-
-@app.route("/api/chat/learner-messages", methods=["GET"])
-@login_required
-def api_chat_learner_messages():
-    """Get chat threads and recent messages for a learner."""
-    learner_id = request.args.get("learner_id", "").strip()
-    if not learner_id:
-        return jsonify({"error": "learner_id is required"}), 400
-
-    threads = (
-        ChatThread.query.filter_by(learner_id=learner_id)
-        .order_by(ChatThread.updated_at.desc())
-        .all()
-    )
-
-    result = []
-    for t in threads:
-        # Get participants with user info
-        participant_rows = ChatParticipant.query.filter_by(thread_id=t.id).all()
-        participants = []
-        for p in participant_rows:
-            user = User.query.get(p.user_id)
-            if user:
-                participants.append({
-                    "id": user.id,
-                    "username": user.username,
-                    "name": user.username,
-                })
-
-        # Get last visible message
-        last_msg = (
-            ChatMessage.query.filter_by(thread_id=t.id, moderation_status="visible")
-            .order_by(ChatMessage.created_at.desc())
-            .first()
-        )
-        last_message = None
-        if last_msg:
-            sender = User.query.get(last_msg.sender_user_id)
-            last_message = {
-                "body": last_msg.body,
-                "sender_name": sender.username if sender else "Unknown",
-                "created_at": last_msg.created_at.isoformat() if last_msg.created_at else None,
-            }
-
-        # Count visible messages
-        message_count = ChatMessage.query.filter_by(
-            thread_id=t.id, moderation_status="visible"
-        ).count()
-
-        result.append({
-            "id": t.id,
-            "thread_type": t.thread_type,
-            "title": t.title,
-            "participants": participants,
-            "last_message": last_message,
-            "message_count": message_count,
-        })
-
-    return jsonify({"threads": result})
-
-
-@app.route("/parent/messages")
-@login_required
-def parent_messages():
-    """Parent chat messages page."""
-    if not is_guardian_parent_account(current_user):
-        abort(403)
-    return render_template("parent/messages.html")
-
-
-@app.route("/management/chat")
-@login_required
-def management_chat():
-    """Management chat page."""
-    if not (is_manager_user(current_user) or is_admin_user(current_user)):
-        abort(403)
-    return render_template("management_chat.html")
-
-
-@app.route("/admin/chat")
-@login_required
-def admin_chat():
-    """Admin chat page."""
-    if not is_admin_user(current_user):
-        abort(403)
-    return render_template("admin/chat.html")
-
 
 # ---------------------------------------------------------------------------
 # Teacher + School-wide Announcements
@@ -5484,6 +6310,33 @@ def api_teacher_announcements_save():
     ann.expires_at = expires_at
     db.session.add(ann)
     db.session.commit()
+
+    # Log to admin audit log
+    action_type = "announcement_update" if ann_id else "announcement_create"
+    target_id_str = str(ann.id)
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action=action_type,
+            module="announcements",
+            target_type="announcement",
+            target_id=target_id_str,
+            summary=f"Teacher {current_user.username} {'updated' if ann_id else 'created'} announcement '{title}'",
+            details_json=json.dumps({
+                "announcement_id": ann.id,
+                "title": title,
+                "scope": scope,
+                "priority": priority,
+                "target_grade": target_grade,
+                "target_class": target_class,
+            }),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+        db.session.commit()
+    except Exception:
+        db.session.commit()
+
     return jsonify({"success": True, "id": ann.id})
 
 
@@ -5496,7 +6349,25 @@ def api_teacher_announcements_delete(ann_id):
     ann = TeacherAnnouncement.query.get_or_404(ann_id)
     if ann.user_id != current_user.id:
         abort(403)
+    title = ann.title
     db.session.delete(ann)
+
+    # Log to admin audit log
+    try:
+        admin_audit = AdminAuditLog(
+            user_id=current_user.id,
+            action="announcement_delete",
+            module="announcements",
+            target_type="announcement",
+            target_id=str(ann_id),
+            summary=f"Teacher {current_user.username} deleted announcement '{title}'",
+            details_json=json.dumps({"announcement_id": ann_id, "title": title}),
+            ip_address=request.remote_addr,
+        )
+        db.session.add(admin_audit)
+    except Exception:
+        pass
+
     db.session.commit()
     return jsonify({"success": True})
 
