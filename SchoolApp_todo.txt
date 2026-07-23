@@ -6,6 +6,7 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
+<<<<<<< Updated upstream
 [x] Add parent/guardian notification workflows for attendance, discipline, and finance events
 [x] Add overdue finance reminders with channel selection and resend tracking
 [x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
@@ -30,3 +31,7 @@
 [ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
 [ ] Add a function notice board where admins can set new notices
 [ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+=======
+[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
+    [ ] Parent read acknowledgment tracking for assignments
+>>>>>>> Stashed changes
