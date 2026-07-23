@@ -6,26 +6,32 @@
 # Examples:
 # [ ] Update attendance report export
 # [x] Fix login redirect
-
+<<<<<<< Updated upstream
+[x] Add parent/guardian notification workflows for attendance, discipline, and finance events
+[x] Add overdue finance reminders with channel selection and resend tracking
+[x] Add missing teacher portal routes/API endpoints for classes, roster, attendance, discipline, assessments, and report export smoke coverage
+[x] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
+[x] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
+[x] Add at-risk learner dashboards with attendance, grade, and discipline flags for early intervention
+[x] Add at-risk learner risk computation engine and management report view
+[x] Add early intervention workflows with notification and referral tracking
+[x] Add templated parent/teacher messaging — MessageTemplate model, CRUD API, and teacher template selector
+[x] Add delivery/read receipt tracking — auto-mark messages as delivered/read via ChatMessageReceipt when parent opens thread
+[x] Show delivery status and read receipts in chat thread UI for teachers
+[x] Add admin message template management UI page
+[x] Add admin audit log for bulk data workflows (AdminAuditLog model + view page)
+[x] Add CSV import preview with column mapping and data display
 [ ] Add CSV row validation with error reporting for admin bulk imports
 [ ] Add student profile 360 view with attendance, grades, discipline, messages, and documents
-[x] Add attendance exception codes with notes and attachment support for late/excused/medical absences
-[x] Add report scheduling/subscriptions for saved management filters and automated delivery
-[x] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+[ ] Add attendance exception codes with notes and attachment support for late/excused/medical absences
+[ ] Add report scheduling/subscriptions for saved management filters and automated delivery
+[ ] Add a searchable admin audit log for changes to grades, attendance, permissions, and announcements
+[ ] Add /api/teacher/dashboard and /api/teacher/messages/send endpoints to match the teacher portal smoke contract
 [ ] Add a teacher home screen with quick actions for attendance, class roster, messaging, and exports
-[x] Fix management reports page: change report icons to suit each report type and sort reports A-Z
-[x] Add a function notice board where admins can set new notices
-[x] Add a full student lookup with learner profile on the admin/manager dashboard
-[x] Add teacher portal feature to post assignments, homework, activities with file/link attachments
-[x]     [x] Parent read acknowledgment tracking for assignments
-[ ] Add a unified teacher dashboard API so portal tiles load instead of 404s
-[ ] Add a repo-level pytest config so direct pytest can import app and management_report_handlers without PYTHONPATH hacks
-[ ] Replace legacy SQLAlchemy Query.get lookups with Session.get to eliminate deprecation warnings
-[x] Implement finance reminder routes (/admin/communication/finance/) — now live in admin_routes.py, 4 spec tests pass
-[x] Extract uncommitted finance reminder routes from stash@{30} — already extracted to admin_routes.py
-[ ] Fix test flakiness: test_parent_assignments_requires_auth is ordering-dependent
-[ ] Fix PG compat translation tests (3 tests, MDBConnection._translate_access_to_postgres deleted)
-[ ] Clean up stale test PDF uploads in static/uploads/ (68 test artifacts)
-[ ] Add pre-commit hook to reject files with merge conflict markers
-[ ] Add .gitignore entries for static/uploads/assignments/ and static/uploads/attendance_exceptions/ to prevent test PDF commits
-[ ] Drop 45/45 stale git stashes (only keep stash@{0})
+[ ] Fix management reports page: change report icons to suit each report type and sort reports A-Z
+[ ] Add a function notice board where admins can set new notices
+[ ] Add a full student lookup with learner profile on the admin/manager dashboard showing everything about the learner (attendance, grades, discipline, messages, documents)
+=======
+[ ] Add teacher portal feature to post assignments, homework, activities with file/link attachments; visible on parent portal with read acknowledgment
+    [ ] Parent read acknowledgment tracking for assignments
+>>>>>>> Stashed changes
