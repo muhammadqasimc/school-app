@@ -34,3 +34,31 @@ Notable:
   - The full test suite now takes ~3m17s (up from ~30s a few cycles ago). Consider parallelizing or pruning slow tests.
   - Function notice board UI: /admin/notice_board route added. New FunctionNotice model with CRUD, target audience, priority, date range.
 
+2026-07-23 05:00 — Cron intake scan
+====================================
+
+HEAD: 0d706ac feat: add student lookup with full learner profile on admin dashboard
+
+State: Clean working tree (1 stale test PDF in static/uploads/attendance_exceptions/). 357 tests (351 pass, 6 fail, 194 warnings).
+
+New since last scan:
+  [x] Student lookup with full learner profile on admin dashboard (0d706ac) — 280 lines in app.py, 353 in dashboard template, no dedicated tests
+
+Still failing (6 tests — same as last scan, no change):
+  1. test_translate_quotes_unbracketed_ems_tables — PG compat stub deleted
+  2. test_translate_top_limit_with_quoted_tables — same
+  3. test_translate_quotes_qualified_mixed_case_columns — same
+  4. test_teacher_routes_exist — teacher portal gap
+  5. test_teacher_api_smoke_authenticated — teacher portal gap
+  6. test_admin_communication_discipline_incidents_and_send — flaky ordering-dependent
+
+Regressions: Legacy Query.get() count STABLE at 47 (41 production + 6 test). No new .query.get() calls in the latest feature. First time in several cycles the count hasn't regressed.
+
+Notable:
+  - Student lookup feature uses modern `db.session.query()` (no new `.query.get()` calls) — good pattern adherence.
+  - Feature adds three Access DB queries (by ID, LearnerID, name) and a seven-tab profile view (learner info, parents, attendance, discipline, academics, messages, documents) on the admin dashboard.
+  - NO tests were added for the new API endpoints (`/api/admin/learner-search`, `/api/admin/learner-profile/<id>`). Recommend adding test_learner_search.py.
+  - The JS uses vanilla fetch() with proper error handling, debounced input (200ms), and Bootstrap Tab API — clean client-side code.
+  - Potential minor XSS vector in innerHTML rendering of learner_info dict entries (field names from Access DB rendered directly), but low risk since admin-only page and DB values are controlled.
+  - One stale test PDF remains in static/uploads/attendance_exceptions/ — clean up candidate.
+  - Test suite runtime improved to ~2m10s (was 3m17s last scan), possibly due to less contention.
