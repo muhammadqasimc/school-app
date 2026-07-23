@@ -237,10 +237,363 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Student Lookup Card -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user-graduate"></i> Student Lookup</h5>
+            </div>
+            <div class="card-body">
+                <!-- Search input with autocomplete -->
+                <div class="row mb-3">
+                    <div class="col-md-6 position-relative">
+                        <label class="form-label">Search Learner</label>
+                        <div class="input-group">
+                            <input id="student_search" class="form-control" placeholder="Type learner surname, first name, learner ID or internal ID..." autocomplete="off">
+                            <button id="student_clear_btn" class="btn btn-outline-secondary" type="button" title="Clear search">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="student_search_results" class="list-group position-absolute w-100 shadow-sm" style="z-index: 20; max-height: 260px; overflow-y: auto; display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Profile content (hidden until learner selected) -->
+                <div id="student_profile_area" style="display: none;">
+                    <!-- Nav tabs -->
+                    <ul class="nav nav-tabs" id="studentProfileTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="tab-learner-info" data-bs-toggle="tab" data-bs-target="#pane-learner-info" type="button" role="tab">
+                                <i class="fas fa-user"></i> Learner Info
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-parents" data-bs-toggle="tab" data-bs-target="#pane-parents" type="button" role="tab">
+                                <i class="fas fa-users"></i> Parents
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-attendance" data-bs-toggle="tab" data-bs-target="#pane-attendance" type="button" role="tab">
+                                <i class="fas fa-calendar-check"></i> Attendance
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-discipline" data-bs-toggle="tab" data-bs-target="#pane-discipline" type="button" role="tab">
+                                <i class="fas fa-gavel"></i> Discipline
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-academics" data-bs-toggle="tab" data-bs-target="#pane-academics" type="button" role="tab">
+                                <i class="fas fa-graduation-cap"></i> Academics
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-messages" data-bs-toggle="tab" data-bs-target="#pane-messages" type="button" role="tab">
+                                <i class="fas fa-envelope"></i> Messages
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-documents" data-bs-toggle="tab" data-bs-target="#pane-documents" type="button" role="tab">
+                                <i class="fas fa-file-alt"></i> Documents
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab panes -->
+                    <div class="tab-content pt-3" id="studentProfileTabsContent">
+                        <!-- Learner Info -->
+                        <div class="tab-pane fade show active" id="pane-learner-info" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <tbody id="learner_info_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Parents -->
+                        <div class="tab-pane fade" id="pane-parents" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Name</th><th>Tel 1</th><th>Tel 2</th><th>Tel 3</th></tr></thead>
+                                    <tbody id="parents_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Attendance -->
+                        <div class="tab-pane fade" id="pane-attendance" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Date</th><th>Status</th><th>Period</th><th>Reason</th></tr></thead>
+                                    <tbody id="attendance_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Discipline -->
+                        <div class="tab-pane fade" id="pane-discipline" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Date</th><th>Type</th><th>Demerit</th><th>Merit</th><th>Comment</th></tr></thead>
+                                    <tbody id="discipline_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Academics -->
+                        <div class="tab-pane fade" id="pane-academics" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Subject</th><th>Mark</th><th>Total</th><th>Percentage</th></tr></thead>
+                                    <tbody id="academics_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Messages -->
+                        <div class="tab-pane fade" id="pane-messages" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Body</th><th>Sender</th><th>Date</th></tr></thead>
+                                    <tbody id="messages_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Documents -->
+                        <div class="tab-pane fade" id="pane-documents" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 360px;">
+                                <table class="table table-sm table-striped">
+                                    <thead><tr><th>Type</th><th>Filename</th><th>Date</th></tr></thead>
+                                    <tbody id="documents_body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="student_empty_state" class="text-center text-muted py-4">
+                    <i class="fas fa-search fa-3x mb-2"></i>
+                    <p class="mb-0">Search for a learner above to view their full profile.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_css %}
 <style>
 .hover-shadow:hover { box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15); }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    const searchInput = document.getElementById('student_search');
+    const clearBtn = document.getElementById('student_clear_btn');
+    const resultsContainer = document.getElementById('student_search_results');
+    const profileArea = document.getElementById('student_profile_area');
+    const emptyState = document.getElementById('student_empty_state');
+
+    let debounceTimer = null;
+    let selectedLearnerId = null;
+
+    function clearResults() {
+        resultsContainer.innerHTML = '';
+        resultsContainer.style.display = 'none';
+    }
+
+    function clearAll() {
+        searchInput.value = '';
+        selectedLearnerId = null;
+        clearResults();
+        profileArea.style.display = 'none';
+        emptyState.style.display = 'block';
+    }
+
+    function renderEmptyRow(containerId, colspan, message) {
+        const tbody = document.getElementById(containerId);
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="' + colspan + '" class="text-muted small">' + message + '</td></tr>';
+        }
+    }
+
+    function populateProfile(data) {
+        // Learner Info
+        const infoBody = document.getElementById('learner_info_body');
+        if (infoBody && data.learner_info) {
+            infoBody.innerHTML = Object.entries(data.learner_info).map(function(entry) {
+                return '<tr><td class="small text-muted fw-semibold">' + entry[0] + '</td><td class="small">' + (entry[1] ?? '') + '</td></tr>';
+            }).join('');
+        }
+
+        // Parents
+        const parentsBody = document.getElementById('parents_body');
+        if (parentsBody) {
+            const parents = data.parents || [];
+            if (parents.length) {
+                parentsBody.innerHTML = parents.map(function(p) {
+                    return '<tr><td>' + (p.name || '') + '</td><td>' + (p.tel1 || '') + '</td><td>' + (p.tel2 || '') + '</td><td>' + (p.tel3 || '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('parents_body', 4, 'No parent information available.');
+            }
+        }
+
+        // Attendance
+        const attBody = document.getElementById('attendance_body');
+        if (attBody) {
+            const attendance = data.attendance || [];
+            if (attendance.length) {
+                attBody.innerHTML = attendance.map(function(a) {
+                    return '<tr><td>' + (a.date || '') + '</td><td>' + (a.status || '') + '</td><td>' + (a.period || '') + '</td><td>' + (a.reason || '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('attendance_body', 4, 'No attendance records.');
+            }
+        }
+
+        // Discipline
+        const discBody = document.getElementById('discipline_body');
+        if (discBody) {
+            const discipline = data.discipline || [];
+            if (discipline.length) {
+                discBody.innerHTML = discipline.map(function(d) {
+                    return '<tr><td>' + (d.date || '') + '</td><td>' + (d.type || '') + '</td><td>' + (d.demerit ?? '') + '</td><td>' + (d.merit ?? '') + '</td><td>' + (d.comment || '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('discipline_body', 5, 'No discipline records.');
+            }
+        }
+
+        // Academics
+        const acadBody = document.getElementById('academics_body');
+        if (acadBody) {
+            const academics = data.academics || [];
+            if (academics.length) {
+                acadBody.innerHTML = academics.map(function(a) {
+                    return '<tr><td>' + (a.subject || '') + '</td><td>' + (a.mark ?? '') + '</td><td>' + (a.total ?? '') + '</td><td>' + (a.percentage ?? '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('academics_body', 4, 'No academic records.');
+            }
+        }
+
+        // Messages
+        const msgBody = document.getElementById('messages_body');
+        if (msgBody) {
+            const messages = data.messages || [];
+            if (messages.length) {
+                msgBody.innerHTML = messages.map(function(m) {
+                    return '<tr><td class="small">' + (m.body || '') + '</td><td class="small">' + (m.senderName || '') + '</td><td class="small">' + (m.createdAt || '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('messages_body', 3, 'No messages.');
+            }
+        }
+
+        // Documents
+        const docBody = document.getElementById('documents_body');
+        if (docBody) {
+            const documents = data.documents || [];
+            if (documents.length) {
+                docBody.innerHTML = documents.map(function(d) {
+                    return '<tr><td>' + (d.type || '') + '</td><td>' + (d.filename || '') + '</td><td>' + (d.date || '') + '</td></tr>';
+                }).join('');
+            } else {
+                renderEmptyRow('documents_body', 3, 'No documents.');
+            }
+        }
+
+        // Activate first tab
+        var firstTab = document.querySelector('#studentProfileTabs .nav-link');
+        if (firstTab) {
+            var tab = new bootstrap.Tab(firstTab);
+            tab.show();
+        }
+
+        // Show profile, hide empty state
+        profileArea.style.display = 'block';
+        emptyState.style.display = 'none';
+    }
+
+    async function loadProfile(learnerId) {
+        try {
+            var response = await fetch('/api/admin/learner-profile/' + encodeURIComponent(learnerId));
+            if (!response.ok) {
+                profileArea.style.display = 'none';
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = '<i class="fas fa-exclamation-triangle fa-3x mb-2 text-danger"></i><p class="mb-0">Failed to load profile (HTTP ' + response.status + ').</p>';
+                return;
+            }
+            var data = await response.json();
+            populateProfile(data);
+        } catch (err) {
+            profileArea.style.display = 'none';
+            emptyState.style.display = 'block';
+            emptyState.innerHTML = '<i class="fas fa-exclamation-triangle fa-3x mb-2 text-danger"></i><p class="mb-0">Network error loading profile.</p>';
+        }
+    }
+
+    async function runSearch(term) {
+        try {
+            var response = await fetch('/api/admin/learner-search?q=' + encodeURIComponent(term));
+            if (!response.ok) {
+                clearResults();
+                return;
+            }
+            var data = await response.json();
+            var rows = data.results || [];
+            if (!rows.length) {
+                resultsContainer.innerHTML = '<div class="list-group-item small text-muted">No learners found</div>';
+                resultsContainer.style.display = 'block';
+                return;
+            }
+            resultsContainer.innerHTML = rows.map(function(x) {
+                return '<button type="button" class="list-group-item list-group-item-action student-search-item" data-id="' + (x.id || x.learnerId || '') + '">' +
+                    '<div class="fw-semibold">' + (x.fname || '') + ' ' + (x.sname || '') + '</div>' +
+                    '<div class="small text-muted">LearnerID: ' + (x.learnerId || '') + ' | Grade: ' + (x.grade || '') + ' | Class: ' + (x.classId || '') + '</div>' +
+                    '</button>';
+            }).join('');
+            resultsContainer.style.display = 'block';
+
+            // Bind click on each search result item
+            document.querySelectorAll('.student-search-item').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var id = btn.getAttribute('data-id') || '';
+                    if (!id) return;
+                    selectedLearnerId = id;
+                    searchInput.value = btn.querySelector('.fw-semibold') ? btn.querySelector('.fw-semibold').textContent : id;
+                    clearResults();
+                    loadProfile(id);
+                });
+            });
+        } catch (err) {
+            clearResults();
+        }
+    }
+
+    // Input handler with debounce
+    searchInput.addEventListener('input', function() {
+        var term = searchInput.value.trim();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (term.length < 2) {
+            clearResults();
+            return;
+        }
+        debounceTimer = setTimeout(function() { runSearch(term); }, 200);
+    });
+
+    // Clear button
+    clearBtn.addEventListener('click', clearAll);
+
+    // Click outside to close dropdown
+    document.addEventListener('click', function(e) {
+        if (!resultsContainer.contains(e.target) && e.target !== searchInput) {
+            clearResults();
+        }
+    });
+})();
+</script>
 {% endblock %}

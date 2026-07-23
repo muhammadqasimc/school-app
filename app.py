@@ -3679,6 +3679,286 @@ def management_dashboard():
     return render_template("management/dashboard_home.html", reports=MANAGEMENT_REPORT_REGISTRY)
 
 
+# ── Admin API: Learner Search ──────────────────────────────────────────────
+@app.route("/api/admin/learner-search")
+@login_required
+def admin_learner_search():
+    if not is_admin_user(current_user):
+        abort(403)
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"results": []})
+    results = []
+    seen = set()
+    try:
+        id_rows = mdb_conn.execute_query(
+            "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM Learner_Info WHERE CSTR([ID]) = ?",
+            (q,),
+        )
+        for r in id_rows or []:
+            lid = str(r.get("ID") or "")
+            if lid and lid not in seen:
+                seen.add(lid)
+                results.append({
+                    "id": lid,
+                    "learnerId": str(r.get("LearnerID") or ""),
+                    "fname": str(r.get("FName") or ""),
+                    "sname": str(r.get("SName") or ""),
+                    "grade": str(r.get("Grade") or ""),
+                    "classId": str(r.get("Class") or ""),
+                })
+    except Exception:
+        pass
+    try:
+        lid_rows = mdb_conn.execute_query(
+            "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM Learner_Info WHERE CSTR([LearnerID]) = ?",
+            (q,),
+        )
+        for r in lid_rows or []:
+            lid = str(r.get("ID") or "")
+            if lid and lid not in seen:
+                seen.add(lid)
+                results.append({
+                    "id": lid,
+                    "learnerId": str(r.get("LearnerID") or ""),
+                    "fname": str(r.get("FName") or ""),
+                    "sname": str(r.get("SName") or ""),
+                    "grade": str(r.get("Grade") or ""),
+                    "classId": str(r.get("Class") or ""),
+                })
+    except Exception:
+        pass
+    try:
+        like_q = f"%{q}%"
+        name_rows = mdb_conn.execute_query(
+            "SELECT [ID], [LearnerID], [FName], [SName], [Grade], [Class] FROM Learner_Info WHERE [FName] LIKE ? OR [SName] LIKE ?",
+            (like_q, like_q),
+        )
+        for r in name_rows or []:
+            lid = str(r.get("ID") or "")
+            if lid and lid not in seen:
+                seen.add(lid)
+                results.append({
+                    "id": lid,
+                    "learnerId": str(r.get("LearnerID") or ""),
+                    "fname": str(r.get("FName") or ""),
+                    "sname": str(r.get("SName") or ""),
+                    "grade": str(r.get("Grade") or ""),
+                    "classId": str(r.get("Class") or ""),
+                })
+    except Exception:
+        pass
+    return jsonify({"results": results})
+
+
+# ── Admin API: Learner Profile ─────────────────────────────────────────────
+@app.route("/api/admin/learner-profile/<learner_id>")
+@login_required
+def admin_learner_profile(learner_id):
+    if not is_admin_user(current_user):
+        abort(403)
+    lid = str(learner_id or "").strip()
+    if not lid:
+        abort(404)
+
+    # learner_info
+    learner_info = _mdb_get_learner_profile_row(lid)
+
+    # parents
+    parents = []
+    try:
+        parent_rows = mdb_conn.execute_query(
+            """
+            SELECT pi.[FName], pi.[SName], pi.[Tel1], pi.[Tel2], pi.[Tel3]
+            FROM Parent_Info pi
+            INNER JOIN Parent_Child pc ON pc.ParentId = pi.ParentID
+            WHERE CSTR(pc.ChildId) = ? OR CSTR(pc.Learnerid) = ?
+            """,
+            (lid, lid),
+        )
+        for r in parent_rows or []:
+            fname = str(r.get("FName") or "")
+            sname = str(r.get("SName") or "")
+            parents.append({
+                "name": f"{fname} {sname}".strip(),
+                "tel1": str(r.get("Tel1") or ""),
+                "tel2": str(r.get("Tel2") or ""),
+                "tel3": str(r.get("Tel3") or ""),
+            })
+    except Exception:
+        pass
+
+    # attendance
+    attendance = []
+    try:
+        att_rows = mdb_conn.execute_query(
+            """
+            SELECT TOP 50 [DateAbsent], [ReasonOther], [DataYear]
+            FROM Absentees
+            WHERE CSTR([Learnerid]) = ?
+            ORDER BY [DateAbsent] DESC
+            """,
+            (lid,),
+        )
+        for r in att_rows or []:
+            attendance.append({
+                "date": str(r.get("DateAbsent") or ""),
+                "status": "Absent",
+                "period": "",
+                "reason": str(r.get("ReasonOther") or ""),
+            })
+    except Exception:
+        pass
+
+    # discipline
+    discipline = []
+    try:
+        disc_rows = mdb_conn.execute_query(
+            """
+            SELECT TOP 50 [Date], [Type], [Demerit], [Merit], [Comment]
+            FROM DisciplinaryLearnerMisconduct
+            WHERE CSTR([Learnerid]) = ?
+            ORDER BY [Date] DESC
+            """,
+            (lid,),
+        )
+        for r in disc_rows or []:
+            discipline.append({
+                "date": str(r.get("Date") or ""),
+                "type": str(r.get("Type") or ""),
+                "demerit": str(r.get("Demerit") or ""),
+                "merit": str(r.get("Merit") or ""),
+                "comment": str(r.get("Comment") or ""),
+            })
+    except Exception:
+        pass
+
+    # academics
+    academics = []
+    try:
+        ac_rows = mdb_conn.execute_query(
+            """
+            SELECT TOP 30 rm.[Mark], rm.[TotalMark], rm.[Symbol], rm.[DataYear],
+                   s.[Name] AS SubjectName
+            FROM ReportMarks rm
+            LEFT JOIN Subjects s ON s.[Id] = rm.[SubjectId]
+            WHERE CSTR(rm.[LearnerID]) = ?
+            ORDER BY rm.[DataYear] DESC
+            """,
+            (lid,),
+        )
+        for r in ac_rows or []:
+            mark = r.get("Mark")
+            total = r.get("TotalMark")
+            mark_val = float(mark) if mark is not None else 0.0
+            total_val = float(total) if total is not None else 0.0
+            pct = round(mark_val / total_val * 100, 1) if total_val > 0 else 0.0
+            academics.append({
+                "subject": str(r.get("SubjectName") or ""),
+                "mark": mark_val,
+                "total": total_val,
+                "percentage": pct,
+                "symbol": str(r.get("Symbol") or ""),
+                "dataYear": str(r.get("DataYear") or ""),
+            })
+    except Exception:
+        pass
+
+    # messages
+    messages = []
+    try:
+        parent_users = (
+            db.session.query(User)
+            .filter(
+                User.is_parent == True,
+                db.or_(
+                    User.learner_id == lid,
+                    User.id.in_(
+                        db.session.query(UserLearner.user_id).filter(
+                            UserLearner.learner_id == lid
+                        )
+                    ),
+                ),
+            )
+            .all()
+        )
+        parent_user_ids = [u.id for u in parent_users]
+        if parent_user_ids:
+            participant_threads = (
+                db.session.query(ChatParticipant.thread_id)
+                .filter(ChatParticipant.user_id.in_(parent_user_ids))
+                .distinct()
+                .all()
+            )
+            thread_ids = [p.thread_id for p in participant_threads]
+            if thread_ids:
+                recent_msgs = (
+                    db.session.query(ChatMessage)
+                    .filter(ChatMessage.thread_id.in_(thread_ids))
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(20)
+                    .all()
+                )
+                sender_ids = {m.sender_user_id for m in recent_msgs}
+                sender_map = {}
+                if sender_ids:
+                    senders = db.session.query(User).filter(User.id.in_(sender_ids)).all()
+                    sender_map = {u.id: u.username for u in senders}
+                for m in reversed(recent_msgs):
+                    messages.append({
+                        "id": m.id,
+                        "body": m.body or "",
+                        "senderUserId": m.sender_user_id,
+                        "senderName": sender_map.get(m.sender_user_id, ""),
+                        "createdAt": m.created_at.isoformat() if m.created_at else "",
+                    })
+    except Exception:
+        pass
+
+    # documents
+    documents = []
+    try:
+        sick_notes = (
+            db.session.query(SickNoteSubmission)
+            .filter(SickNoteSubmission.learner_id == lid)
+            .order_by(SickNoteSubmission.submitted_at.desc())
+            .all()
+        )
+        for sn in sick_notes:
+            documents.append({
+                "type": "sick_note",
+                "filename": sn.original_filename,
+                "date": sn.submitted_at.isoformat() if sn.submitted_at else "",
+            })
+    except Exception:
+        pass
+    try:
+        disc_docs = (
+            db.session.query(DisciplinaryDocument)
+            .filter(DisciplinaryDocument.learner_id == lid)
+            .order_by(DisciplinaryDocument.created_at.desc())
+            .all()
+        )
+        for dd in disc_docs:
+            documents.append({
+                "type": "disciplinary",
+                "filename": dd.pdf_filename,
+                "date": dd.created_at.isoformat() if dd.created_at else "",
+            })
+    except Exception:
+        pass
+
+    return jsonify({
+        "learner_info": learner_info,
+        "parents": parents,
+        "attendance": attendance,
+        "discipline": discipline,
+        "academics": academics,
+        "messages": messages,
+        "documents": documents,
+    })
+
+
 @app.route("/admin", strict_slashes=False)
 @login_required
 def admin_dashboard():
